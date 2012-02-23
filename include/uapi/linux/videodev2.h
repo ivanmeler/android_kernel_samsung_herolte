@@ -1139,6 +1139,77 @@ struct v4l2_standard {
 };
 
 /*
+ *	V I D E O	T I M I N G S	D V	P R E S E T
+ */
+struct v4l2_dv_preset {
+	__u32	preset;
+	__u32	reserved[4];
+};
+
+/*
+ *	D V	P R E S E T S	E N U M E R A T I O N
+ */
+struct v4l2_dv_enum_preset {
+	__u32	index;
+	__u32	preset;
+	__u8	name[32]; /* Name of the preset timing */
+	__u32	width;
+	__u32	height;
+	__u32	reserved[4];
+};
+
+/*
+ * 	D V	P R E S E T	V A L U E S
+ */
+#define		V4L2_DV_INVALID		0
+#define		V4L2_DV_480P59_94	1 /* BT.1362 */
+#define		V4L2_DV_576P50		2 /* BT.1362 */
+#define		V4L2_DV_720P24		3 /* SMPTE 296M */
+#define		V4L2_DV_720P25		4 /* SMPTE 296M */
+#define		V4L2_DV_720P30		5 /* SMPTE 296M */
+#define		V4L2_DV_720P50		6 /* SMPTE 296M */
+#define		V4L2_DV_720P59_94	7 /* SMPTE 274M */
+#define		V4L2_DV_720P60		8 /* SMPTE 274M/296M */
+#define		V4L2_DV_1080I29_97	9 /* BT.1120/ SMPTE 274M */
+#define		V4L2_DV_1080I30		10 /* BT.1120/ SMPTE 274M */
+#define		V4L2_DV_1080I25		11 /* BT.1120 */
+#define		V4L2_DV_1080I50		12 /* SMPTE 296M */
+#define		V4L2_DV_1080I60		13 /* SMPTE 296M */
+#define		V4L2_DV_1080P24		14 /* SMPTE 296M */
+#define		V4L2_DV_1080P25		15 /* SMPTE 296M */
+#define		V4L2_DV_1080P30		16 /* SMPTE 296M */
+#define		V4L2_DV_1080P50		17 /* BT.1120 */
+#define		V4L2_DV_1080P60		18 /* BT.1120 */
+
+#define		V4L2_DV_480P60			19
+#define		V4L2_DV_1080I59_94		20
+#define		V4L2_DV_1080P59_94		21
+
+#define		V4L2_DV_720P60_FP		22
+#define		V4L2_DV_720P60_SB_HALF		23
+#define		V4L2_DV_720P60_TB		24
+#define		V4L2_DV_720P59_94_FP		25
+#define		V4L2_DV_720P59_94_SB_HALF	26
+#define		V4L2_DV_720P59_94_TB		27
+#define		V4L2_DV_720P50_FP		28
+#define		V4L2_DV_720P50_SB_HALF		29
+#define		V4L2_DV_720P50_TB		30
+#define		V4L2_DV_1080P24_FP		31
+#define		V4L2_DV_1080P24_SB_HALF		32
+#define		V4L2_DV_1080P24_TB		33
+#define		V4L2_DV_1080P23_98_FP		34
+#define		V4L2_DV_1080P23_98_SB_HALF	35
+#define		V4L2_DV_1080P23_98_TB		36
+#define		V4L2_DV_1080I60_SB_HALF		37
+#define		V4L2_DV_1080I59_94_SB_HALF	38
+#define		V4L2_DV_1080I50_SB_HALF		39
+#define		V4L2_DV_1080P60_SB_HALF		40
+#define		V4L2_DV_1080P60_TB		41
+#define		V4L2_DV_1080P30_FP		42
+#define		V4L2_DV_1080P30_SB_HALF		43
+#define		V4L2_DV_1080P30_TB		44
+
+/*
  *	D V 	B T	T I M I N G S
  */
 
@@ -1321,99 +1392,6 @@ struct v4l2_dv_timings_cap {
 		__u32 raw_data[32];
 	};
 };
-
-/*
- *	V I D E O	T I M I N G S	D V	P R E S E T
- */
-struct v4l2_dv_preset {
-	__u32	preset;
-	__u32	reserved[4];
-};
-
-/*
- *	D V	P R E S E T S	E N U M E R A T I O N
- */
-struct v4l2_dv_enum_preset {
-	__u32	index;
-	__u32	preset;
-	__u8	name[32]; /* Name of the preset timing */
-	__u32	width;
-	__u32	height;
-	__u32	reserved[4];
-};
-
-/*
- * 	D V	P R E S E T	V A L U E S
- */
-#define		V4L2_DV_INVALID		0
-#define		V4L2_DV_480P59_94	1 /* BT.1362 */
-#define		V4L2_DV_576P50		2 /* BT.1362 */
-#define		V4L2_DV_720P24		3 /* SMPTE 296M */
-#define		V4L2_DV_720P25		4 /* SMPTE 296M */
-#define		V4L2_DV_720P30		5 /* SMPTE 296M */
-#define		V4L2_DV_720P50		6 /* SMPTE 296M */
-#define		V4L2_DV_720P59_94	7 /* SMPTE 274M */
-#define		V4L2_DV_720P60		8 /* SMPTE 274M/296M */
-#define		V4L2_DV_1080I29_97	9 /* BT.1120/ SMPTE 274M */
-#define		V4L2_DV_1080I30		10 /* BT.1120/ SMPTE 274M */
-#define		V4L2_DV_1080I25		11 /* BT.1120 */
-#define		V4L2_DV_1080I50		12 /* SMPTE 296M */
-#define		V4L2_DV_1080I60		13 /* SMPTE 296M */
-#define		V4L2_DV_1080P24		14 /* SMPTE 296M */
-#define		V4L2_DV_1080P25		15 /* SMPTE 296M */
-#define		V4L2_DV_1080P30		16 /* SMPTE 296M */
-#define		V4L2_DV_1080P50		17 /* BT.1120 */
-#define		V4L2_DV_1080P60		18 /* BT.1120 */
-
-/*
- *	D V 	B T	T I M I N G S
- */
-
-/* BT.656/BT.1120 timing data */
-struct v4l2_bt_timings {
-	__u32	width;		/* width in pixels */
-	__u32	height;		/* height in lines */
-	__u32	interlaced;	/* Interlaced or progressive */
-	__u32	polarities;	/* Positive or negative polarity */
-	__u64	pixelclock;	/* Pixel clock in HZ. Ex. 74.25MHz->74250000 */
-	__u32	hfrontporch;	/* Horizpontal front porch in pixels */
-	__u32	hsync;		/* Horizontal Sync length in pixels */
-	__u32	hbackporch;	/* Horizontal back porch in pixels */
-	__u32	vfrontporch;	/* Vertical front porch in pixels */
-	__u32	vsync;		/* Vertical Sync length in lines */
-	__u32	vbackporch;	/* Vertical back porch in lines */
-	__u32	il_vfrontporch;	/* Vertical front porch for bottom field of
-				 * interlaced field formats
-				 */
-	__u32	il_vsync;	/* Vertical sync length for bottom field of
-				 * interlaced field formats
-				 */
-	__u32	il_vbackporch;	/* Vertical back porch for bottom field of
-				 * interlaced field formats
-				 */
-	__u32	reserved[16];
-} __attribute__ ((packed));
-
-/* Interlaced or progressive format */
-#define	V4L2_DV_PROGRESSIVE	0
-#define	V4L2_DV_INTERLACED	1
-
-/* Polarities. If bit is not set, it is assumed to be negative polarity */
-#define V4L2_DV_VSYNC_POS_POL	0x00000001
-#define V4L2_DV_HSYNC_POS_POL	0x00000002
-
-
-/* DV timings */
-struct v4l2_dv_timings {
-	__u32 type;
-	union {
-		struct v4l2_bt_timings	bt;
-		__u32	reserved[32];
-	};
-} __attribute__ ((packed));
-
-/* Values for the type field */
-#define V4L2_DV_BT_656_1120	0	/* BT.656/1120 timing type */
 
 /*
  *	V I D E O   I N P U T S
