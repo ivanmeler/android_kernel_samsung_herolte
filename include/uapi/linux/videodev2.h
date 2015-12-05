@@ -1180,6 +1180,7 @@ struct v4l2_dv_enum_preset {
 #define		V4L2_DV_1080P30		16 /* SMPTE 296M */
 #define		V4L2_DV_1080P50		17 /* BT.1120 */
 #define		V4L2_DV_1080P60		18 /* BT.1120 */
+#define		V4L2_DV_2160P24		19 /* BT.1120 */
 
 #define		V4L2_DV_480P60			19
 #define		V4L2_DV_1080I59_94		20
