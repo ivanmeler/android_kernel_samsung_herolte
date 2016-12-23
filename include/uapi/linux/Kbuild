@@ -112,6 +112,7 @@ header-y += errno.h
 header-y += errqueue.h
 header-y += ethtool.h
 header-y += eventpoll.h
+header-y += exynos_mfc_media.h
 header-y += fadvise.h
 header-y += falloc.h
 header-y += fanotify.h

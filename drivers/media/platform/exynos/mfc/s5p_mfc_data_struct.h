@@ -31,7 +31,7 @@
 #include <linux/pm_qos.h>
 #endif
 
-#include "exynos_mfc_media.h"
+#include <linux/exynos_mfc_media.h>
 #include "s5p_mfc_nal_q_struct.h"
 
 #define MFC_NUM_CONTEXTS	32
