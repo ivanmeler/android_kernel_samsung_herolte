@@ -16,6 +16,7 @@
 #define __LINUX_VIDEODEV2_EXYNOS_MEDIA_H
 
 #include <linux/videodev2.h>
+#include <linux/exynos_mfc_media.h>
 
 /* added for lihwjpeg.so */
 
