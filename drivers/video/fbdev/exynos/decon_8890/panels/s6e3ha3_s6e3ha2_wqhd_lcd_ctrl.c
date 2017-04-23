@@ -1588,6 +1588,187 @@ error:
 
 }
 
+#ifdef CONFIG_PANEL_SMART_DIMMING
+static signed char smart_aid[] = {0xB1, 0x00, 0x0A};
+static signed char smart_rtbl[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+static signed char smart_ctbl[] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+
+struct SmtDimInfo smart_dimming_info[] = {
+	{ .br = 2,   .refBr = 7,   .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps8,  .elv = elv8,  .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 3,   .refBr = 8,   .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps8,  .elv = elv8,  .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 4,   .refBr = 9,   .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps8,  .elv = elv8,  .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 5,   .refBr = 10,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps8,  .elv = elv8,  .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 6,   .refBr = 11,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps8,  .elv = elv8,  .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 7,   .refBr = 12,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps8,  .elv = elv8,  .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 8,   .refBr = 13,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps8,  .elv = elv8,  .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 9,   .refBr = 14,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps8,  .elv = elv8,  .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 10,  .refBr = 15,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps8,  .elv = elv8,  .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 11,  .refBr = 16,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps8,  .elv = elv8,  .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 12,  .refBr = 17,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps8,  .elv = elv8,  .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 13,  .refBr = 18,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps8,  .elv = elv8,  .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 14,  .refBr = 19,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps8,  .elv = elv8,  .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 15,  .refBr = 20,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps8,  .elv = elv8,  .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 16,  .refBr = 21,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps8,  .elv = elv8,  .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 17,  .refBr = 22,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps8,  .elv = elv8,  .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 19,  .refBr = 23,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps8,  .elv = elv8,  .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 20,  .refBr = 24,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps8,  .elv = elv8,  .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 21,  .refBr = 25,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps8,  .elv = elv8,  .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 22,  .refBr = 26,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps8,  .elv = elv8,  .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 24,  .refBr = 27,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps8,  .elv = elv8,  .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 25,  .refBr = 28,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps8,  .elv = elv8,  .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 27,  .refBr = 29,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps8,  .elv = elv8,  .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 29,  .refBr = 30,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps8,  .elv = elv8,  .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 30,  .refBr = 31,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps8,  .elv = elv8,  .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 32,  .refBr = 32,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps8,  .elv = elv8,  .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 34,  .refBr = 34,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps9,  .elv = elv9,  .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 37,  .refBr = 37,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps9,  .elv = elv9,  .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 39,  .refBr = 39,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps8,  .elv = elv8,  .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 41,  .refBr = 41,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps8,  .elv = elv8,  .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 44,  .refBr = 44,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps10, .elv = elv10, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 47,  .refBr = 47,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps10, .elv = elv10, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 50,  .refBr = 50,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps10, .elv = elv10, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 53,  .refBr = 53,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps10, .elv = elv10, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 56,  .refBr = 56,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps10, .elv = elv10, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 60,  .refBr = 60,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps10, .elv = elv10, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 64,  .refBr = 64,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps10, .elv = elv10, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 68,  .refBr = 68,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps10, .elv = elv10, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 72,  .refBr = 72,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps10, .elv = elv10, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 77,  .refBr = 77,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps10, .elv = elv10, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 82,  .refBr = 82,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps10, .elv = elv10, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 87,  .refBr = 87,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps10, .elv = elv10, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 93,  .refBr = 93,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps10, .elv = elv10, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 98,  .refBr = 98,  .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps10, .elv = elv10, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 105, .refBr = 105, .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps10, .elv = elv10, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 111, .refBr = 111, .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps10, .elv = elv10, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 119, .refBr = 119, .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps10, .elv = elv10, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 126, .refBr = 126, .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps10, .elv = elv10, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 134, .refBr = 134, .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps10, .elv = elv10, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 143, .refBr = 143, .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps10, .elv = elv10, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 152, .refBr = 152, .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps10, .elv = elv10, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 162, .refBr = 162, .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps11, .elv = elv11, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 172, .refBr = 172, .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps11, .elv = elv11, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 183, .refBr = 183, .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps11, .elv = elv11, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 195, .refBr = 195, .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps11, .elv = elv11, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 207, .refBr = 207, .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps11, .elv = elv11, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 220, .refBr = 220, .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps11, .elv = elv11, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 234, .refBr = 234, .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps11, .elv = elv11, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 249, .refBr = 249, .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps11, .elv = elv11, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 265, .refBr = 265, .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps11, .elv = elv11, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 282, .refBr = 282, .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps11, .elv = elv11, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 300, .refBr = 300, .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps11, .elv = elv11, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 316, .refBr = 316, .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps11, .elv = elv11, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 333, .refBr = 333, .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps11, .elv = elv11, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 350, .refBr = 350, .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps11, .elv = elv11, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 357, .refBr = 357, .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps11, .elv = elv11, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 365, .refBr = 365, .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps11, .elv = elv11, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 372, .refBr = 372, .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps11, .elv = elv11, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 380, .refBr = 380, .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps11, .elv = elv11, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 387, .refBr = 387, .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps11, .elv = elv11, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 395, .refBr = 395, .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps11, .elv = elv11, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 403, .refBr = 403, .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps11, .elv = elv11, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 412, .refBr = 412, .cGma = gma2p15, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps11, .elv = elv11, .way = W1, .elvss_offset = elvss_offset5},
+	{ .br = 420, .refBr = 420, .cGma = gma2p20, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps11, .elv = elv11, .way = W2, .elvss_offset = elvss_offset5},
+	{ .br = 443, .refBr = 443, .cGma = gma2p20, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps12, .elv = elv12, .way = W3, .elvss_offset = elvss_offset5},
+	{ .br = 465, .refBr = 465, .cGma = gma2p20, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps21, .elv = elv21, .way = W3, .elvss_offset = elvss_offset5},
+	{ .br = 488, .refBr = 488, .cGma = gma2p20, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps14, .elv = elv14, .way = W3, .elvss_offset = elvss_offset5},
+	{ .br = 510, .refBr = 510, .cGma = gma2p20, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps15, .elv = elv15, .way = W3, .elvss_offset = elvss_offset5},
+	{ .br = 533, .refBr = 533, .cGma = gma2p20, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps16, .elv = elv16, .way = W3, .elvss_offset = elvss_offset5},
+	{ .br = 555, .refBr = 555, .cGma = gma2p20, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps18, .elv = elv18, .way = W3, .elvss_offset = elvss_offset5},
+	{ .br = 578, .refBr = 578, .cGma = gma2p20, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps19, .elv = elv19, .way = W3, .elvss_offset = elvss_offset5},
+	{ .br = 600, .refBr = 600, .cGma = gma2p20, .rTbl = smart_rtbl, .cTbl = smart_ctbl, .aid = smart_aid, .elvCaps = elvCaps20, .elv = elv20, .way = W4, .elvss_offset = elvss_offset5},
+};
+
+static int smart_init_dimming(struct dsim_device *dsim, u8 * mtp, u8 * hbm)
+{
+	int    i, j;
+	int    pos = 0;
+	int    ret = 0;
+	short  temp;
+	int    method = 0;
+	static struct dim_data *dimming = NULL;
+	struct panel_private *panel = &dsim->priv;
+	struct SmtDimInfo *diminfo = NULL;
+
+	if (dimming == NULL) {
+		dimming = (struct dim_data *) kmalloc(sizeof(struct dim_data), GFP_KERNEL);
+		if (!dimming) {
+			dsim_err("failed to allocate memory for dim data\n");
+			ret = -ENOMEM;
+			goto error;
+		}
+	}
+
+	dsim_info("%s: init smart dimming table\n", __func__);
+	diminfo = (void *)smart_dimming_info;
+	panel->smart_dim_data = (void *)dimming;
+	panel->smart_dim_info = (void *)diminfo;
+
+	for (j = 0; j < CI_MAX; j++) {
+		temp = ((mtp[pos] & 0x01) ? -1 : 1) * mtp[pos+1];
+		dimming->t_gamma[V255][j] = (int)center_gamma[V255][j] + temp;
+		dimming->mtp[V255][j] = temp;
+		pos += 2;
+	}
+
+	for (i = V203; i >= 0; i--) {
+		for (j = 0; j < CI_MAX; j++) {
+			temp = ((mtp[pos] & 0x80) ? -1 : 1) * (mtp[pos] & 0x7f);
+			dimming->t_gamma[i][j] = (int)center_gamma[i][j] + temp;
+			dimming->mtp[i][j] = temp;
+			pos++;
+		}
+	}
+
+	temp = (mtp[pos+1]) << 8 | mtp[pos];
+	for (i=0;i<CI_MAX;i++)
+		dimming->vt_mtp[i] = (temp >> (i*4)) &0x0f;
+
+	ret = generate_volt_table(dimming);
+	if (ret) {
+		dimm_err("[ERR:%s] failed to generate volt table\n", __func__);
+		goto error;
+	}
+
+	for (i = 0; i < MAX_BR_INFO; i++) {
+		method = diminfo[i].way;
+		if (method == DIMMING_METHOD_FILL_CENTER) {
+			ret = set_gamma_to_center(&diminfo[i]);
+			if (ret) {
+				dsim_err("%s : failed to get center gamma\n", __func__);
+				goto error;
+			}
+		}
+		else if (method == DIMMING_METHOD_FILL_HBM) {
+			ret = set_gamma_to_hbm(&diminfo[i], dimming, hbm);
+			if (ret) {
+				dsim_err("%s: failed to get hbm gamma\n", __func__);
+				goto error;
+			}
+		}
+	}
+
+	for (i = 0; i < MAX_BR_INFO; i++) {
+		method = diminfo[i].way;
+		if (method == DIMMING_METHOD_AID) {
+			ret = cal_gamma_from_index(dimming, &diminfo[i]);
+			if (ret) {
+				dsim_err("%s: failed to calculate gamma: index: %d\n", __func__, i);
+				goto error;
+			}
+		}
+		if (method == DIMMING_METHOD_INTERPOLATION) {
+			ret = interpolation_gamma_to_hbm(diminfo, i);
+			if (ret) {
+				dsim_err("%s: failed to calculate gamma: index: %d\n", __func__, i);
+				goto error;
+			}
+		}
+	}
+
+error:
+	return ret;
+}
+#endif
 
 
 #ifdef CONFIG_LCD_HMT
@@ -2856,6 +3037,14 @@ static int s6e3ha3_wqhd_probe(struct dsim_device *dsim)
 		dsim_err("%s : failed to generate gamma tablen\n", __func__);
 	}
 #endif
+
+#ifdef CONFIG_PANEL_SMART_DIMMING
+	ret = smart_init_dimming(dsim, mtp, hbm);
+	if (ret) {
+		dsim_err("%s : failed to generate gamma table\n", __func__);
+	}
+#endif
+
 #ifdef CONFIG_LCD_HMT
 	panel->hmt_support = SUPPORT_HMT;
 
@@ -3807,6 +3996,13 @@ static int s6e3hf4_wqhd_probe(struct dsim_device *dsim)
 	ret = init_dimming(dsim, mtp, hbm);
 	if (ret) {
 		dsim_err("%s : failed to generate gamma tablen\n", __func__);
+	}
+#endif
+
+#ifdef CONFIG_PANEL_SMART_DIMMING
+	ret = smart_init_dimming(dsim, mtp, hbm);
+	if (ret) {
+		dsim_err("%s : failed to generate gamma table\n", __func__);
 	}
 #endif
 
