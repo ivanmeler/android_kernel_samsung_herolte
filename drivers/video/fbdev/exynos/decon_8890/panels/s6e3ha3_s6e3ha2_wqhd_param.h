@@ -1324,6 +1324,11 @@ enum {
 #define S6E3HF4_OCTAID_LEN			25
 #endif
 
+#ifdef CONFIG_PANEL_SMART_DIMMING
+static const unsigned char S6E3HF4_AID[] = {0xB1, 0x00, 0x0A};
+static const unsigned char S6E3HF4_VINT[] = {0xF4, 0xBB, 0x1C};
+#endif
+
 static const unsigned char S6E3HF4_SEQ_GAMMA_CONDITION_SET[] = {
 	0xCA,
 	0x01, 0x00, 0x01, 0x00, 0x01, 0x00,
