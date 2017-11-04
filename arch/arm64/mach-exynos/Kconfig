@@ -125,16 +125,15 @@ config EXYNOS5420_MCPM
 
 endif
 
-
 config TIMA
 	bool "Enable TIMA(Trustzone based Integrity Measurement Archtecture feature"
 	default n
-	
+
 config TIMA_LKMAUTH
 	bool "Enable LKM authentication by TIMA"
 	help
 	  TIMA authenticates loaded kernel modules. Disable it if you don't
-	  want TIMA enabled.	
+	  want TIMA enabled.
 
 config TIMA_RKP
 	bool "Enable RKP (Realtime Kernel Protection) TIMA feature"
@@ -172,7 +171,7 @@ config TIMA_RKP_L2_GROUP
 config TIMA_RKP_LAZY_MMU
 	bool
 	depends on TIMA_RKP_L2_TABLES
-	default	y 
+	default	y
 	help
 	  TIMA lazy MMU for L2 pages
 
@@ -182,7 +181,7 @@ config TIMA_IOMMU_OPT
 	default	y
 	help
 	  TIMA IOMMU optimization for L2 pages
-	
+
 config TIMA_KMAP_OPT
 	bool
 	depends on TIMA_RKP_L2_TABLES
@@ -193,7 +192,7 @@ config TIMA_KMAP_OPT
 config TIMA_DALVIKHEAP_OPT
 	bool
 	depends on TIMA_RKP_L2_TABLES
-	default	y 
+	default	y
 	help
 	  TIMA DALVIK HEAP optimization for L2 pages
 

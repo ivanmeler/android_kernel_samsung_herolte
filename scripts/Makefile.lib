@@ -308,6 +308,16 @@ $(obj)/%.dtb: $(src)/%.dts FORCE
 
 dtc-tmp = $(subst $(comma),_,$(dot-target).dts.tmp)
 
+# dtbtool (Exynos)
+# ---------------------------------------------------------------------------
+
+quiet_cmd_dtbtool_exynos = DTBTOOL $@
+cmd_dtbtool_exynos = $(objtree)/scripts/dtbtool_exynos/dtbtool \
+		--pagesize $(CONFIG_EXYNOS_DTBH_PAGE_SIZE) \
+		--platform $(CONFIG_EXYNOS_DTBH_PLATFORM_CODE) \
+		--subtype $(CONFIG_EXYNOS_DTBH_SUBTYPE_CODE) \
+		-o $@ $(sort $(filter-out FORCE,$^))
+
 # Helper targets for Installing DTBs into the boot directory
 quiet_cmd_dtb_install =	INSTALL $<
       cmd_dtb_install =	cp $< $(2)
