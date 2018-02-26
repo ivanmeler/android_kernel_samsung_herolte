@@ -118,6 +118,23 @@
 		pmu_base = <0x105C0000>;
 	};
 
+	firmware: firmware {
+		android {
+			compatible = "android,firmware";
+			fstab {
+				compatible = "android,fstab";
+				system {
+					compatible = "android,system";
+					dev = "/dev/block/platform/155a0000.ufs/by-name/SYSTEM";
+					type = "ext4";
+					mnt_flags = "ro,errors=panic,noload";
+					fsmgr_flags = "wait";
+					status = "ok";
+				};
+			};
+		};
+	};
+
 	cpus {
 		#address-cells = <2>;
 		#size-cells = <0>;
