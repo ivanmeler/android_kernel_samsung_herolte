@@ -238,6 +238,7 @@ header-y += llc.h
 header-y += loop.h
 header-y += lp.h
 header-y += m2m1shot.h
+header-y += m2m1shot2.h
 header-y += magic.h
 header-y += major.h
 header-y += map_to_7segment.h
