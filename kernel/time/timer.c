@@ -1152,7 +1152,9 @@ static void call_timer_fn(struct timer_list *timer, void (*fn)(unsigned long),
 	lock_map_acquire(&lockdep_map);
 
 	trace_timer_expire_entry(timer);
+	exynos_ss_irq(ESS_FLAG_CALL_TIMER_FN, fn, irqs_disabled(), ESS_FLAG_IN);
 	fn(data);
+	exynos_ss_irq(ESS_FLAG_CALL_TIMER_FN, fn, irqs_disabled(), ESS_FLAG_OUT);
 	trace_timer_expire_exit(timer);
 
 	lock_map_release(&lockdep_map);

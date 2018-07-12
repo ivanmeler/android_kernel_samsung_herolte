@@ -1186,6 +1186,9 @@ __setup_irq(unsigned int irq, struct irq_desc *desc, struct irqaction *new)
 			irqd_set(&desc->irq_data, IRQD_NO_BALANCING);
 		}
 
+		if (new->flags & IRQF_GIC_MULTI_TARGET)
+			irqd_set(&desc->irq_data, IRQD_GIC_MULTI_TARGET);
+
 		/* Set default affinity mask once everything is setup */
 		setup_affinity(irq, desc, mask);
 

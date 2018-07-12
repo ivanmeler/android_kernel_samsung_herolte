@@ -15,6 +15,7 @@
 #define _DW_MMC_H_
 
 #define DW_MMC_240A		0x240a
+#define DW_MMC_260A		0x260a
 
 #define SDMMC_CTRL		0x000
 #define SDMMC_PWREN		0x004
@@ -53,7 +54,9 @@
 #define SDMMC_IDINTEN		0x090
 #define SDMMC_DSCADDR		0x094
 #define SDMMC_BUFADDR		0x098
+#define SDMMC_RESP_TAT		0x0AC
 #define SDMMC_CDTHRCTL		0x100
+#define SDMMC_EMMC_DDR_REG	0x10C
 #define SDMMC_DATA(x)		(x)
 
 /*
@@ -137,6 +140,9 @@
 #define SDMMC_SET_FIFOTH(m, r, t)	(((m) & 0x7) << 28 | \
 					 ((r) & 0xFFF) << 16 | \
 					 ((t) & 0xFFF))
+
+#define SDMMC_FIFOTH_DMA_MULTI_TRANS_SIZE	28
+#define SDMMC_FIFOTH_RX_WMARK		16
 /* Internal DMAC interrupt defines */
 #define SDMMC_IDMAC_INT_AI		BIT(9)
 #define SDMMC_IDMAC_INT_NI		BIT(8)
@@ -164,6 +170,9 @@
 #define mci_writel(dev, reg, value)			\
 	__raw_writel((value), (dev)->regs + SDMMC_##reg)
 
+/* timeout */
+#define dw_mci_set_timeout(host, value)	mci_writel(host, TMOUT, value)
+
 /* 16-bit FIFO access macros */
 #define mci_readw(dev, reg)			\
 	__raw_readw((dev)->regs + SDMMC_##reg)
@@ -172,10 +181,25 @@
 
 /* 64-bit FIFO access macros */
 #ifdef readq
+#ifdef CONFIG_MMC_DW_FORCE_32BIT_SFR_RW
+#define mci_readq(dev, reg) ({\
+		u64 __ret = 0;\
+		u32* ptr = (u32*)&__ret;\
+		*ptr++ = __raw_readl((dev)->regs + SDMMC_##reg);\
+		*ptr = __raw_readl((dev)->regs + SDMMC_##reg + 0x4);\
+		__ret;\
+	})
+#define mci_writeq(dev, reg, value) ({\
+		u32 *ptr = (u32*)&(value);\
+		__raw_writel(*ptr++, (dev)->regs + SDMMC_##reg);\
+		__raw_writel(*ptr, (dev)->regs + SDMMC_##reg + 0x4);\
+	})
+#else
 #define mci_readq(dev, reg)			\
 	__raw_readq((dev)->regs + SDMMC_##reg)
 #define mci_writeq(dev, reg, value)			\
 	__raw_writeq((value), (dev)->regs + SDMMC_##reg)
+#endif /* CONFIG_MMC_DW_FORCE_32BIT_SFR_RW */
 #else
 /*
  * Dummy readq implementation for architectures that don't define it.
@@ -190,6 +214,34 @@
 #define mci_writeq(dev, reg, value)			\
 	(*(volatile u64 __force *)((dev)->regs + SDMMC_##reg) = (value))
 #endif
+
+/*
+ * platform-dependent miscellaneous control
+ *
+ * Input arguments for platform-dependent control may be different
+ * for each one, respectively. If we would add functions like them
+ * whenever we need to do that, this common header file(dw_mmc.h)
+ * will be modified so frequently.
+ * The following enumeration type is to minimize an amount of changes
+ * of common files.
+ */
+
+enum dw_mci_misc_control {
+	CTRL_RESTORE_CLKSEL = 0,
+	CTRL_REQUEST_EXT_IRQ,
+	CTRL_CHECK_CD,
+};
+
+#define SDMMC_DATA_TMOUT_SHIFT		11
+#define SDMMC_RESP_TMOUT		0xFF
+#define SDMMC_DATA_TMOUT_CRT		8
+#define SDMMC_DATA_TMOUT_EXT		0x1
+#define SDMMC_DATA_TMOUT_EXT_SHIFT	8
+#define SDMMC_DATA_TMOUT_MAX_CNT	0x1FFFFF
+#define SDMMC_DATA_TMOUT_MAX_EXT_CNT	0xFFFFFF
+#define SDMMC_HTO_TMOUT_SHIFT		8
+
+extern u32 dw_mci_calc_timeout(struct dw_mci *host);
 
 extern int dw_mci_probe(struct dw_mci *host);
 extern void dw_mci_remove(struct dw_mci *host);
@@ -237,6 +289,87 @@ struct dw_mci_slot {
 	int			last_detect_state;
 };
 
+/**
+ * struct dw_mci_debug_data - DwMMC debugging infomation
+ * @host_count: a number of all hosts
+ * @info_count: a number of set of debugging information
+ * @info_index: index of debugging information for each host
+ * @host: pointer of each dw_mci structure
+ * @debug_info: debugging information structure
+ */
+
+struct dw_mci_cmd_log {
+	u64	send_time;
+	u64	done_time;
+	u8	cmd;
+	u32	arg;
+	u8	data_size;
+	/* no data CMD = CD, data CMD = DTO */
+	/*
+	 * 0b1000 0000	: new_cmd with without send_cmd
+	 * 0b0000 1000	: error occurs
+	 * 0b0000 0100	: data_done : DTO(Data Transfer Over)
+	 * 0b0000 0010	: resp : CD(Command Done)
+	 * 0b0000 0001	: send_cmd : set 1 only start_command
+	 */
+	u8	seq_status;	/* 0bxxxx xxxx : error data_done resp send */
+#define DW_MCI_FLAG_SEND_CMD	BIT(0)
+#define DW_MCI_FLAG_CD		BIT(1)
+#define DW_MCI_FLAG_DTO		BIT(2)
+#define DW_MCI_FLAG_ERROR	BIT(3)
+#define DW_MCI_FLAG_NEW_CMD_ERR	BIT(7)
+
+	u16	rint_sts;	/* RINTSTS value in case of error */
+	u8	status_count;	/* TBD : It can be changed */
+};
+
+enum dw_mci_req_log_state {
+	STATE_REQ_START = 0,
+	STATE_REQ_CMD_PROCESS,
+	STATE_REQ_DATA_PROCESS,
+	STATE_REQ_END,
+};
+
+struct dw_mci_req_log {
+	u64				timestamp;
+	u32				info0;
+	u32				info1;
+	u32				info2;
+	u32				info3;
+	u32				pending_events;
+	u32				completed_events;
+	enum dw_mci_state		state;
+	enum dw_mci_state		state_cmd;
+	enum dw_mci_state		state_dat;
+	enum dw_mci_req_log_state	log_state;
+};
+
+#define DWMCI_LOG_MAX		0x80
+#define DWMCI_REQ_LOG_MAX	0x40
+struct dw_mci_debug_info {
+	struct dw_mci_cmd_log		cmd_log[DWMCI_LOG_MAX];
+	atomic_t			cmd_log_count;
+	struct dw_mci_req_log		req_log[DWMCI_REQ_LOG_MAX];
+	atomic_t			req_log_count;
+	unsigned char			en_logging;
+#define DW_MCI_DEBUG_ON_CMD	BIT(0)
+#define DW_MCI_DEBUG_ON_REQ	BIT(1)
+};
+
+#define DWMCI_DBG_NUM_HOST	3
+
+#define DWMCI_DBG_NUM_INFO	3			/* configurable */
+#define DWMCI_DBG_MASK_INFO	(BIT(0) | BIT(1) | BIT(2))	/* configurable */
+#define DWMCI_DBG_BIT_HOST(x)	BIT(x)
+
+struct dw_mci_debug_data {
+	unsigned char			host_count;
+	unsigned char			info_count;
+	unsigned char			info_index[DWMCI_DBG_NUM_HOST];
+	struct dw_mci			*host[DWMCI_DBG_NUM_HOST];
+	struct dw_mci_debug_info	debug_info[DWMCI_DBG_NUM_INFO];
+};
+
 struct dw_mci_tuning_data {
 	const u8 *blk_pattern;
 	unsigned int blksz;
@@ -251,6 +384,7 @@ struct dw_mci_tuning_data {
  * @set_ios: handle bus specific extensions.
  * @parse_dt: parse implementation specific device tree properties.
  * @execute_tuning: implementation specific tuning procedure.
+ * @cfg_smu: to configure security management unit
  *
  * Provide controller implementation specific extensions. The usage of this
  * data structure is fully optional and usage of each member in this structure
@@ -265,5 +399,66 @@ struct dw_mci_drv_data {
 	int		(*parse_dt)(struct dw_mci *host);
 	int		(*execute_tuning)(struct dw_mci_slot *slot, u32 opcode,
 					struct dw_mci_tuning_data *tuning_data);
+	void            (*cfg_smu)(struct dw_mci *host);
+	int             (*misc_control)(struct dw_mci *host,
+				enum dw_mci_misc_control control, void *priv);
+};
+
+struct dw_mci_sfe_ram_dump {
+	u32			contrl;
+	u32			pwren;
+	u32			clkdiv;
+	u32			clkena;
+	u32			clksrc;
+	u32			tmout;
+	u32			ctype;
+	u32			blksiz;
+	u32			bytcnt;
+	u32			intmask;
+	u32			cmdarg;
+	u32			cmd;
+	u32		       	mintsts;
+	u32			rintsts;
+	u32			status;
+	u32			fifoth;
+	u32			tcbcnt;
+	u32			tbbcnt;
+	u32			debnce;
+	u32			uhs_reg;
+	u32			bmod;
+	u32			pldmnd;
+	u32			dbaddrl;
+	u32			dbaddru;
+	u32			dscaddrl;
+	u32			dscaddru;
+	u32			bufaddru;
+	u32			dbaddr;
+	u32			dscaddr;
+	u32			bufaddr;
+	u32			clksel;
+	u32			idsts64;
+	u32			idinten64;
+	u32			force_clk_stop;
+	u32			cdthrctl;
+	u32			ddr200_rdqs_en;
+	u32			ddr200_acync_fifo_ctrl;
+	u32			ddr200_dline_ctrl;
+	u32			fmp_emmcp_base;
+	u32			mpsecurity;
+	u32			mpstat;
+	u32			mpsbegin;
+	u32			mpsend;
+	u32			mpsctrl;
+	u32			cmd_status;
+	u32			data_status;
+	u32			pending_events;
+	u32			completed_events;
+	u32			host_state;
+	u32			cmd_index;
+	u32			fifo_count;
+	u32			data_busy;
+	u32			data_3_state;
+	u32			fifo_tx_watermark;
+	u32			fifo_rx_watermark;
 };
 #endif /* _DW_MMC_H_ */

@@ -21,12 +21,12 @@
 #include <linux/mailbox_client.h>
 #include <linux/mailbox_controller.h>
 
-#define TXDONE_BY_IRQ	BIT(0) /* controller has remote RTR irq */
-#define TXDONE_BY_POLL	BIT(1) /* controller can read status of last TX */
-#define TXDONE_BY_ACK	BIT(2) /* S/W ACK recevied by Client ticks the TX */
+#include "mailbox.h"
 
 static LIST_HEAD(mbox_cons);
 static DEFINE_MUTEX(con_mutex);
+
+static int poll_txdone(unsigned long data);
 
 static int add_to_rbuf(struct mbox_chan *chan, void *mssg)
 {
@@ -55,17 +55,20 @@ static int add_to_rbuf(struct mbox_chan *chan, void *mssg)
 	return idx;
 }
 
-static void msg_submit(struct mbox_chan *chan)
+static int msg_submit(struct mbox_chan *chan)
 {
 	unsigned count, idx;
 	unsigned long flags;
 	void *data;
-	int err;
+	int err = -EBUSY;
+	int ret = 0;
 
 	spin_lock_irqsave(&chan->lock, flags);
 
-	if (!chan->msg_count || chan->active_req)
+	if (!chan->msg_count || chan->active_req) {
+		ret = -ENOENT;
 		goto exit;
+	}
 
 	count = chan->msg_count;
 	idx = chan->msg_free;
@@ -76,14 +79,27 @@ static void msg_submit(struct mbox_chan *chan)
 
 	data = chan->msg_data[idx];
 
+	if (chan->cl->tx_prepare)
+		chan->cl->tx_prepare(chan->cl, data);
 	/* Try to submit a message to the MBOX controller */
 	err = chan->mbox->ops->send_data(chan, data);
 	if (!err) {
 		chan->active_req = data;
 		chan->msg_count--;
+	} else {
+		pr_err("mailbox: cm3 send fail\n");
+		ret = -EIO;
 	}
 exit:
 	spin_unlock_irqrestore(&chan->lock, flags);
+
+	if (!err && (chan->txdone_method & TXDONE_BY_POLL)) {
+		ret = poll_txdone((unsigned long)chan->mbox);
+		if (ret < 0)
+			pr_err("%s Do not check polling data\n", __func__);
+	}
+
+	return ret;
 }
 
 static void tx_tick(struct mbox_chan *chan, int r)
@@ -110,26 +126,29 @@ static void tx_tick(struct mbox_chan *chan, int r)
 		complete(&chan->tx_complete);
 }
 
-static void poll_txdone(unsigned long data)
+static int poll_txdone(unsigned long data)
 {
 	struct mbox_controller *mbox = (struct mbox_controller *)data;
-	bool txdone, resched = false;
+	int txdone;
 	int i;
+	int ret = 0;
 
 	for (i = 0; i < mbox->num_chans; i++) {
 		struct mbox_chan *chan = &mbox->chans[i];
 
 		if (chan->active_req && chan->cl) {
-			resched = true;
 			txdone = chan->mbox->ops->last_tx_done(chan);
-			if (txdone)
-				tx_tick(chan, 0);
+			if (!txdone) {
+				tx_tick(chan, MBOX_OK);
+				ret = 0;
+			} else if (txdone == -EIO) {
+				tx_tick(chan, MBOX_ERR);
+				ret = -EIO;
+			}
 		}
 	}
 
-	if (resched)
-		mod_timer(&mbox->poll, jiffies +
-				msecs_to_jiffies(mbox->txpoll_period));
+	return ret;
 }
 
 /**
@@ -242,7 +261,7 @@ EXPORT_SYMBOL_GPL(mbox_client_peek_data);
  */
 int mbox_send_message(struct mbox_chan *chan, void *mssg)
 {
-	int t;
+	int t, ret;
 
 	if (!chan || !chan->cl)
 		return -EINVAL;
@@ -253,10 +272,10 @@ int mbox_send_message(struct mbox_chan *chan, void *mssg)
 		return t;
 	}
 
-	msg_submit(chan);
-
-	if (chan->txdone_method	== TXDONE_BY_POLL)
-		poll_txdone((unsigned long)chan->mbox);
+	ret = msg_submit(chan);
+	if (ret) {
+		return -EIO;
+	}
 
 	if (chan->cl->tx_block) {
 		unsigned long wait;
@@ -318,7 +337,7 @@ struct mbox_chan *mbox_request_channel(struct mbox_client *cl, int index)
 		return ERR_PTR(-ENODEV);
 	}
 
-	chan = NULL;
+	chan = ERR_PTR(-EPROBE_DEFER);
 	list_for_each_entry(mbox, &mbox_cons, node)
 		if (mbox->dev->of_node == spec.np) {
 			chan = mbox->of_xlate(mbox, &spec);
@@ -327,7 +346,12 @@ struct mbox_chan *mbox_request_channel(struct mbox_client *cl, int index)
 
 	of_node_put(spec.np);
 
-	if (!chan || chan->cl || !try_module_get(mbox->dev->driver->owner)) {
+	if (IS_ERR(chan)) {
+		mutex_unlock(&con_mutex);
+		return chan;
+	}
+
+	if (chan->cl || !try_module_get(mbox->dev->driver->owner)) {
 		dev_dbg(dev, "%s: mailbox not free\n", __func__);
 		mutex_unlock(&con_mutex);
 		return ERR_PTR(-EBUSY);
@@ -390,7 +414,7 @@ of_mbox_index_xlate(struct mbox_controller *mbox,
 	int ind = sp->args[0];
 
 	if (ind >= mbox->num_chans)
-		return NULL;
+		return ERR_PTR(-EINVAL);
 
 	return &mbox->chans[ind];
 }
@@ -417,9 +441,7 @@ int mbox_controller_register(struct mbox_controller *mbox)
 		txdone = TXDONE_BY_ACK;
 
 	if (txdone == TXDONE_BY_POLL) {
-		mbox->poll.function = &poll_txdone;
 		mbox->poll.data = (unsigned long)mbox;
-		init_timer(&mbox->poll);
 	}
 
 	for (i = 0; i < mbox->num_chans; i++) {

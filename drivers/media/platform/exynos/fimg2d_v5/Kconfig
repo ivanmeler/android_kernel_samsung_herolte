@@ -1,0 +1,31 @@
+#
+# Copyright (c) 2015 Samsung Electronics Co., Ltd.
+#		http://www.samsung.com/
+#
+# Licensed under GPLv2
+
+config VIDEO_EXYNOS_FIMG2D_V5
+	bool "Samsung Graphics 2D Driver v5"
+	depends on VIDEO_EXYNOS && ARCH_EXYNOS8
+	default n
+	---help---
+	  This is a legacy driver for graphics 2D in Samsung ARM based SoC.
+
+config FIMG2D_CCI_SNOOP
+	bool
+	depends on VIDEO_EXYNOS_FIMG2D_LEGACY
+	default n
+
+choice
+depends on VIDEO_EXYNOS_FIMG2D_V5
+prompt "FIMG2D version"
+	default VIDEO_EXYNOS_FIMG2D_LEGACY
+config VIDEO_EXYNOS_FIMG2D_LEGACY
+prompt "G2D legacy version"
+	bool
+	select FIMG2D_CCI_SNOOP
+config VIDEO_EXYNOS_FIMG2D_1SHOT2
+prompt "G2D m2m1shot2 version"
+	bool
+	select MEDIA_M2M1SHOT2
+endchoice

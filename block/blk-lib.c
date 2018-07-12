@@ -26,29 +26,29 @@ static void bio_batch_end_io(struct bio *bio, int err)
 	bio_put(bio);
 }
 
-/**
- * blkdev_issue_discard - queue a discard
- * @bdev:	blockdev to issue discard for
- * @sector:	start sector
- * @nr_sects:	number of sectors to discard
- * @gfp_mask:	memory allocation flags (for bio_alloc)
- * @flags:	BLKDEV_IFL_* flags to control behaviour
- *
- * Description:
- *    Issue a discard request for the sectors in question.
- */
-int blkdev_issue_discard(struct block_device *bdev, sector_t sector,
-		sector_t nr_sects, gfp_t gfp_mask, unsigned long flags)
+static struct bio *next_bio(struct bio *bio, unsigned int nr_pages,
+		int type, gfp_t gfp)
 {
-	DECLARE_COMPLETION_ONSTACK(wait);
+	struct bio *new = bio_alloc(gfp, nr_pages);
+
+	if (bio) {
+		bio_chain(bio, new);
+		submit_bio(type, bio);
+	}
+
+	return new;
+}
+
+int __blkdev_issue_discard(struct block_device *bdev, sector_t sector,
+		sector_t nr_sects, gfp_t gfp_mask, unsigned long flags,
+		struct bio **biop)
+{
 	struct request_queue *q = bdev_get_queue(bdev);
-	int type = REQ_WRITE | REQ_DISCARD;
+	struct bio *bio = *biop;
+	int type = REQ_WRITE | REQ_DISCARD | REQ_PRIO;
 	unsigned int max_discard_sectors, granularity;
 	int alignment;
-	struct bio_batch bb;
-	struct bio *bio;
-	int ret = 0;
-	struct blk_plug plug;
+	sector_t bs_mask;
 
 	if (!q)
 		return -ENXIO;
@@ -56,7 +56,11 @@ int blkdev_issue_discard(struct block_device *bdev, sector_t sector,
 	if (!blk_queue_discard(q))
 		return -EOPNOTSUPP;
 
-	/* Zero-sector (unknown) and one-sector granularities are the same.  */
+	bs_mask = (bdev_logical_block_size(bdev) >> 9) - 1;
+	if ((sector | nr_sects) & bs_mask)
+		return -EINVAL;
+
+	/* Zero-sector (unknown) and one-sector granularities are the same. */
 	granularity = max(q->limits.discard_granularity >> 9, 1U);
 	alignment = (bdev_discard_alignment(bdev) >> 9) % granularity;
 
@@ -77,24 +81,16 @@ int blkdev_issue_discard(struct block_device *bdev, sector_t sector,
 		type |= REQ_SECURE;
 	}
 
-	atomic_set(&bb.done, 1);
-	bb.flags = 1 << BIO_UPTODATE;
-	bb.wait = &wait;
+	if (flags & BLKDEV_DISCARD_SYNC)
+		type |= REQ_SYNC;
 
-	blk_start_plug(&plug);
 	while (nr_sects) {
 		unsigned int req_sects;
 		sector_t end_sect, tmp;
 
-		bio = bio_alloc(gfp_mask, 1);
-		if (!bio) {
-			ret = -ENOMEM;
-			break;
-		}
-
 		req_sects = min_t(sector_t, nr_sects, max_discard_sectors);
 
-		/*
+		/**
 		 * If splitting a request, and the next starting sector would be
 		 * misaligned, stop the discard at the previous aligned sector.
 		 */
@@ -108,17 +104,13 @@ int blkdev_issue_discard(struct block_device *bdev, sector_t sector,
 			req_sects = end_sect - sector;
 		}
 
+		bio = next_bio(bio, 1, type, gfp_mask);
 		bio->bi_iter.bi_sector = sector;
-		bio->bi_end_io = bio_batch_end_io;
 		bio->bi_bdev = bdev;
-		bio->bi_private = &bb;
 
 		bio->bi_iter.bi_size = req_sects << 9;
 		nr_sects -= req_sects;
 		sector = end_sect;
-
-		atomic_inc(&bb.done);
-		submit_bio(type, bio);
 
 		/*
 		 * We can loop for a long time in here, if someone does
@@ -128,14 +120,41 @@ int blkdev_issue_discard(struct block_device *bdev, sector_t sector,
 		 */
 		cond_resched();
 	}
+
+	*biop = bio;
+	return 0;
+}
+EXPORT_SYMBOL(__blkdev_issue_discard);
+
+/**
+ * blkdev_issue_discard - queue a discard
+ * @bdev:	blockdev to issue discard for
+ * @sector:	start sector
+ * @nr_sects:	number of sectors to discard
+ * @gfp_mask:	memory allocation flags (for bio_alloc)
+ * @flags:	BLKDEV_IFL_* flags to control behaviour
+ *
+ * Description:
+ *    Issue a discard request for the sectors in question.
+ */
+int blkdev_issue_discard(struct block_device *bdev, sector_t sector,
+		sector_t nr_sects, gfp_t gfp_mask, unsigned long flags)
+{
+	struct bio *bio = NULL;
+	struct blk_plug plug;
+	int type = REQ_WRITE | REQ_DISCARD | REQ_PRIO;
+	int ret;
+
+	blk_start_plug(&plug);
+	ret = __blkdev_issue_discard(bdev, sector, nr_sects, gfp_mask, flags,
+				     &bio);
+	if (!ret && bio) {
+		ret = submit_bio_wait(type, bio);
+		if (ret == -EOPNOTSUPP)
+			ret = 0;
+		bio_put(bio);
+	}
 	blk_finish_plug(&plug);
-
-	/* Wait for bios in-flight */
-	if (!atomic_dec_and_test(&bb.done))
-		wait_for_completion_io(&wait);
-
-	if (!test_bit(BIO_UPTODATE, &bb.flags))
-		ret = -EIO;
 
 	return ret;
 }

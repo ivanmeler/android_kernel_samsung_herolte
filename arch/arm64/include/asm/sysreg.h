@@ -238,6 +238,17 @@ static inline void config_sctlr_el1(u32 clear, u32 set)
 		     : : "r" (__val));				\
 } while (0)
 
+#ifndef CONFIG_REMOVE_M1_TLBI_ERRATUM_FOR_TVM
+#define write_sysreg_with_tlbi(v, r) do {			\
+	u64 __val = (u64)v;					\
+	asm volatile(	"tlbi    vae1, xzr\n"			\
+			"dsb     nsh\n"				\
+			"tlbi    vae1, xzr\n"			\
+			"msr " __stringify(r) ", %0\n"		\
+			"tlbi	vae1, xzr"				\
+		     : : "r" (__val));				\
+} while (0)
+#endif
 #endif
 
 #endif	/* __ASM_SYSREG_H */

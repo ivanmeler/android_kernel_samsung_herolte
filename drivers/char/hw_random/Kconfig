@@ -307,6 +307,43 @@ config HW_RANDOM_EXYNOS
 
 	  If unsure, say Y.
 
+config HW_RANDOM_EXYNOS_SWD
+	tristate "EXYNOS SWD HW random number generator support"
+	depends on ARCH_EXYNOS
+	default HW_RANDOM
+	---help---
+	  This driver provides kernel-side support for TRNG hardware
+	  found in secure world by using smc call
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called exynos-rng.
+
+	  If unsure, say Y.
+
+config EXYRNG_FIPS_COMPLIANCE
+	bool "Compliant with FIPS 140-2"
+	depends on HW_RANDOM_EXYNOS_SWD
+
+choice
+	prompt "Fail Policy"
+	depends on EXYRNG_FIPS_COMPLIANCE
+	default EXYRNG_FAIL_POLICY_DISABLE
+
+config EXYRNG_FAIL_POLICY_DISABLE
+	bool "Disable RNG if the tests fail"
+	depends on EXYRNG_FIPS_COMPLIANCE
+
+config EXYRNG_FAIL_POLICY_RESET
+	bool "Reset if the tests fail"
+	depends on EXYRNG_FIPS_COMPLIANCE
+
+endchoice
+
+config EXYRNG_USE_CRYPTOMANAGER
+	tristate "Use CryptoManager"
+	depends on HW_RANDOM_EXYNOS_SWD
+	default n
+
 config HW_RANDOM_TPM
 	tristate "TPM HW Random Number Generator support"
 	depends on TCG_TPM
@@ -362,3 +399,4 @@ config UML_RANDOM
 	  (check your distro, or download from
 	  http://sourceforge.net/projects/gkernel/).  rngd periodically reads
 	  /dev/hwrng and injects the entropy into /dev/random.
+

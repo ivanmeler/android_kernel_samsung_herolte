@@ -1,0 +1,37 @@
+menuconfig CAMERA_ACT_SELECT
+	bool "Sensor actuator select"
+	depends on USE_DIRECT_IS_CONTROL
+	help
+	  Say Y here to enable support for platform-specific V4L drivers.
+
+config CAMERA_ACT_AK7348_OBJ
+        bool "Use actuator AK7348"
+	depends on USE_DIRECT_IS_CONTROL
+	depends on CAMERA_ACT_SELECT
+        default n
+        help
+          Use to build AK7348 driver.
+
+config CAMERA_ACT_AK7345_OBJ
+        bool "Use actuator AK7345"
+	depends on USE_DIRECT_IS_CONTROL
+	depends on CAMERA_ACT_SELECT
+        default n
+        help
+          Use to build AK7345 driver.
+
+config CAMERA_ACT_DW9714_OBJ
+        bool "Use actuator DW9714"
+	depends on USE_DIRECT_IS_CONTROL
+	depends on CAMERA_ACT_SELECT
+        default n
+        help
+          Use to build DW9714 driver.
+
+config CAMERA_ACT_DW9804_OBJ
+        bool "Use actuator DW9804"
+	depends on USE_DIRECT_IS_CONTROL
+	depends on CAMERA_ACT_SELECT
+        default n
+        help
+          Use to build DW9804 driver.

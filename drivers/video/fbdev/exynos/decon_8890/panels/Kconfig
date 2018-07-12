@@ -1,0 +1,121 @@
+config EXYNOS_DECON_LCD
+	depends on EXYNOS_DECON_8890
+	bool "Select LCD panel driver"
+
+config EXYNOS_DECON_MDNIE_LITE
+	depends on EXYNOS_DECON_LCD
+	tristate "Support MDNIE LITE"
+	default n
+
+config EXYNOS_DECON_LCD_SYSFS
+	depends on EXYNOS_DECON_LCD
+	tristate "Support LCD SYSFS"
+	default y
+
+config PANEL_AID_DIMMING
+	depends on EXYNOS_DECON_LCD
+	tristate "Support AID Dimming"
+	default n
+
+config EXYNOS_DECON_LCD_MCD
+	depends on EXYNOS_DECON_LCD_SYSFS
+	tristate "Support MCD"
+	default n
+
+config LCD_HMT
+	depends on EXYNOS_DECON_LCD
+	tristate "Support HMT display"
+	default n
+
+config LCD_ALPM
+	depends on EXYNOS_DECON_LCD
+	tristate "Support ALPM display"
+	default n
+
+config LCD_DOZE_MODE
+	depends on EXYNOS_DECON_LCD
+	tristate "Support DOZE MODE"
+	default n
+
+config LCD_ESD_IDLE_MODE
+	depends on EXYNOS_DECON_LCD
+	tristate "Support HA3 PANEL FOR ESD"
+	default n
+
+config PANEL_S6E3HF4_WQHD
+	depends on EXYNOS_DECON_LCD && EXYNOS_MIPI_DSI
+	tristate "S6E3HF4 AMOLED SUPPORT WQHD RESOLUTION"
+
+config PANEL_S6E3HF4_WQHD_HAECHI
+	depends on EXYNOS_DECON_LCD && EXYNOS_MIPI_DSI
+	tristate "S6E3HF4 AMOLED SUPPORT WQHD RESOLUTION FOR HAECHI"
+
+config PANEL_S6E3HA5_WQHD
+	depends on EXYNOS_DECON_LCD && EXYNOS_MIPI_DSI
+	tristate "S6E3HA5 AMOLED SUPPORT WQHD RESOLUTION"
+
+config PANEL_S6E3FA2_FHD
+	depends on EXYNOS_DECON_LCD && EXYNOS_MIPI_DSI
+	tristate "S6E3FA2 AMOLED SUPPORT FHD RESULOTION"
+
+config PANEL_S6E3HF2_WQXGA
+	depends on EXYNOS_DECON_LCD && EXYNOS_MIPI_DSI
+	tristate "S6E3HF2 AMOLED SUPPORT WQXGA RESOLUTION"
+
+config PANEL_S6E3HF4_WQXGA
+	depends on EXYNOS_DECON_LCD && EXYNOS_MIPI_DSI
+	tristate "S6E3HF4 AMOLED SUPPORT WQXGA RESOLUTION"
+
+config PANEL_S6E3HA3_DYNAMIC
+	depends on EXYNOS_DECON_LCD && EXYNOS_MIPI_DSI
+	tristate "S6E3HA3 AMOLED SUPPORT BOTH S6E3HA2/S6E3HA3/S6E3HF4 (1440 x 2560)"
+
+config SUPPORT_CROSS_DOWNLOAD
+	depends on EXYNOS_DECON_LCD && EXYNOS_MIPI_DSI
+	tristate "PANEL SUPPORT CROSS DOWNLOAD"
+
+config LCD_WEAKNESS_CCB
+	depends on EXYNOS_DECON_LCD && EXYNOS_MIPI_DSI
+	tristate "PANEL SUPPORT CCB"
+
+config PANEL_DDI_SPI
+	depends on EXYNOS_DECON_LCD && EXYNOS_MIPI_DSI
+	tristate "DDI SPI"
+
+config PANEL_DUALIZATION
+	depends on PANEL_S6E3HF4_WQHD
+	tristate "S6E3HF4 A2 PANEL DUALIZATION"
+
+config LCD_BURNIN_CORRECTION
+	depends on EXYNOS_DECON_LCD
+	tristate "Support Burnin correction"
+	default n
+
+config VDDR_1p5V_ALPM
+	tristate "Grace : VDDR 1.5V in AOD mode"
+	default n
+
+config DISPLAY_USE_INFO
+	depends on EXYNOS_DECON_LCD
+	tristate "Support display use info logging"
+	default n
+
+config PANEL_CALL_MDNIE
+	depends on EXYNOS_DECON_LCD && EXYNOS_MIPI_DSI
+	tristate "Support panel call mdnie update"
+	default n
+
+config SUPPORT_POC_FLASH
+	depends on EXYNOS_DECON_LCD && PANEL_S6E3HA5_WQHD
+	tristate "Support display poc flash"
+	default n
+
+config POC_GRACE
+	depends on EXYNOS_DECON_LCD && PANEL_S6E3HA5_WQHD && SUPPORT_POC_FLASH
+	tristate "Support poc for grace"
+	default n
+
+config PANEL_GRAY_SPOT
+	depends on EXYNOS_DECON_LCD
+	tristate "Support gray spot test"
+	default n

@@ -1078,6 +1078,18 @@ static void mmc_sd_detect(struct mmc_host *host)
 	BUG_ON(!host);
 	BUG_ON(!host->card);
 
+	if (host->ops->get_cd && host->ops->get_cd(host) == 0) {
+		mmc_card_set_removed(host->card);
+		mmc_sd_remove(host);
+
+		mmc_claim_host(host);
+		mmc_detach_bus(host);
+		mmc_power_off(host);
+		mmc_release_host(host);
+		pr_err("%s: card(tray) removed...\n", __func__);
+		return;
+	}
+
 	mmc_get_card(host->card);
 
 	/*

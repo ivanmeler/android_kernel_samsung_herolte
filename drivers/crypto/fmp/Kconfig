@@ -1,0 +1,39 @@
+config FMP_UFS
+	tristate "Samsung EXYNOS FMP Driver for UFS"
+	depends on SCSI_UFSHCD && SCSI_UFSHCD_PLATFORM
+	---help---
+	  This selects EXYNOS FMP UFS driver.
+
+	  If you have a controller with this interface, say Y here.
+
+	  If unsure, say N.
+
+config FIPS_FMP
+	tristate "Samsung EXYNOS FMP Validation Driver for FIPS"
+	depends on FMP_UFS
+	depends on !FUNCTION_TRACER
+	---help---
+	  This selects Samsung EXYNOS FMP Validation driver for FIPS.
+
+	  If you have a controller with this interface, say Y here.
+
+	  If unsure, say N.
+
+choice
+	prompt "Option for self-test failure"
+	depends on FIPS_FMP
+	default NODE_FOR_SELFTEST_FAIL
+
+config NODE_FOR_SELFTEST_FAIL
+	bool "Set fips fmp node when self-test fails"
+	depends on FIPS_FMP
+	help
+	   This select that fips fmp node was set to zero when FMP self-test fails.
+
+config PANIC_FOR_SELFTEST_FAIL
+	bool "Panic when self-test fails"
+	depends on FIPS_FMP
+	help
+	   This select that kernel panic occurs when FMP self-test fails.
+
+endchoice

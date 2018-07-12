@@ -445,13 +445,13 @@ static int soc_pcm_open(struct snd_pcm_substream *substream)
 	const char *codec_dai_name = "multicodec";
 	int i, ret = 0;
 
-	pinctrl_pm_select_default_state(cpu_dai->dev);
-	for (i = 0; i < rtd->num_codecs; i++)
-		pinctrl_pm_select_default_state(rtd->codec_dais[i]->dev);
 	pm_runtime_get_sync(cpu_dai->dev);
 	for (i = 0; i < rtd->num_codecs; i++)
 		pm_runtime_get_sync(rtd->codec_dais[i]->dev);
 	pm_runtime_get_sync(platform->dev);
+	pinctrl_pm_select_default_state(cpu_dai->dev);
+	for (i = 0; i < rtd->num_codecs; i++)
+		pinctrl_pm_select_default_state(rtd->codec_dais[i]->dev);
 
 	mutex_lock_nested(&rtd->pcm_mutex, rtd->pcm_subclass);
 
@@ -589,16 +589,16 @@ platform_err:
 out:
 	mutex_unlock(&rtd->pcm_mutex);
 
-	pm_runtime_put(platform->dev);
-	for (i = 0; i < rtd->num_codecs; i++)
-		pm_runtime_put(rtd->codec_dais[i]->dev);
-	pm_runtime_put(cpu_dai->dev);
 	for (i = 0; i < rtd->num_codecs; i++) {
 		if (!rtd->codec_dais[i]->active)
 			pinctrl_pm_select_sleep_state(rtd->codec_dais[i]->dev);
 	}
 	if (!cpu_dai->active)
 		pinctrl_pm_select_sleep_state(cpu_dai->dev);
+	pm_runtime_put(platform->dev);
+	for (i = 0; i < rtd->num_codecs; i++)
+		pm_runtime_put(rtd->codec_dais[i]->dev);
+	pm_runtime_put(cpu_dai->dev);
 
 	return ret;
 }
@@ -674,36 +674,41 @@ static int soc_pcm_close(struct snd_pcm_substream *substream)
 		platform->driver->ops->close(substream);
 
 	if (substream->stream == SNDRV_PCM_STREAM_PLAYBACK) {
-		if (snd_soc_runtime_ignore_pmdown_time(rtd)) {
-			/* powered down playback stream now */
-			snd_soc_dapm_stream_event(rtd,
-						  SNDRV_PCM_STREAM_PLAYBACK,
-						  SND_SOC_DAPM_STREAM_STOP);
-		} else {
-			/* start delayed pop wq here for playback streams */
-			rtd->pop_wait = 1;
-			queue_delayed_work(system_power_efficient_wq,
-					   &rtd->delayed_work,
-					   msecs_to_jiffies(rtd->pmdown_time));
+		if (!codec_dai->playback_active) {
+
+			if (snd_soc_runtime_ignore_pmdown_time(rtd)) {
+				/* powered down playback stream now */
+				snd_soc_dapm_stream_event(rtd,
+						SNDRV_PCM_STREAM_PLAYBACK,
+						SND_SOC_DAPM_STREAM_STOP);
+			} else {
+				/* start delayed pop wq here for playback streams */
+				rtd->pop_wait = 1;
+				queue_delayed_work(system_power_efficient_wq,
+						&rtd->delayed_work,
+						msecs_to_jiffies(rtd->pmdown_time));
+			}
 		}
 	} else {
-		/* capture streams can be powered down now */
-		snd_soc_dapm_stream_event(rtd, SNDRV_PCM_STREAM_CAPTURE,
-					  SND_SOC_DAPM_STREAM_STOP);
+		if (!codec_dai->capture_active) {
+			/* capture streams can be powered down now */
+			snd_soc_dapm_stream_event(rtd, SNDRV_PCM_STREAM_CAPTURE,
+					SND_SOC_DAPM_STREAM_STOP);
+		}
 	}
 
 	mutex_unlock(&rtd->pcm_mutex);
 
-	pm_runtime_put(platform->dev);
-	for (i = 0; i < rtd->num_codecs; i++)
-		pm_runtime_put(rtd->codec_dais[i]->dev);
-	pm_runtime_put(cpu_dai->dev);
 	for (i = 0; i < rtd->num_codecs; i++) {
 		if (!rtd->codec_dais[i]->active)
 			pinctrl_pm_select_sleep_state(rtd->codec_dais[i]->dev);
 	}
 	if (!cpu_dai->active)
 		pinctrl_pm_select_sleep_state(cpu_dai->dev);
+	pm_runtime_put(platform->dev);
+	for (i = 0; i < rtd->num_codecs; i++)
+		pm_runtime_put(rtd->codec_dais[i]->dev);
+	pm_runtime_put(cpu_dai->dev);
 
 	return 0;
 }

@@ -16,6 +16,8 @@
 #include <linux/fs.h>
 #include <linux/uaccess.h>
 #include <linux/vmalloc.h>
+#include <linux/exynos-ss.h>
+
 #include "internal.h"
 
 static DEFINE_MUTEX(pmsg_lock);
@@ -82,6 +84,7 @@ void pstore_register_pmsg(void)
 		pr_err("failed to create device\n");
 		goto err_device;
 	}
+
 	return;
 
 err_device:

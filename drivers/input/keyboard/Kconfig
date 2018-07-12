@@ -12,6 +12,12 @@ menuconfig INPUT_KEYBOARD
 
 if INPUT_KEYBOARD
 
+config TOUCHKEY_LIGHT_EFS
+	tristate "touchkey led light with efs"
+	depends on I2C
+	help
+	  Say Y here if you want to use touchkey light efs.
+
 config KEYBOARD_ADP5520
 	tristate "Keypad Support for ADP5520 PMIC"
 	depends on PMIC_ADP5520
@@ -675,4 +681,17 @@ config KEYBOARD_CAP1106
 	  To compile this driver as a module, choose M here: the
 	  module will be called cap1106.
 
+config KEYBOARD_ABOV_FT16XX_TOUCH
+	tristate "Abov FT16XX touchkey"
+	depends on I2C
+	help
+	  Say Y here if you want to use ABOV MC96FT16XX chip as touchkey.
+
+config KEYBOARD_ABOV_TOUCH_A96TA316
+	tristate "Abov T316 touchkey"
+	depends on I2C
+	help
+	  Say Y here if you want to use ABOV A96TA316AUN chip as touchkey.
+
+source "drivers/input/keyboard/cypress/Kconfig"
 endif

@@ -3,9 +3,19 @@
 #
 
 obj-y                          := main.o version.o mounts.o
+ifeq ($(CONFIG_TIMA_RKP), y)
+obj-y += _vmm.o vmm.o
+obj-y += ld.o
+endif
+
 obj-y                          += noinitramfs.o
 obj-$(CONFIG_BLK_DEV_INITRD)   += initramfs.o
 obj-$(CONFIG_GENERIC_CALIBRATE_DELAY) += calibrate.o
+
+ifeq ($(CONFIG_RKP_CFP), y)
+obj-y += rkp_cfp.o
+endif
+
 
 ifneq ($(CONFIG_ARCH_INIT_TASK),y)
 obj-y                          += init_task.o

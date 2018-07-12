@@ -41,6 +41,10 @@
 #include <linux/log2.h>
 #include <linux/configfs.h>
 
+#ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
+#include <linux/usb_notify.h>
+#include <linux/gpio.h>
+#endif
 /*
  * USB function drivers should return USB_GADGET_DELAYED_STATUS if they
  * wish to delay the data/status stages of the control transfer till they
@@ -187,6 +191,12 @@ struct usb_function {
 	struct usb_descriptor_header	**ss_descriptors;
 
 	struct usb_configuration	*config;
+
+#ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
+	int (*set_intf_num)(struct usb_function *f,
+			int intf_num, int index_num);
+	int (*set_config_desc)(int conf_num);
+#endif
 
 	struct usb_os_desc_table	*os_desc_table;
 	unsigned			os_desc_n;
@@ -486,6 +496,13 @@ struct usb_composite_dev {
 	 */
 	int				delayed_status;
 
+#ifdef CONFIG_USB_ANDROID_SAMSUNG_COMPOSITE
+		/* used by enable_store function of android.c
+		 * to avoid signalling switch changes
+		 */
+	bool				mute_switch;
+	bool				force_disconnect;
+#endif
 	/* protects deactivations and delayed_status counts*/
 	spinlock_t			lock;
 };

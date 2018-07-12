@@ -43,6 +43,7 @@
 #define GENERAL_UPIU_REQUEST_SIZE 32
 #define QUERY_DESC_MAX_SIZE       255
 #define QUERY_DESC_MIN_SIZE       2
+#define QUERY_DESC_HDR_SIZE 2
 #define QUERY_OSF_SIZE            (GENERAL_UPIU_REQUEST_SIZE - \
 					(sizeof(struct utp_upiu_header)))
 
@@ -70,6 +71,16 @@ enum {
 	UFS_UPIU_BOOT_WLUN		= 0xB0,
 	UFS_UPIU_RPMB_WLUN		= 0xC4,
 };
+
+/**
+ * ufs_is_valid_unit_desc_lun - checks if the given LUN has a unit descriptor
+ * @lun: LU number to check
+ * @return: true if the lun has a matching unit descriptor, false otherwise
+ */
+static inline bool ufs_is_valid_unit_desc_lun(u8 lun)
+{
+	return (lun == UFS_UPIU_RPMB_WLUN || (lun < UFS_UPIU_MAX_GENERAL_LUN));
+}
 
 /*
  * UFS Protocol Information Unit related definitions
@@ -120,6 +131,13 @@ enum {
 	UPIU_TASK_ATTR_ACA	= 0x03,
 };
 
+#ifdef CUSTOMIZE_UPIU_FLAGS
+/* UPIU Task Attributes */
+enum {
+	UPIU_COMMAND_PRIORITY_HIGH	= 0x4,
+};
+#endif
+
 /* UPIU Query request function */
 enum {
 	UPIU_QUERY_FUNC_STANDARD_READ_REQUEST           = 0x01,
@@ -128,17 +146,37 @@ enum {
 
 /* Flag idn for Query Requests*/
 enum flag_idn {
-	QUERY_FLAG_IDN_FDEVICEINIT      = 0x01,
-	QUERY_FLAG_IDN_PWR_ON_WPE	= 0x03,
-	QUERY_FLAG_IDN_BKOPS_EN         = 0x04,
+	QUERY_FLAG_IDN_FDEVICEINIT      	= 0x01,
+	QUERY_FLAG_IDN_PERMANENT_WPE		= 0x02,
+	QUERY_FLAG_IDN_PWR_ON_WPE			= 0x03,
+	QUERY_FLAG_IDN_BKOPS_EN 			= 0x04,
+	QUERY_FLAG_IDN_RESERVED1			= 0x05,
+	QUERY_FLAG_IDN_PURGE_ENABLE 		= 0x06,
+	QUERY_FLAG_IDN_RESERVED2			= 0x07,
+	QUERY_FLAG_IDN_FPHYRESOURCEREMOVAL	= 0x08,
+	QUERY_FLAG_IDN_BUSY_RTC 			= 0x09,
 };
 
 /* Attribute idn for Query requests */
 enum attr_idn {
+	QUERY_ATTR_IDN_BOOT_LU_EN	= 0x00,
+	QUERY_ATTR_IDN_RESERVED		= 0x01,
+	QUERY_ATTR_IDN_POWER_MODE	= 0x02,
 	QUERY_ATTR_IDN_ACTIVE_ICC_LVL	= 0x03,
+	QUERY_ATTR_IDN_OOO_DATA_EN	= 0x04,
 	QUERY_ATTR_IDN_BKOPS_STATUS	= 0x05,
+	QUERY_ATTR_IDN_PURGE_STATUS	= 0x06,
+	QUERY_ATTR_IDN_MAX_DATA_IN	= 0x07,
+	QUERY_ATTR_IDN_MAX_DATA_OUT	= 0x08,
+	QUERY_ATTR_IDN_DYN_CAP_NEEDED	= 0x09,
+	QUERY_ATTR_IDN_REF_CLK_FREQ	= 0x0A,
+	QUERY_ATTR_IDN_CONF_DESC_LOCK	= 0x0B,
+	QUERY_ATTR_IDN_MAX_NUM_OF_RTT	= 0x0C,
 	QUERY_ATTR_IDN_EE_CONTROL	= 0x0D,
 	QUERY_ATTR_IDN_EE_STATUS	= 0x0E,
+	QUERY_ATTR_IDN_SECONDS_PASSED	= 0x0F,
+	QUERY_ATTR_IDN_CNTX_CONF	= 0x10,
+	QUERY_ATTR_IDN_CORR_PRG_BLK_NUM	= 0x11,
 };
 
 /* Descriptor idn for Query requests */
@@ -152,7 +190,14 @@ enum desc_idn {
 	QUERY_DESC_IDN_RFU_1		= 0x6,
 	QUERY_DESC_IDN_GEOMETRY		= 0x7,
 	QUERY_DESC_IDN_POWER		= 0x8,
+	QUERY_DESC_IDN_HEALTH           = 0x9,
+	QUERY_DESC_IDN_RFU_2            = 0xA,
+#ifdef CONFIG_JOURNAL_DATA_TAG
+	QUERY_DESC_IDN_VENDOR		= 0xFF,
+	QUERY_DESC_IDN_MAX		= 0x100,
+#else
 	QUERY_DESC_IDN_MAX,
+#endif
 };
 
 enum desc_header_offset {
@@ -161,7 +206,7 @@ enum desc_header_offset {
 };
 
 enum ufs_desc_max_size {
-	QUERY_DESC_DEVICE_MAX_SIZE		= 0x1F,
+	QUERY_DESC_DEVICE_MAX_SIZE		= 0x40,
 	QUERY_DESC_CONFIGURAION_MAX_SIZE	= 0x90,
 	QUERY_DESC_UNIT_MAX_SIZE		= 0x23,
 	QUERY_DESC_INTERCONNECT_MAX_SIZE	= 0x06,
@@ -172,7 +217,11 @@ enum ufs_desc_max_size {
 	QUERY_DESC_STRING_MAX_SIZE		= 0xFE,
 	QUERY_DESC_GEOMETRY_MAZ_SIZE		= 0x44,
 	QUERY_DESC_POWER_MAX_SIZE		= 0x62,
+	QUERY_DESC_HEALTH_MAX_SIZE		= 0x25,
 	QUERY_DESC_RFU_MAX_SIZE			= 0x00,
+#ifdef CONFIG_JOURNAL_DATA_TAG
+	QUERY_DESC_VENDOR_SPECIFIC_SIZE		= QUERY_DESC_MAX_SIZE,
+#endif
 };
 
 /* Unit descriptor parameters offsets in bytes*/
@@ -215,6 +264,15 @@ enum {
 	UFSHCD_AMP		= 3,
 };
 
+/* reset type*/
+enum {
+	UFS_RESET_DEFAULT		= 0x00,
+	UFS_RESET_PROBE			= 0x01,
+	UFS_RESET_UIC_ERR		= 0x02,
+	UFS_RESET_HOST_RESET		= 0x03,
+	UFS_RESET_HIBERN8		= 0x04,
+};
+
 #define POWER_DESC_MAX_SIZE			0x62
 #define POWER_DESC_MAX_ACTV_ICC_LVLS		16
 
@@ -235,6 +293,10 @@ enum power_desc_param_offset {
 /* Exception event mask values */
 enum {
 	MASK_EE_STATUS		= 0xFFFF,
+#ifdef CONFIG_JOURNAL_DATA_TAG
+	MASK_EE_DYNCAP_EVENT	= (1 << 0),
+	MASK_EE_SYSPOOL_EVENT	= (1 << 1),
+#endif
 	MASK_EE_URGENT_BKOPS	= (1 << 2),
 };
 
@@ -258,6 +320,7 @@ enum query_opcode {
 	UPIU_QUERY_OPCODE_SET_FLAG	= 0x6,
 	UPIU_QUERY_OPCODE_CLEAR_FLAG	= 0x7,
 	UPIU_QUERY_OPCODE_TOGGLE_FLAG	= 0x8,
+	UPIU_QUERY_OPCODE_MAX,
 };
 
 /* Query response result code */
@@ -273,6 +336,46 @@ enum {
 	QUERY_RESULT_INVALID_IDN                = 0xFD,
 	QUERY_RESULT_INVALID_OPCODE             = 0xFE,
 	QUERY_RESULT_GENERAL_FAILURE            = 0xFF,
+};
+
+/* Device descriptor parameters offsets in bytes*/
+enum device_desc_param {
+	DEVICE_DESC_PARAM_LEN			= 0x0,
+	DEVICE_DESC_PARAM_TYPE			= 0x1,
+	DEVICE_DESC_PARAM_DEVICE_TYPE		= 0x2,
+	DEVICE_DESC_PARAM_DEVICE_CLASS		= 0x3,
+	DEVICE_DESC_PARAM_DEVICE_SUB_CLASS	= 0x4,
+	DEVICE_DESC_PARAM_PRTCL			= 0x5,
+	DEVICE_DESC_PARAM_NUM_LU		= 0x6,
+	DEVICE_DESC_PARAM_NUM_WLU		= 0x7,
+	DEVICE_DESC_PARAM_BOOT_ENBL		= 0x8,
+	DEVICE_DESC_PARAM_DESC_ACCSS_ENBL	= 0x9,
+	DEVICE_DESC_PARAM_INIT_PWR_MODE		= 0xA,
+	DEVICE_DESC_PARAM_HIGH_PR_LUN		= 0xB,
+	DEVICE_DESC_PARAM_SEC_RMV_TYPE		= 0xC,
+	DEVICE_DESC_PARAM_SEC_LU		= 0xD,
+	DEVICE_DESC_PARAM_BKOP_TERM_LT		= 0xE,
+	DEVICE_DESC_PARAM_ACTVE_ICC_LVL		= 0xF,
+	DEVICE_DESC_PARAM_SPEC_VER		= 0x10,
+	DEVICE_DESC_PARAM_MANF_DATE		= 0x12,
+	DEVICE_DESC_PARAM_MANF_NAME		= 0x14,
+	DEVICE_DESC_PARAM_PRDCT_NAME		= 0x15,
+	DEVICE_DESC_PARAM_SN			= 0x16,
+	DEVICE_DESC_PARAM_OEM_ID		= 0x17,
+	DEVICE_DESC_PARAM_MANF_ID		= 0x18,
+	DEVICE_DESC_PARAM_UD_OFFSET		= 0x1A,
+	DEVICE_DESC_PARAM_UD_LEN		= 0x1B,
+	DEVICE_DESC_PARAM_RTT_CAP		= 0x1C,
+	DEVICE_DESC_PARAM_FRQ_RTC		= 0x1D,
+};
+
+enum health_device_desc_param {
+	HEALTH_DEVICE_DESC_PARAM_LEN	= 0x0,
+	HEALTH_DEVICE_DESC_PARAM_IDN	=0x1,
+	HEALTH_DEVICE_DESC_PARAM_INFO	=0x2,
+	HEALTH_DEVICE_DESC_PARAM_LIFETIMEA	=0x3,
+	HEALTH_DEVICE_DESC_PARAM_LIFETIMEB	=0x4,
+	HEALTH_DEVICE_DESC_PARAM_RESERVED	=0x5,
 };
 
 /* UTP Transfer Request Command Type (CT) */
@@ -295,6 +398,7 @@ enum {
 	MASK_QUERY_DATA_SEG_LEN         = 0xFFFF,
 	MASK_RSP_UPIU_DATA_SEG_LEN	= 0xFFFF,
 	MASK_RSP_EXCEPTION_EVENT        = 0x10000,
+	MASK_TM_SERVICE_RESP		= 0xFF,
 };
 
 /* Task management service response */

@@ -20,6 +20,9 @@ enum functionfs_flags {
 	FUNCTIONFS_HAS_SS_DESC = 4,
 	FUNCTIONFS_HAS_MS_OS_DESC = 8,
 	FUNCTIONFS_VIRTUAL_ADDR = 16,
+	FUNCTIONFS_EVENTFD = 32,
+	FUNCTIONFS_ALL_CTRL_RECIP = 64,
+	FUNCTIONFS_CONFIG0_SETUP = 128,
 };
 
 /* Descriptor of an non-audio endpoint */

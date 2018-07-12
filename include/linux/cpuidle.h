@@ -115,6 +115,10 @@ struct cpuidle_driver {
 
 	/* the driver handles the cpus in cpumask */
 	struct cpumask		*cpumask;
+
+#ifdef CONFIG_CPU_IDLE_GOV_MENU
+	bool 			skip_correction;
+#endif
 };
 
 #ifdef CONFIG_CPU_IDLE

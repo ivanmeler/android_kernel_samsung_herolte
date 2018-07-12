@@ -205,6 +205,15 @@ static int multi_cpu_stop(void *data)
 			}
 			ack_state(msdata);
 		}
+
+#ifdef CONFIG_ARM64
+		if (msdata->state == curstate)
+			wfe();
+		else {
+			dsb(sy);
+			sev();
+		}
+#endif
 	} while (curstate != MULTI_STOP_EXIT);
 
 	local_irq_restore(flags);
@@ -246,10 +255,7 @@ int stop_two_cpus(unsigned int cpu1, unsigned int cpu2, cpu_stop_fn_t fn, void *
 	struct cpu_stop_done done;
 	struct cpu_stop_work work1, work2;
 	struct irq_cpu_stop_queue_work_info call_args;
-	struct multi_stop_data msdata;
-
-	preempt_disable();
-	msdata = (struct multi_stop_data){
+	struct multi_stop_data msdata = {
 		.fn = fn,
 		.data = arg,
 		.num_threads = 2,
@@ -272,20 +278,8 @@ int stop_two_cpus(unsigned int cpu1, unsigned int cpu2, cpu_stop_fn_t fn, void *
 	cpu_stop_init_done(&done, 2);
 	set_state(&msdata, MULTI_STOP_PREPARE);
 
-	/*
-	 * If we observe both CPUs active we know _cpu_down() cannot yet have
-	 * queued its stop_machine works and therefore ours will get executed
-	 * first. Or its not either one of our CPUs that's getting unplugged,
-	 * in which case we don't care.
-	 *
-	 * This relies on the stopper workqueues to be FIFO.
-	 */
-	if (!cpu_active(cpu1) || !cpu_active(cpu2)) {
-		preempt_enable();
-		return -ENOENT;
-	}
-
 	lg_local_lock(&stop_cpus_lock);
+
 	/*
 	 * Queuing needs to be done by the lowest numbered CPU, to ensure
 	 * that works are always queued in the same order on every CPU.
@@ -294,11 +288,10 @@ int stop_two_cpus(unsigned int cpu1, unsigned int cpu2, cpu_stop_fn_t fn, void *
 	smp_call_function_single(min(cpu1, cpu2),
 				 &irq_cpu_stop_queue_work,
 				 &call_args, 1);
+
 	lg_local_unlock(&stop_cpus_lock);
-	preempt_enable();
 
 	wait_for_completion(&done.completion);
-
 	return done.executed ? done.ret : -ENOENT;
 }
 

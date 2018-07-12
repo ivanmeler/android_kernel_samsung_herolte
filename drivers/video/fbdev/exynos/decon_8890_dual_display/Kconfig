@@ -1,0 +1,60 @@
+config EXYNOS_DECON_8890_DUAL_DISPLAY
+	bool "Samsung Exynos8890 Display system (VPP, DECON, MIPI, HDMI)"
+	depends on FB
+
+if EXYNOS_DECON_8890_DUAL_DISPLAY
+config USE_VSYNC_SKIP
+	bool "Vsync Skip Enable"
+	depends on EXYNOS_DECON_8890_DUAL_DISPLAY
+	default n
+	help
+	  Say Y here if you want to enable vsync skip feature for DFS solution.
+
+config EXYNOS_DECON_FB
+	bool "Samsung DECON Framebuffer driver"
+	depends on EXYNOS_DECON_8890_DUAL_DISPLAY
+	select MEDIA_EXYNOS
+	default y
+	help
+	  Say Y here if you want support for the DECON in Samsung S5P SoCs.
+	  This device produce image data to one of output interfaces.
+
+config EXYNOS_MIPI_DSI
+	bool "Samsung Exynos MIPI-DSI driver"
+	depends on EXYNOS_DECON_8890_DUAL_DISPLAY
+	default y
+	help
+	  Enable MIPI-DSI driver.
+
+config DECON_MIPI_DSI_PKTGO
+	bool "Samsung Exynos MIPI-DSI Packet Go"
+	depends on EXYNOS_MIPI_DSI
+	default n
+	help
+	  Enable/disable MIPI-DSI Packet Go function
+
+config DECON_LPD_DISPLAY
+        bool "Decon Low Power Display MODE"
+        depends on EXYNOS_DECON_8890_DUAL_DISPLAY
+        default n
+
+config FB_WINDOW_UPDATE
+        bool "DECON window update mode"
+        depends on EXYNOS_DECON_8890_DUAL_DISPLAY
+        default n
+
+config DECON_BLOCKING_MODE
+	bool "DECON blocking mode"
+        depends on EXYNOS_DECON_8890_DUAL_DISPLAY
+        default n
+
+config DECON_EVENT_LOG
+	bool "Display sub-system event logger (DECON/DSIM/VPP)"
+        depends on DEBUG_INFO && EXYNOS_DECON_8890_DUAL_DISPLAY
+        default y
+
+source "drivers/video/fbdev/exynos/decon_8890_dual_display/vpp/Kconfig"
+
+endif
+
+source "drivers/video/fbdev/exynos/decon_8890_dual_display/panels/Kconfig"

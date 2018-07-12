@@ -112,6 +112,30 @@ config CPU_THERMAL
 
 	  If you want this support, you should say Y here.
 
+config GPU_THERMAL
+	bool "generic gpu cooling support"
+	depends on THERMAL_OF
+	help
+	  This implements the generic gpu cooling mechanism through frequency
+	  reduction. An ACPI version of this already exists
+	  (drivers/acpi/processor_thermal.c).
+	  This will be useful for platforms using the generic thermal interface
+	  and not the ACPI interface.
+
+	  If you want this support, you should say Y here.
+
+config ISP_THERMAL
+	bool "generic isp cooling support"
+	depends on THERMAL_OF
+	help
+	  This implements the generic gpu cooling mechanism through frequency
+	  reduction. An ACPI version of this already exists
+	  (drivers/acpi/processor_thermal.c).
+	  This will be useful for platforms using the generic thermal interface
+	  and not the ACPI interface.
+
+	  If you want this support, you should say Y here.
+
 config THERMAL_EMULATION
 	bool "Thermal emulation mode support"
 	help
@@ -158,6 +182,20 @@ config KIRKWOOD_THERMAL
 	help
 	  Support for the Kirkwood thermal sensor driver into the Linux thermal
 	  framework. Only kirkwood 88F6282 and 88F6283 have this sensor.
+
+config EXYNOS_THERMAL
+	tristate "Temperature sensor on Samsung EXYNOS"
+	depends on (ARCH_EXYNOS4 || ARCH_EXYNOS5 || ARCH_EXYNOS7 || ARCH_EXYNOS8)
+	depends on CPU_THERMAL
+	help
+	  If you say yes here you get support for TMU (Thermal Management
+	  Unit) on SAMSUNG EXYNOS series of SoC.
+
+config EXYNOS_SWTRIP
+	bool "SW TRIP Feature on Samsung EXYNOS"
+	depends on EXYNOS_THERMAL
+	help
+	  Support for SWTRIP uevent on SAMSUNG EXYNOS series of SOC
 
 config DOVE_THERMAL
 	tristate "Temperature sensor on Marvell Dove SoCs"
@@ -253,6 +291,30 @@ config ACPI_THERMAL_REL
 	tristate
 	depends on ACPI
 
+config CPU_THERMAL_IPA
+	bool "Enable Intelligent Power Arbiter"
+	depends on THERMAL && CPU_FREQ && EXYNOS_THERMAL
+	help
+	  This implements the Intelligent Power Arbiter (IPA)
+
+config CPU_THERMAL_IPA_CONTROL
+	bool "Enable control"
+	depends on CPU_THERMAL_IPA
+	help
+	  This implements the intelligent power arbiter (IPA) control algorithms.
+	  If you want this support, you should say Y here.
+
+config CPU_THERMAL_IPA_DEBUG
+	bool "Enable debugging"
+	depends on CPU_THERMAL_IPA
+	select FUNCTION_TRACER
+	select DYNAMIC_FTRACE
+	help
+	  This enables *trace* routines in IPA, used to collect logs
+	  of temperature, CPU and GPU utilisations and power
+	  estimates.  If you want to analyze IPA behaviour, you should
+	  say Y here.
+
 menu "Texas Instruments thermal drivers"
 source "drivers/thermal/ti-soc-thermal/Kconfig"
 endmenu
@@ -268,3 +330,8 @@ source "drivers/thermal/st/Kconfig"
 endmenu
 
 endif
+
+menu "Samsung thermal drivers"
+depends on ARCH_EXYNOS
+source "drivers/thermal/samsung/Kconfig"
+endmenu

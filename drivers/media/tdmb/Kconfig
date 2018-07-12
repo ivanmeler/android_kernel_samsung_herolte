@@ -1,0 +1,114 @@
+#
+# TDMB config states
+#
+
+#klaatu TDMB
+config TDMB
+	bool "T-DMB"
+	help
+	  This allows T-DMB support for Korea.
+	  This module is designed for SPI or EBI2.
+	  Select chipset and interface
+
+	config TDMB_VENDOR_FCI
+	depends on TDMB
+	bool "FCI"
+
+choice
+	depends on TDMB && TDMB_VENDOR_FCI
+	prompt "chip"
+	default TDMB_FC8080
+	config TDMB_FC8050
+		bool "FC8050"
+	config TDMB_FC8080
+		bool "FC8080"
+endchoice
+
+config TDMB_VENDOR_INC
+	depends on TDMB
+	bool "I&C"
+
+choice
+	depends on TDMB && TDMB_VENDOR_INC
+	prompt "chip"
+	default TDMB_T39F0
+	config TDMB_T39F0
+		bool "T39F0"
+	config TDMB_T3900
+		bool "T3900"
+	config TDMB_T3700
+		bool "T3700"
+	config TDMB_T3300
+		bool "T3300"
+endchoice
+
+config TDMB_VENDOR_RAONTECH
+	depends on TDMB
+	bool "Raontech"
+
+choice
+	depends on TDMB && TDMB_VENDOR_RAONTECH
+	prompt "chip"
+	default TDMB_MTV318
+	config TDMB_MTV318
+		bool "MTV318"
+	config TDMB_MTV319
+		bool "MTV319"
+endchoice
+
+config TDMB_VENDOR_TELECHIPS
+	depends on TDMB
+	bool "Telechips"
+
+choice
+	depends on TDMB && TDMB_VENDOR_TELECHIPS
+	prompt "chip"
+	default TDMB_TCC3170
+	config TDMB_TCC3170
+		bool "TCC3170"
+endchoice
+
+choice
+	depends on TDMB
+	prompt "AP vendor"
+	default TDMB_QUALCOMM
+	config TDMB_QUALCOMM
+		bool "Qualcomm"
+	config TDMB_SLSI
+		bool "S.LSI"
+endchoice
+
+config TDMB_SPI
+	depends on TDMB
+	bool "SPI"
+
+config TDMB_EBI
+	depends on TDMB
+	bool "EBI"
+config TDMB_TSIF_SLSI
+	depends on TDMB
+	bool "SLSI TSIF"
+config TDMB_TSIF_QC
+	depends on TDMB
+	bool "Qualcomm TSIF"
+
+config TDMB_I2C
+	depends on TDMB
+	bool "I2C"
+
+config TDMB_XTAL_FREQ
+	depends on TDMB
+	bool "use xtal freq"
+	default 0
+
+config TDMB_DEBUG
+	depends on TDMB
+	bool "tdmb debugfs"
+
+config TDMB_ANT_DET
+	depends on TDMB
+	bool "tdmb antenna detector"
+
+config TDMB_VREG_SUPPORT
+	depends on TDMB
+	bool "tdmb use regulator vdd"

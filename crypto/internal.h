@@ -27,6 +27,26 @@
 #include <linux/slab.h>
 #include <linux/fips.h>
 
+/*
+ * Use this only for FIPS Functional Test with CMT Lab.
+ * FIPS_FUNC_TEST 1 will make self algorithm test (ecb aes) fail
+ * FIPS_FUNC_TEST 12 will make self algorithm test (hmac sha1) fail
+ * FIPS_FUNC_TEST 2 will make integrity check fail by corrupting the
+ * kernel image
+ * FIPS_FUNC_TEST 3 will make sure all the logs needed in no error mode
+ * FIPS_FUNC_TEST 4 will make the necessary dumps for zeroization test
+ * FIPS_FUNC_TEST 5 will make the continous PRNG test fail
+ * FIPS_FUNC_TEST 6 will make the SHA1 test fail
+ * FIPS_FUNC_TEST 7 will make the TDES test fail
+ * FIPS_FUNC_TEST 8 will make the RNG test fail
+ * FIPS_FUNC_TEST 91 will make the drbg_pr_ctr_aes128 test fail
+ * FIPS_FUNC_TEST 92 will make the drbg_pr_sha256 test fail
+ * FIPS_FUNC_TEST 93 will make the drbg_pr_hmac_sha256 test fail
+ * FIPS_FUNC_TEST 94 will make the continous PRNG test fail for DRBG
+ * FIPS_FUNC_TEST 100 will make the AES GCM self test fail
+ */
+
+#define FIPS_FUNC_TEST 0
 /* Crypto notification events. */
 enum {
 	CRYPTO_MSG_ALG_REQUEST,
@@ -51,7 +71,16 @@ extern struct rw_semaphore crypto_alg_sem;
 extern struct blocking_notifier_head crypto_chain;
 
 #ifdef CONFIG_PROC_FS
+
+#ifdef CONFIG_CRYPTO_FIPS
+bool in_fips_err(void);
+void set_in_fips_err(void);
+void crypto_init_proc(int *fips_error);
+int do_integrity_check(void);
+int testmgr_crypto_proc_init(void);
+#else
 void __init crypto_init_proc(void);
+#endif
 void __exit crypto_exit_proc(void);
 #else
 static inline void crypto_init_proc(void)

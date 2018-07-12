@@ -1307,7 +1307,7 @@ static void do_one_broadcast(struct sock *sk,
 	sock_hold(sk);
 	if (p->skb2 == NULL) {
 		if (skb_shared(p->skb)) {
-			p->skb2 = skb_clone(p->skb, p->allocation);
+			p->skb2 = skb_copy(p->skb, p->allocation);
 		} else {
 			p->skb2 = skb_get(p->skb);
 			/*

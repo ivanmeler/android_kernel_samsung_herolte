@@ -322,9 +322,12 @@ static int menu_select(struct cpuidle_driver *drv, struct cpuidle_device *dev)
 	 * operands are 32 bits.
 	 * Make sure to round up for half microseconds.
 	 */
-	data->predicted_us = div_round64((uint64_t)data->next_timer_us *
-					 data->correction_factor[data->bucket],
-					 RESOLUTION * DECAY);
+	if (drv->skip_correction)
+		data->predicted_us = data->next_timer_us;
+	else
+		data->predicted_us = div_round64((uint64_t)data->next_timer_us *
+				data->correction_factor[data->bucket],
+				RESOLUTION * DECAY);
 
 	get_typical_interval(data);
 

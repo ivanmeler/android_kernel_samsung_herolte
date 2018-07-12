@@ -39,6 +39,25 @@ config ARM_EXYNOS4210_CPUFREQ
 
 	  If in doubt, say N.
 
+config ARM_EXYNOS_MP_CPUFREQ
+	bool "SAMSUNG EXYNOS SoCs for MP"
+	depends on ARCH_EXYNOS
+	help
+	  This adds the MP CPUFreq driver common part for Samsung
+	  EXYNOS SoCs.
+
+	  If in doubt, say N.
+
+config EXYNOS_BIG_FREQ_BOOST
+	bool "Big cluster boost frequency support"
+	default n
+	depends on ARM_EXYNOS_MP_CPUFREQ && SCHED_HMP
+
+config EXYNOS_DUAL_GOV_PARAMS_SUPPORT
+	bool "Dual governor parameter support on interactive governor"
+	default n
+	depends on EXYNOS_BIG_FREQ_BOOST
+
 config ARM_EXYNOS4X12_CPUFREQ
 	bool "SAMSUNG EXYNOS4x12"
 	depends on SOC_EXYNOS4212 || SOC_EXYNOS4412

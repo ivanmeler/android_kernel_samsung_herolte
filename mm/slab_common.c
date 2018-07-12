@@ -726,8 +726,13 @@ void __init create_kmalloc_caches(unsigned long flags)
 	}
 	for (i = KMALLOC_SHIFT_LOW; i <= KMALLOC_SHIFT_HIGH; i++) {
 		if (!kmalloc_caches[i]) {
+#ifdef CONFIG_SLUB_DEBUG_LIGHT
+			kmalloc_caches[i] = create_kmalloc_cache(NULL,
+							1 << i, flags | (i == 7) ? SLAB_STORE_USER:0x00);
+#else
 			kmalloc_caches[i] = create_kmalloc_cache(NULL,
 							1 << i, flags);
+#endif
 		}
 
 		/*

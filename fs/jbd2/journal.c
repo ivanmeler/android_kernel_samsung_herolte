@@ -1366,6 +1366,10 @@ static int jbd2_write_superblock(journal_t *journal, int write_op)
 	jbd2_superblock_csum_set(journal, sb);
 	get_bh(bh);
 	bh->b_end_io = end_buffer_write_sync;
+#ifdef CONFIG_JOURNAL_DATA_TAG
+	if (journal->j_flags & JBD2_JOURNAL_TAG)
+		set_buffer_journal(bh);
+#endif
 	ret = submit_bh(write_op, bh);
 	wait_on_buffer(bh);
 	if (buffer_write_io_error(bh)) {
@@ -1472,7 +1476,7 @@ void jbd2_journal_update_sb_errno(journal_t *journal)
 	sb->s_errno    = cpu_to_be32(journal->j_errno);
 	read_unlock(&journal->j_state_lock);
 
-	jbd2_write_superblock(journal, WRITE_SYNC);
+	jbd2_write_superblock(journal, WRITE_FUA);
 }
 EXPORT_SYMBOL(jbd2_journal_update_sb_errno);
 

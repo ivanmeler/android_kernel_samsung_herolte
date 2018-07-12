@@ -31,11 +31,16 @@
 
 #define MIRRED_TAB_MASK     7
 static LIST_HEAD(mirred_list);
+static DEFINE_SPINLOCK(mirred_list_lock);
 
 static void tcf_mirred_release(struct tc_action *a, int bind)
 {
 	struct tcf_mirred *m = to_mirred(a);
+
+	/* We could be called either in a RCU callback or with RTNL lock held. */
+	spin_lock_bh(&mirred_list_lock);
 	list_del(&m->tcfm_list);
+	spin_unlock_bh(&mirred_list_lock);
 	if (m->tcfm_dev)
 		dev_put(m->tcfm_dev);
 }
@@ -65,6 +70,7 @@ static int tcf_mirred_init(struct net *net, struct nlattr *nla,
 	switch (parm->eaction) {
 	case TCA_EGRESS_MIRROR:
 	case TCA_EGRESS_REDIR:
+	case TCA_INGRESS_REDIR:
 		break;
 	default:
 		return -EINVAL;
@@ -118,7 +124,9 @@ static int tcf_mirred_init(struct net *net, struct nlattr *nla,
 	}
 	spin_unlock_bh(&m->tcf_lock);
 	if (ret == ACT_P_CREATED) {
+		spin_lock_bh(&mirred_list_lock);
 		list_add(&m->tcfm_list, &mirred_list);
+		spin_unlock_bh(&mirred_list_lock);
 		tcf_hash_insert(a);
 	}
 
@@ -150,24 +158,38 @@ static int tcf_mirred(struct sk_buff *skb, const struct tc_action *a,
 		goto out;
 	}
 
-	at = G_TC_AT(skb->tc_verd);
 	skb2 = skb_act_clone(skb, GFP_ATOMIC, m->tcf_action);
 	if (skb2 == NULL)
 		goto out;
 
-	if (!(at & AT_EGRESS)) {
-		if (m->tcfm_ok_push)
-			skb_push(skb2, skb2->dev->hard_header_len);
-	}
+        if (m->tcfm_eaction == TCA_INGRESS_REDIR) {
+                /* Let's _hope_ the devices are of similar type.
+                 * This is rather dangerous; with changed skb_iif, we
+                 * will not know the real input device, but perhaps
+                 * that's the whole point of doing the ingress
+                 * redirect/mirror in the first place?  (Note: This
+                 * can lead to bad things if two devices ingress
+                 * redirect at each other. Don't do that.)*/
+                skb2->dev = dev;
+                skb2->skb_iif = skb2->dev->ifindex;
+                skb2->pkt_type = PACKET_HOST;
+                netif_rx(skb2);
+        } else {
+                at = G_TC_AT(skb->tc_verd);
+                if (!(at & AT_EGRESS)) {
+                        if (m->tcfm_ok_push) {
+			        skb_push(skb2, skb2->dev->hard_header_len);
+                        }
+                }
 
-	/* mirror is always swallowed */
-	if (m->tcfm_eaction != TCA_EGRESS_MIRROR)
-		skb2->tc_verd = SET_TC_FROM(skb2->tc_verd, at);
+                /* mirror is always swallowed */
+                if (m->tcfm_eaction != TCA_EGRESS_MIRROR)
+		        skb2->tc_verd = SET_TC_FROM(skb2->tc_verd, at);
 
-	skb2->skb_iif = skb->dev->ifindex;
-	skb2->dev = dev;
-	err = dev_queue_xmit(skb2);
-
+                skb2->skb_iif = skb->dev->ifindex;
+                skb2->dev = dev;
+                err = dev_queue_xmit(skb2);
+        }
 out:
 	if (err) {
 		m->tcf_qstats.overlimits++;
@@ -216,7 +238,8 @@ static int mirred_device_event(struct notifier_block *unused,
 	struct net_device *dev = netdev_notifier_info_to_dev(ptr);
 	struct tcf_mirred *m;
 
-	if (event == NETDEV_UNREGISTER)
+	if (event == NETDEV_UNREGISTER) {
+		spin_lock_bh(&mirred_list_lock);
 		list_for_each_entry(m, &mirred_list, tcfm_list) {
 			spin_lock_bh(&m->tcf_lock);
 			if (m->tcfm_dev == dev) {
@@ -225,6 +248,8 @@ static int mirred_device_event(struct notifier_block *unused,
 			}
 			spin_unlock_bh(&m->tcf_lock);
 		}
+		spin_unlock_bh(&mirred_list_lock);
+	}
 
 	return NOTIFY_DONE;
 }

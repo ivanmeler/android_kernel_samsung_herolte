@@ -188,6 +188,7 @@ int ext4_is_child_context_consistent_with_parent(struct inode *parent,
 		return 0;
 	parent_ci = EXT4_I(parent)->i_crypt_info;
 	child_ci = EXT4_I(child)->i_crypt_info;
+
 	if (parent_ci && child_ci) {
 		return memcmp(parent_ci->ci_master_key, child_ci->ci_master_key,
 			      EXT4_KEY_DESCRIPTOR_SIZE) == 0 &&

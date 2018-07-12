@@ -414,6 +414,23 @@ config REGULATOR_MAX77802
 	  Exynos5420/Exynos5800 SoCs to control various voltages.
 	  It includes support for control of voltage and ramp speed.
 
+config REGULATOR_MAX77838
+	tristate "Maxim 77838 regulator"
+	depends on I2C
+	help
+	  This driver controls a Maxim 77838 regulator
+	  via I2C bus. The provided regulator is suitable for
+	  Exynos-7 chips to control DISP & TSP voltages.
+
+config REGULATOR_MAX77854
+	tristate "Maxim 77854 regulator"
+	depends on MFD_MAX77854
+	help
+	  This driver controls a Maxim 77843 regulator
+	  via I2C bus. The provided regulator is suitable for
+	  Exynos-5 chips to control VCC_CORE and
+	  VCC_USIM voltages.
+
 config REGULATOR_MC13XXX_CORE
 	tristate
 
@@ -529,13 +546,65 @@ config REGULATOR_S2MPA01
 	 via I2C bus. S2MPA01 has 10 Bucks and 26 LDO outputs.
 
 config REGULATOR_S2MPS11
-	tristate "Samsung S2MPS11/S2MPS14/S2MPU02 voltage regulator"
+	tristate "Samsung S2MPS11 voltage regulator"
 	depends on MFD_SEC_CORE
 	help
-	 This driver supports a Samsung S2MPS11/S2MPS14/S2MPU02 voltage output
-	 regulator via I2C bus. The chip is comprised of high efficient Buck
-	 converters including Dual-Phase Buck converter, Buck-Boost converter,
-	 various LDOs.
+	 This driver supports a Samsung S2MPS11 voltage output regulator
+	 via I2C bus. S2MPS11 is comprised of high efficient Buck converters
+	 including Dual-Phase Buck converter, Buck-Boost converter, various LDOs.
+
+config REGULATOR_S2MPS13
+	tristate "Samsung S2MPS13 voltage regulator"
+	depends on MFD_SEC_CORE
+	help
+	 This driver supports a Samsung S2MPS13 voltage output regulator
+	 via I2C bus. S2MPS13 is comprised of high efficient Buck converters
+	 including Dual-Phase Buck converter, Buck-Boost converter, various LDOs.
+
+config REGULATOR_S2MPS15
+	tristate "Samsung S2MPS15 voltage regulator"
+	depends on MFD_SEC_CORE
+	help
+	 This driver supports a Samsung S2MPS15 voltage output regulator
+	 via I2C bus. S2MPS15 is comprised of high efficient Buck converters
+	 including Dual-Phase Buck converter, Buck-Boost converter, various LDOs.
+
+config REGULATOR_S2MPS16
+	tristate "Samsung S2MPS16 voltage regulator"
+	depends on MFD_SEC_CORE
+	help
+	 This driver supports a Samsung S2MPS16 voltage output regulator
+	 via I2C bus. S2MPS16 is comprised of high efficient Buck converters
+	 including Dual-Phase Buck converter, Buck-Boost converter, various LDOs.
+
+config REGULATOR_S2MPU03
+	tristate "Samsung S2MPU03 voltage regulator"
+	depends on MFD_SEC_CORE
+	help
+	 This driver supports a Samsung S2MPU03 voltage output regulator
+	 via I2C bus. S2MPU03 is comprised of high efficient Buck converters
+	 including Dual-Phase Buck converter, Buck-Boost converter, various LDOs.
+
+config REGULATOR_S2MPB01
+	tristate "Samsung S2MPB01 voltage regulator"
+	depends on I2C
+	help
+	 This driver supports a Samsung Sub-PMIC S2MPB01 voltage output regulator
+	 via I2C bus. S2MPB01 is comprised of Buck & LDOs.
+
+config REGULATOR_S2MPB02
+	tristate "Samsung S2MPB02 regulator"
+	depends on MFD_S2MPB02
+	help
+	 This driver controls a Samsung S2MPB02 regulator
+	 via I2C bus.
+
+config REGULATOR_S2MU003
+	tristate "Samsung S2MU003 voltage regulator"
+	depends on MFD_S2MU003
+	help
+	 This driver supports a Samsung Sub-PMIC S2MU003 voltage output regulator
+	 via I2C bus. S2MU003 is comprised of Buck & LDOs.
 
 config REGULATOR_S5M8767
 	tristate "Samsung S5M8767A voltage regulator"

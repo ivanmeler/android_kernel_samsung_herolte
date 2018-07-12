@@ -714,6 +714,12 @@ encryption_policy_out:
 		return -EOPNOTSUPP;
 #endif
 	}
+
+	case FS_IOC_INVAL_MAPPING:
+	{
+		return invalidate_mapping_pages(inode->i_mapping, 0, -1);
+	}
+
 	default:
 		return -ENOTTY;
 	}

@@ -94,6 +94,12 @@ extern const struct cpumask *const cpu_active_mask;
 #define num_possible_cpus()	cpumask_weight(cpu_possible_mask)
 #define num_present_cpus()	cpumask_weight(cpu_present_mask)
 #define num_active_cpus()	cpumask_weight(cpu_active_mask)
+#ifdef CONFIG_SCHED_HMP
+extern struct cpumask hmp_slow_cpu_mask;
+extern struct cpumask hmp_fast_cpu_mask;
+#define num_hmp_fast_cpus()	cpumask_weight(&hmp_fast_cpu_mask)
+#define num_hmp_slow_cpus()	cpumask_weight(&hmp_slow_cpu_mask)
+#endif
 #define cpu_online(cpu)		cpumask_test_cpu((cpu), cpu_online_mask)
 #define cpu_possible(cpu)	cpumask_test_cpu((cpu), cpu_possible_mask)
 #define cpu_present(cpu)	cpumask_test_cpu((cpu), cpu_present_mask)

@@ -24,6 +24,7 @@
 #include <asm/cpu.h>
 #include <asm/cpufeature.h>
 #include <asm/cpu_ops.h>
+#include <asm/smp_plat.h>
 #include <asm/processor.h>
 #include <asm/sysreg.h>
 
@@ -480,6 +481,15 @@ void update_cpu_features(int cpu,
 {
 	int taint = 0;
 
+#ifdef CONFIG_SOC_EXYNOS8890
+	/*
+	* HACK: In Exynos8890, the sanity check for cluster '0' is meaningless
+	* because it consists of non-arm CPUs.
+	*/
+	if (!MPIDR_AFFINITY_LEVEL(cpu_logical_map(cpu), 1))
+		return;
+#endif
+
 	/*
 	 * The kernel can handle differing I-cache policies, but otherwise
 	 * caches should look identical. Userspace JITs will make use of
@@ -617,6 +627,39 @@ has_cpuid_feature(const struct arm64_cpu_capabilities *entry)
 	return feature_matches(val, entry);
 }
 
+#ifdef CONFIG_UNMAP_KERNEL_AT_EL0
+static int __kpti_forced; /* 0: not forced, >0: forced on, <0: forced off */
+
+static bool unmap_kernel_at_el0(const struct arm64_cpu_capabilities *entry)
+{
+	/* Forced on command line? */
+	if (__kpti_forced) {
+		pr_info_once("kernel page table isolation forced %s by command line option\n",
+			     __kpti_forced > 0 ? "ON" : "OFF");
+		return __kpti_forced > 0;
+	}
+
+	/* Useful for KASLR robustness */
+	if (IS_ENABLED(CONFIG_RANDOMIZE_BASE) || IS_ENABLED(CONFIG_RELOCATABLE_KERNEL))
+		return true;
+
+	return false;
+}
+
+static int __init parse_kpti(char *str)
+{
+	bool enabled;
+	int ret = strtobool(str, &enabled);
+
+	if (ret)
+		return ret;
+
+	__kpti_forced = enabled ? 1 : -1;
+	return 0;
+}
+__setup("kpti=", parse_kpti);
+#endif	/* CONFIG_UNMAP_KERNEL_AT_EL0 */
+
 static const struct arm64_cpu_capabilities arm64_features[] = {
 	{
 		.desc = "GIC system register CPU interface",
@@ -654,6 +697,12 @@ static const struct arm64_cpu_capabilities arm64_features[] = {
 		.matches = cpufeature_pan_not_uao,
 	},
 #endif /* CONFIG_ARM64_PAN */
+#ifdef CONFIG_UNMAP_KERNEL_AT_EL0
+	{
+		.capability = ARM64_UNMAP_KERNEL_AT_EL0,
+		.matches = unmap_kernel_at_el0,
+	},
+#endif
 	{},
 };
 

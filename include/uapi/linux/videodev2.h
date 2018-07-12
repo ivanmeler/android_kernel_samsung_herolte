@@ -178,31 +178,148 @@ enum v4l2_memory {
 
 /* see also http://vektor.theorem.ca/graphics/ycbcr/ */
 enum v4l2_colorspace {
-	/* ITU-R 601 -- broadcast NTSC/PAL */
-	V4L2_COLORSPACE_SMPTE170M     = 1,
+	/*
+	* Default colorspace, i.e. let the driver figure it out.
+	* Can only be used with video capture.
+	*/
+	V4L2_COLORSPACE_DEFAULT 	  = 0,
 
-	/* 1125-Line (US) HDTV */
+	/* SMPTE 170M: used for broadcast NTSC/PAL SDTV */
+	V4L2_COLORSPACE_SMPTE170M     = 1,
+	
+	/* Obsolete pre-1998 SMPTE 240M HDTV standard, superseded by Rec 709 */	
 	V4L2_COLORSPACE_SMPTE240M     = 2,
 
-	/* HD and modern captures. */
+	/* Rec.709: used for HDTV */	
 	V4L2_COLORSPACE_REC709        = 3,
 
-	/* broken BT878 extents (601, luma range 16-253 instead of 16-235) */
+	/*
+	* Deprecated, do not use. No driver will ever return this. This was
+	* based on a misunderstanding of the bt878 datasheet.
+	*/
+	
 	V4L2_COLORSPACE_BT878         = 4,
-
-	/* These should be useful.  Assume 601 extents. */
+	/*
+	* NTSC 1953 colorspace. This only makes sense when dealing with
+	* really, really old NTSC recordings. Superseded by SMPTE 170M.
+	*/
+	
 	V4L2_COLORSPACE_470_SYSTEM_M  = 5,
+	/*
+	* EBU Tech 3213 PAL/SECAM colorspace. This only makes sense when
+	* dealing with really old PAL/SECAM recordings. Superseded by
+	* SMPTE 170M.
+	*/
+	
 	V4L2_COLORSPACE_470_SYSTEM_BG = 6,
 
-	/* I know there will be cameras that send this.  So, this is
-	 * unspecified chromaticities and full 0-255 on each of the
-	 * Y'CbCr components
-	 */
+	/*
+	* Effectively shorthand for V4L2_COLORSPACE_SRGB, V4L2_YCBCR_ENC_601
+	* and V4L2_QUANTIZATION_FULL_RANGE. To be used for (Motion-)JPEG.
+	*/
 	V4L2_COLORSPACE_JPEG          = 7,
-
-	/* For RGB colourspaces, this is probably a good start. */
+	
+	/* For RGB colorspaces such as produces by most webcams. */
 	V4L2_COLORSPACE_SRGB          = 8,
+	
+	/* AdobeRGB colorspace */
+	V4L2_COLORSPACE_ADOBERGB      = 9,
+
+	/* BT.2020 colorspace, used for UHDTV. */
+	V4L2_COLORSPACE_BT2020        = 10,
+	
+	/* Raw colorspace: for RAW unprocessed images */
+	V4L2_COLORSPACE_RAW 		  = 11,
+	
+	/* DCI-P3 colorspace, used by cinema projectors */
+	V4L2_COLORSPACE_DCI_P3		  = 12,
 };
+
+/*
+ * Determine how COLORSPACE_DEFAULT should map to a proper colorspace.
+ * This depends on whether this is a SDTV image (use SMPTE 170M), an
+ * HDTV image (use Rec. 709), or something else (use sRGB).
+ */
+#define V4L2_MAP_COLORSPACE_DEFAULT(is_sdtv, is_hdtv) \
+	((is_sdtv) ? V4L2_COLORSPACE_SMPTE170M : \
+	 ((is_hdtv) ? V4L2_COLORSPACE_REC709 : V4L2_COLORSPACE_SRGB))
+
+enum v4l2_ycbcr_encoding {
+	/*
+	 * Mapping of V4L2_YCBCR_ENC_DEFAULT to actual encodings for the
+	 * various colorspaces:
+	 *
+	 * V4L2_COLORSPACE_SMPTE170M, V4L2_COLORSPACE_470_SYSTEM_M,
+	 * V4L2_COLORSPACE_470_SYSTEM_BG, V4L2_COLORSPACE_ADOBERGB and
+	 * V4L2_COLORSPACE_JPEG: V4L2_YCBCR_ENC_601
+	 *
+	 * V4L2_COLORSPACE_REC709 and V4L2_COLORSPACE_DCI_P3: V4L2_YCBCR_ENC_709
+	 *
+	 * V4L2_COLORSPACE_SRGB: V4L2_YCBCR_ENC_SYCC
+	 *
+	 * V4L2_COLORSPACE_BT2020: V4L2_YCBCR_ENC_BT2020
+	 *
+	 * V4L2_COLORSPACE_SMPTE240M: V4L2_YCBCR_ENC_SMPTE240M
+	 */
+	V4L2_YCBCR_ENC_DEFAULT        = 0,
+
+	/* ITU-R 601 -- SDTV */
+	V4L2_YCBCR_ENC_601            = 1,
+
+	/* Rec. 709 -- HDTV */
+	V4L2_YCBCR_ENC_709            = 2,
+
+	/* ITU-R 601/EN 61966-2-4 Extended Gamut -- SDTV */
+	V4L2_YCBCR_ENC_XV601          = 3,
+
+	/* Rec. 709/EN 61966-2-4 Extended Gamut -- HDTV */
+	V4L2_YCBCR_ENC_XV709          = 4,
+
+	/* sYCC (Y'CbCr encoding of sRGB) */
+	V4L2_YCBCR_ENC_SYCC           = 5,
+
+	/* BT.2020 Non-constant Luminance Y'CbCr */
+	V4L2_YCBCR_ENC_BT2020         = 6,
+
+	/* BT.2020 Constant Luminance Y'CbcCrc */
+	V4L2_YCBCR_ENC_BT2020_CONST_LUM = 7,
+
+	/* SMPTE 240M -- Obsolete HDTV */
+	V4L2_YCBCR_ENC_SMPTE240M      = 8,
+};
+
+/*
+ * Determine how YCBCR_ENC_DEFAULT should map to a proper Y'CbCr encoding.
+ * This depends on the colorspace.
+ */
+#define V4L2_MAP_YCBCR_ENC_DEFAULT(colsp) \
+	 (((colsp) == V4L2_COLORSPACE_REC709 || \
+	  (colsp) == V4L2_COLORSPACE_DCI_P3) ? V4L2_YCBCR_ENC_709 : \
+	 ((colsp) == V4L2_COLORSPACE_BT2020 ? V4L2_YCBCR_ENC_BT2020 : \
+	  ((colsp) == V4L2_COLORSPACE_SMPTE240M ? V4L2_YCBCR_ENC_SMPTE240M : \
+	   V4L2_YCBCR_ENC_601)))
+
+enum v4l2_quantization {
+	/*
+	 * The default for R'G'B' quantization is always full range. For
+	 * Y'CbCr the quantization is always limited range, except for
+	 * SYCC, XV601, XV709 or JPEG: those are full range.
+	 */
+	V4L2_QUANTIZATION_DEFAULT     = 0,
+	V4L2_QUANTIZATION_FULL_RANGE  = 1,
+	V4L2_QUANTIZATION_LIM_RANGE   = 2,
+ };
+
+/*
+ * Determine how QUANTIZATION_DEFAULT should map to a proper quantization.
+ * This depends on whether the image is RGB or not, the colorspace and the
+ * Y'CbCr encoding.
+ */
+#define V4L2_MAP_QUANTIZATION_DEFAULT(is_rgb, colsp, ycbcr_enc) \
+	(((is_rgb) && (colsp) == V4L2_COLORSPACE_BT2020) ? V4L2_QUANTIZATION_LIM_RANGE : \
+	 (((is_rgb) || (ycbcr_enc) == V4L2_YCBCR_ENC_XV601 || \
+	  (ycbcr_enc) == V4L2_YCBCR_ENC_XV709 || (colsp) == V4L2_COLORSPACE_JPEG) ? \
+	 V4L2_QUANTIZATION_FULL_RANGE : V4L2_QUANTIZATION_LIM_RANGE))
 
 enum v4l2_priority {
 	V4L2_PRIORITY_UNSET       = 0,  /* not initialized */
@@ -294,6 +411,8 @@ struct v4l2_pix_format {
 	__u32			colorspace;	/* enum v4l2_colorspace */
 	__u32			priv;		/* private data, depends on pixelformat */
 	__u32			flags;		/* format flags (V4L2_PIX_FMT_FLAG_*) */
+	__u32			ycbcr_enc;	/* enum v4l2_ycbcr_encoding */
+	__u32			quantization;	/* enum v4l2_quantization */
 };
 
 /*      Pixel format         FOURCC                          depth  Description  */
@@ -729,6 +848,8 @@ struct v4l2_buffer {
 #define V4L2_BUF_FLAG_TIMESTAMP_UNKNOWN		0x00000000
 #define V4L2_BUF_FLAG_TIMESTAMP_MONOTONIC	0x00002000
 #define V4L2_BUF_FLAG_TIMESTAMP_COPY		0x00004000
+/* Expects and returns an Android sync fence */
+#define V4L2_BUF_FLAG_USE_SYNC			0x00008000
 /* Timestamp sources. */
 #define V4L2_BUF_FLAG_TSTAMP_SRC_MASK		0x00070000
 #define V4L2_BUF_FLAG_TSTAMP_SRC_EOF		0x00000000
@@ -1777,6 +1898,8 @@ struct v4l2_plane_pix_format {
  * @plane_fmt:		per-plane information
  * @num_planes:		number of planes for this format
  * @flags:		format flags (V4L2_PIX_FMT_FLAG_*)
+ * @ycbcr_enc:		enum v4l2_ycbcr_encoding, Y'CbCr encoding
+ * @quantization:	enum v4l2_quantization, colorspace quantization
  */
 struct v4l2_pix_format_mplane {
 	__u32				width;
@@ -1787,8 +1910,10 @@ struct v4l2_pix_format_mplane {
 
 	struct v4l2_plane_pix_format	plane_fmt[VIDEO_MAX_PLANES];
 	__u8				num_planes;
-	__u8				flags;
-	__u8				reserved[10];
+	__u8				flags;	
+	__u8				ycbcr_enc;
+	__u8				quantization;
+	__u8				reserved[8];
 } __attribute__ ((packed));
 
 /**

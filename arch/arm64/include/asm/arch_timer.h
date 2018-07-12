@@ -116,12 +116,23 @@ static inline u64 arch_counter_get_cntpct(void)
 
 static inline u64 arch_counter_get_cntvct(void)
 {
-	u64 cval;
+	/* ARM64_ERRATUM_858921 */
+	u64 cval1;
+	u64 cval2;
 
 	isb();
-	asm volatile("mrs %0, cntvct_el0" : "=r" (cval));
+	asm volatile("mrs %0, cntvct_el0" : "=r" (cval1));
+	isb();
+	asm volatile("mrs %0, cntvct_el0" : "=r" (cval2));
 
-	return cval;
+	/*
+	 * if bit[32] is different, keep the first value
+	 * if bit[32] is the same, keep the second value.
+	 */
+	if ((cval1 & BIT(32)) != (cval2 & BIT(32)))
+		return cval1;
+	else
+		return cval2;
 }
 
 static inline int arch_timer_arch_init(void)

@@ -1,0 +1,16 @@
+config VIDEO_EXYNOS_FIMC_IS2
+	bool "Exynos FIMC-IS2 (Image Subsystem) driver"
+	depends on VIDEO_EXYNOS
+	select MEDIA_EXYNOS
+	select EXYNOS_MIPI_CSIS
+	select EXYNOS_FIMC_BNS
+	select EXYNOS_FIMC_IS
+	select VENDER_FEATURE
+	default n
+	help
+	  This is a v4l2 driver for exynos FIMC-IS device.
+
+source "drivers/media/platform/exynos/fimc-is2/sensor/Kconfig"
+source "drivers/media/platform/exynos/fimc-is2/ischain/Kconfig"
+source "drivers/media/platform/exynos/fimc-is2/vendor/Kconfig"
+source "drivers/media/platform/exynos/fimc-is2/hardware/Kconfig"

@@ -27,6 +27,10 @@
 
 #include <asm/sections.h>
 
+#ifdef CONFIG_SEC_DEBUG_EXTRA_INFO
+#include <linux/sec_debug.h>
+#endif
+
 #ifdef CONFIG_KALLSYMS_ALL
 #define all_var 1
 #else
@@ -52,6 +56,27 @@ extern const u16 kallsyms_token_index[] __weak;
 
 extern const unsigned long kallsyms_markers[] __weak;
 
+#ifdef CONFIG_SEC_DEBUG_EXTRA_INFO
+void sec_debug_set_kallsyms_info(struct sec_debug_shared_info *sec_debug_info)
+{
+	if (sec_debug_info) {
+		sec_debug_info->ksyms.addresses_pa = __pa(kallsyms_addresses);
+		sec_debug_info->ksyms.names_pa = __pa(kallsyms_names);
+		sec_debug_info->ksyms.num_syms = kallsyms_num_syms;
+		sec_debug_info->ksyms.token_table_pa = __pa(kallsyms_token_table);
+		sec_debug_info->ksyms.token_index_pa = __pa(kallsyms_token_index);
+		sec_debug_info->ksyms.markers_pa = __pa(kallsyms_markers);
+		sec_debug_info->ksyms.sinittext = (uint64_t)_sinittext;
+		sec_debug_info->ksyms.einittext = (uint64_t)_einittext;
+		sec_debug_info->ksyms.stext = (uint64_t)_stext;
+		sec_debug_info->ksyms.etext = (uint64_t)_etext;
+		sec_debug_info->ksyms.end = (uint64_t)_end;
+		sec_debug_info->ksyms.kallsyms_all = all_var;
+		sec_debug_info->ksyms.magic = SEC_DEBUG_SHARED_MAGIC1;
+	}
+}
+#endif
+
 static inline int is_kernel_inittext(unsigned long addr)
 {
 	if (addr >= (unsigned long)_sinittext
@@ -62,7 +87,7 @@ static inline int is_kernel_inittext(unsigned long addr)
 
 static inline int is_kernel_text(unsigned long addr)
 {
-	if ((addr >= (unsigned long)_stext && addr <= (unsigned long)_etext) ||
+	if ((addr >= (unsigned long)_text && addr <= (unsigned long)_etext) ||
 	    arch_is_kernel_text(addr))
 		return 1;
 	return in_gate_area_no_mm(addr);
@@ -70,7 +95,7 @@ static inline int is_kernel_text(unsigned long addr)
 
 static inline int is_kernel(unsigned long addr)
 {
-	if (addr >= (unsigned long)_stext && addr <= (unsigned long)_end)
+	if (addr >= (unsigned long)_text && addr <= (unsigned long)_end)
 		return 1;
 	return in_gate_area_no_mm(addr);
 }
@@ -276,6 +301,7 @@ int kallsyms_lookup_size_offset(unsigned long addr, unsigned long *symbolsize,
 				unsigned long *offset)
 {
 	char namebuf[KSYM_NAME_LEN];
+
 	if (is_ksym_addr(addr))
 		return !!get_symbol_pos(addr, symbolsize, offset);
 
@@ -565,6 +591,7 @@ static int kallsyms_open(struct inode *inode, struct file *file)
 	 * using get_symbol_offset for every symbol.
 	 */
 	struct kallsym_iter *iter;
+
 	iter = __seq_open_private(file, &kallsyms_op, sizeof(*iter));
 	if (!iter)
 		return -ENOMEM;
@@ -577,6 +604,7 @@ static int kallsyms_open(struct inode *inode, struct file *file)
 const char *kdb_walk_kallsyms(loff_t *pos)
 {
 	static struct kallsym_iter kdb_walk_kallsyms_iter;
+
 	if (*pos == 0) {
 		memset(&kdb_walk_kallsyms_iter, 0,
 		       sizeof(kdb_walk_kallsyms_iter));

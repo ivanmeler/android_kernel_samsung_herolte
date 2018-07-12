@@ -1,0 +1,120 @@
+config CAMERA_EEPROM_SUPPORT_REAR
+        bool "Enable eeprom for rear cam"
+        depends on VENDER_MCD
+        default n
+        help
+          Enable eeprom for rear cam.
+config CAMERA_EEPROM_SUPPORT_FRONT
+        bool "Enable eeprom for front cam"
+        depends on VENDER_MCD
+        default n
+        help
+          Enable eeprom for front cam.
+config COMPANION_USE
+        bool "Use companion"
+        depends on VENDER_MCD
+        default n
+        help
+          Use companion.
+ config COMPANION_C1_USE
+        bool "Use companion C1"
+        depends on VENDER_MCD
+        default n
+        help
+          Use companion C1.
+ config COMPANION_C2_USE
+        bool "Use companion C2"
+        depends on VENDER_MCD
+        default n
+        help
+          Use companion C2.
+ config COMPANION_C3_USE
+        bool "Use companion C3"
+        depends on VENDER_MCD
+        default n
+        help
+          Use companion C3.
+config COMPANION_DCDC_USE
+        bool "Use companion DCDC regulator"
+        depends on VENDER_MCD
+        default n
+        help
+          Use companion DCDC regulator.
+config PREPROCESSOR_STANDBY_USE
+        bool "Use companion standby"
+        depends on VENDER_MCD
+        default n
+        help
+          Use companion standby.
+config SENSOR_RETENTION_USE
+	bool "Use sensor retention"
+	depends on VENDER_MCD
+	default n
+	help
+	  Use sensor retention.
+config OIS_USE
+        bool "Use ois"
+        depends on VENDER_MCD
+        default n
+        help
+          Use ois.
+config OIS_FW_UPDATE_THREAD_USE
+        bool "Enable ois fw update thread"
+        depends on OIS_USE
+        default n
+        help
+          Enable ois fw update thread.
+config AF_HOST_CONTROL
+        bool "Enable host af control"
+        depends on VENDER_MCD
+        default n
+        help
+          Enable host af control.
+config TORCH_CURRENT_CHANGE_SUPPORT
+        bool "Change torch current in recording mode"
+        depends on VENDER_MCD
+        default n
+        help
+          Change torch current in recording mode.
+config CAMERA_HERO
+        bool "This camera is hero project"
+        depends on VENDER_MCD
+        default n
+        help
+          This camera is hero project.
+config CAMERA_GRACE
+        bool "This camera is grace project"
+        depends on VENDER_MCD
+        default n
+        help
+          This camera is grace project.
+config CAMERA_VJFLTE
+        bool "This camera is vjflte project"
+        depends on VENDER_MCD
+        default n
+        help
+          This camera is vjflte project.
+config CAMERA_ULTE
+        bool "This camera is ulte project"
+        depends on VENDER_MCD
+        default n
+        help
+          This camera is ulte project.
+config OIS_USE_RUMBA_S4
+        bool "Use RUMBA S4 ois driver IC"
+        depends on OIS_USE
+        default n
+        help
+          Use RUMBA S4 ois driver IC.
+config COMPANION_FACTORY_VALIDATION
+        bool "Use factory validation for companion ic"
+        depends on COMPANION_USE
+        default n
+        help
+          Use factory validation for companion ic.
+config SECURE_CAMERA_USE
+        bool "Use secure camera"
+        depends on VENDER_MCD
+        default n
+        help
+          Use secure camera.

@@ -95,9 +95,24 @@ static int __try_to_free_cp_buf(struct journal_head *jh)
 	struct buffer_head *bh = jh2bh(jh);
 
 	if (jh->b_transaction == NULL && !buffer_locked(bh) &&
-	    !buffer_dirty(bh) && !buffer_write_io_error(bh)) {
-		JBUFFER_TRACE(jh, "remove from checkpoint list");
-		ret = __jbd2_journal_remove_checkpoint(jh) + 1;
+	    !buffer_dirty(bh)) {
+		if (likely(!buffer_write_io_error(bh))) {
+			JBUFFER_TRACE(jh, "remove from checkpoint list");
+			ret = __jbd2_journal_remove_checkpoint(jh) + 1;
+		} else if (jh->b_cp_transaction) {
+			journal_t *journal = jh->b_cp_transaction->t_journal;
+
+			printk(KERN_ERR "%s: I/O error during writeback "
+			       "checkpointed buffers in %s\n", __func__,
+			       journal->j_devname);
+			printk(KERN_ERR " bh %p, bh->b_size %lu, bh->b_data %p"
+					" bh->b_blocknr %lu\n",
+					(void *) bh,
+					(long unsigned int) bh->b_size,
+					(void *) bh->b_data,
+					(long unsigned int) bh->b_blocknr);
+			jbd2_journal_abort(journal, -EIO);
+		}
 	}
 	return ret;
 }

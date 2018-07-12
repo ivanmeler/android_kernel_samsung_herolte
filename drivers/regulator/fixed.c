@@ -96,6 +96,8 @@ of_get_fixed_voltage_config(struct device *dev)
 	config->gpio_is_open_drain = of_property_read_bool(np,
 							   "gpio-open-drain");
 
+	of_property_read_u32(np, "endup-delay-us", &config->endup_delay);
+
 	if (of_find_property(np, "vin-supply", NULL))
 		config->input_supply = "vin";
 
@@ -140,7 +142,7 @@ static int reg_fixed_voltage_probe(struct platform_device *pdev)
 	drvdata->desc.ops = &fixed_voltage_ops;
 
 	drvdata->desc.enable_time = config->startup_delay;
-
+	drvdata->desc.disable_time = config->endup_delay;
 	if (config->input_supply) {
 		drvdata->desc.supply_name = devm_kstrdup(&pdev->dev,
 					    config->input_supply,

@@ -1240,7 +1240,7 @@ char *address_val(char *buf, char *end, const void *addr,
 	return number(buf, end, num, spec);
 }
 
-int kptr_restrict __read_mostly;
+int kptr_restrict __read_mostly = 4;
 
 /*
  * Show a '%p' thing.  A kernel extension is that the '%p' is followed

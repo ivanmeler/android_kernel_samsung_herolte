@@ -269,6 +269,17 @@ static int suspend_prepare(suspend_state_t state)
 		goto Finish;
 	}
 
+	trace_suspend_resume(TPS("sync_filesystems"), 0, true);
+	printk(KERN_INFO "PM: Syncing filesystems ... ");
+	if (intr_sync(NULL)) {
+		printk("canceled.\n");
+		trace_suspend_resume(TPS("sync_filesystems"), 0, false);
+		error = -EBUSY;
+		goto Finish;
+	}
+	printk("done.\n");
+	trace_suspend_resume(TPS("sync_filesystems"), 0, false);
+
 	trace_suspend_resume(TPS("freeze_processes"), 0, true);
 	error = suspend_freeze_processes();
 	trace_suspend_resume(TPS("freeze_processes"), 0, false);
@@ -493,12 +504,6 @@ static int enter_state(suspend_state_t state)
 
 	if (state == PM_SUSPEND_FREEZE)
 		freeze_begin();
-
-	trace_suspend_resume(TPS("sync_filesystems"), 0, true);
-	printk(KERN_INFO "PM: Syncing filesystems ... ");
-	sys_sync();
-	printk("done.\n");
-	trace_suspend_resume(TPS("sync_filesystems"), 0, false);
 
 	pr_debug("PM: Preparing system for %s sleep\n", pm_states[state]);
 	error = suspend_prepare(state);

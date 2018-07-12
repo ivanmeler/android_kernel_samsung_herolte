@@ -1,0 +1,38 @@
+/*
+ * SAMSUNG UNIVERSAL7420 board device tree source
+ *
+ * Copyright (c) 2014 Samsung Electronics Co., Ltd.
+ *		http://www.samsung.com
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+*/
+
+
+/ {
+
+
+	decon_f: decon_f@0x13960000 {
+		/* EINT for TE */
+		gpios = <&gpb0 0 0xf>;
+		gpio_err = <&gpa0 6 0>;
+		gpio_pcd = <&gpe7 1 0>;
+		/* gpio_det = <&gpi2 1 0>; */
+		te_eint {
+			/* NWEINT_GPB0_PEND(GPB0_0), NWEINT_GPB0_MASK(GPB0_0) */
+			reg = <0x0 0x136D0A1C 0x4>, <0x0 0x136D091C 0x4>;
+		};
+	};
+
+	dsim_0: dsim@0x13900000 {
+		lcd_info1 = <&s6e3ha3>;
+		lcd_info2 = <&s6e3hf4>;
+		/* lcd reset, power */
+		gpios = <&gpi2 0 0x1>, <&gpd0 4 0x1>;
+		disp_type_gpio = <&gpi2 2 0x0>;
+		regulator_30V = "vdd_3p0_ddi";
+		regulator_18V = "vdd_1p8_ddi";
+	};
+
+};

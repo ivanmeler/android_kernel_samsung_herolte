@@ -204,6 +204,9 @@ config PINCTRL_PALMAS
 	  open drain configuration for the Palmas series devices like
 	  TPS65913, TPS80036 etc.
 
+config MST_SECURE_GPIO
+	bool "setting MST gpio as secure pin"
+
 source "drivers/pinctrl/berlin/Kconfig"
 source "drivers/pinctrl/freescale/Kconfig"
 source "drivers/pinctrl/mvebu/Kconfig"

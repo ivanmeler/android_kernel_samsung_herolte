@@ -43,6 +43,7 @@
 #include <linux/hw_breakpoint.h>
 #include <linux/personality.h>
 #include <linux/notifier.h>
+#include <linux/exynos-ss.h>
 
 #include <asm/alternative.h>
 #include <asm/compat.h>
@@ -56,6 +57,10 @@
 #include <linux/stackprotector.h>
 unsigned long __stack_chk_guard __read_mostly;
 EXPORT_SYMBOL(__stack_chk_guard);
+#endif
+
+#ifdef CONFIG_RKP_CFP_ROPP
+#include <linux/rkp_cfp.h>
 #endif
 
 /*
@@ -232,6 +237,15 @@ void __show_regs(struct pt_regs *regs)
 		sp = regs->sp;
 		top_reg = 29;
 	}
+	if (!user_mode(regs)) {
+		exynos_ss_save_context(regs);
+		/*
+		 *  If you want to see more kernel events after panic,
+		 *  you should modify exynos_ss_set_enable's function 2nd parameter
+		 *  to true.
+		 */
+		exynos_ss_set_enable("log_kevents", false);
+	}
 
 	show_regs_print_info(KERN_DEFAULT);
 	print_symbol("PC is at %s\n", instruction_pointer(regs));
@@ -245,7 +259,7 @@ void __show_regs(struct pt_regs *regs)
 			printk("\n");
 	}
 	if (!user_mode(regs))
-		show_extra_register_data(regs, 128);
+		show_extra_register_data(regs, 256);
 	printk("\n");
 }
 
@@ -306,6 +320,7 @@ int copy_thread(unsigned long clone_flags, unsigned long stack_start,
 	struct pt_regs *childregs = task_pt_regs(p);
 	unsigned long tls = p->thread.tp_value;
 
+
 	memset(&p->thread.cpu_context, 0, sizeof(struct cpu_context));
 
 	/*
@@ -351,6 +366,9 @@ int copy_thread(unsigned long clone_flags, unsigned long stack_start,
 		p->thread.cpu_context.x19 = stack_start;
 		p->thread.cpu_context.x20 = stk_sz;
 	}
+#ifdef CONFIG_RKP_CFP_ROPP
+	rkp_cfp_ropp_change_keys(p);
+#endif
 	p->thread.cpu_context.pc = (unsigned long)ret_from_fork;
 	p->thread.cpu_context.sp = (unsigned long)childregs;
 	p->thread.tp_value = tls;
@@ -362,25 +380,18 @@ int copy_thread(unsigned long clone_flags, unsigned long stack_start,
 
 static void tls_thread_switch(struct task_struct *next)
 {
-	unsigned long tpidr, tpidrro;
-
 	if (!is_compat_task()) {
+		unsigned long tpidr;
 		asm("mrs %0, tpidr_el0" : "=r" (tpidr));
 		current->thread.tp_value = tpidr;
 	}
 
-	if (is_compat_thread(task_thread_info(next))) {
-		tpidr = 0;
-		tpidrro = next->thread.tp_value;
-	} else {
-		tpidr = next->thread.tp_value;
-		tpidrro = 0;
-	}
+	if (is_compat_thread(task_thread_info(next)))
+		write_sysreg(next->thread.tp_value, tpidrro_el0);
+	else if (!arm64_kernel_unmapped_at_el0())
+		write_sysreg(0, tpidrro_el0);
 
-	asm(
-	"	msr	tpidr_el0, %0\n"
-	"	msr	tpidrro_el0, %1"
-	: : "r" (tpidr), "r" (tpidrro));
+	write_sysreg(next->thread.tp_value, tpidr_el0);
 }
 
 /* Restore the UAO state depending on next's addr_limit */

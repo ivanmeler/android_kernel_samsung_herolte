@@ -30,8 +30,24 @@
 #include <linux/spinlock.h>
 #include <linux/syscore_ops.h>
 
+#include <soc/samsung/exynos-pm.h>
+
+#ifdef CONFIG_SEC_FACTORY
+#undef CONFIG_ESE_SECURE
+#endif
+
 #include "../core.h"
 #include "pinctrl-samsung.h"
+#ifdef CONFIG_SEC_GPIO_DVS
+#include "secgpio_dvs.h"
+#endif
+
+#ifdef ENABLE_SENSORS_FPRINT_SECURE
+#ifdef CONFIG_FB
+#include <linux/smc.h>
+extern int vfsspi_goto_suspend;
+#endif
+#endif
 
 #define GROUP_SUFFIX		"-grp"
 #define GSUFFIX_LEN		sizeof(GROUP_SUFFIX)
@@ -298,6 +314,71 @@ static int samsung_dt_node_to_map(struct pinctrl_dev *pctldev,
 	return 0;
 }
 
+/* GPIO register names */
+static char *gpio_regs[] = {"CON", "DAT", "PUD", "DRV", "CON_PDN", "PUD_PDN"};
+
+static void pin_to_reg_bank(struct samsung_pinctrl_drv_data *drvdata,
+			unsigned pin, void __iomem **reg, u32 *offset,
+			struct samsung_pin_bank **bank);
+
+/* common debug show function */
+static void samsung_pin_dbg_show_by_type(struct samsung_pin_bank *bank,
+				void __iomem *reg_base, u32 pin_offset,
+				struct seq_file *s, unsigned pin,
+				enum pincfg_type cfg_type)
+{
+	struct samsung_pin_bank_type *type;
+	u32 data, width, mask, shift, cfg_reg;
+
+	type = bank->type;
+
+	if (!type->fld_width[cfg_type])
+		return;
+
+	width = type->fld_width[cfg_type];
+	cfg_reg = type->reg_offset[cfg_type];
+	mask = (1 << width) - 1;
+	shift = pin_offset * width;
+
+	data = readl(reg_base + cfg_reg);
+
+	data >>= shift;
+	data &= mask;
+
+	seq_printf(s, " %s(0x%x)", gpio_regs[cfg_type], data);
+}
+
+/* show GPIO register status */
+static void samsung_pin_dbg_show(struct pinctrl_dev *pctldev,
+				struct seq_file *s, unsigned pin)
+{
+	struct samsung_pinctrl_drv_data *drvdata;
+	struct samsung_pin_bank *bank;
+	void __iomem *reg_base;
+	u32 pin_offset;
+	unsigned long flags;
+	enum pincfg_type cfg_type;
+
+	drvdata = pinctrl_dev_get_drvdata(pctldev);
+	pin_to_reg_bank(drvdata, pin - drvdata->ctrl->base, &reg_base,
+					&pin_offset, &bank);
+
+	/* GPH ports are AUD interface (I2S, UART, PCM, SB) that should not
+	 * access when AUD power is disabled
+	 */
+	if (!strncmp(bank->name, "gph", 3))
+		return ;
+
+	spin_lock_irqsave(&bank->slock, flags);
+
+	for (cfg_type = 0; cfg_type < PINCFG_TYPE_NUM; cfg_type++) {
+		samsung_pin_dbg_show_by_type(bank, reg_base,
+					pin_offset, s, pin, cfg_type);
+	}
+
+	spin_unlock_irqrestore(&bank->slock, flags);
+}
+
 /* list of pinctrl callbacks for the pinctrl core */
 static const struct pinctrl_ops samsung_pctrl_ops = {
 	.get_groups_count	= samsung_get_group_count,
@@ -305,6 +386,7 @@ static const struct pinctrl_ops samsung_pctrl_ops = {
 	.get_group_pins		= samsung_get_group_pins,
 	.dt_node_to_map		= samsung_dt_node_to_map,
 	.dt_free_map		= samsung_dt_free_map,
+	.pin_dbg_show		= samsung_pin_dbg_show,
 };
 
 /* check if the selector is a valid pin function selector */
@@ -380,6 +462,22 @@ static void samsung_pinmux_setup(struct pinctrl_dev *pctldev, unsigned selector,
 
 	pin_to_reg_bank(drvdata, grp->pins[0] - drvdata->ctrl->base,
 			&reg, &pin_offset, &bank);
+
+#ifdef ENABLE_SENSORS_FPRINT_SECURE
+	if (!strncmp(bank->name, CONFIG_SENSORS_FP_SPI_GPIO, 4))
+		return;
+#endif
+
+#ifdef CONFIG_ESE_SECURE
+	if (!strncmp(bank->name, CONFIG_ESE_SECURE_GPIO, 4))
+		return;
+#endif
+
+#ifdef CONFIG_MST_SECURE_GPIO
+	if (!strncmp(bank->name, "gpf0", 4))
+		return;
+#endif
+
 	type = bank->type;
 	mask = (1 << type->fld_width[PINCFG_TYPE_FUNC]) - 1;
 	shift = pin_offset * type->fld_width[PINCFG_TYPE_FUNC];
@@ -433,6 +531,22 @@ static int samsung_pinconf_rw(struct pinctrl_dev *pctldev, unsigned int pin,
 	drvdata = pinctrl_dev_get_drvdata(pctldev);
 	pin_to_reg_bank(drvdata, pin - drvdata->ctrl->base, &reg_base,
 					&pin_offset, &bank);
+
+#ifdef ENABLE_SENSORS_FPRINT_SECURE
+	if (!strncmp(bank->name, CONFIG_SENSORS_FP_SPI_GPIO, 4))
+		return 0;
+#endif
+
+#ifdef CONFIG_ESE_SECURE
+	if (!strncmp(bank->name, CONFIG_ESE_SECURE_GPIO, 4))
+		return 0;
+#endif
+
+#ifdef CONFIG_MST_SECURE_GPIO
+	if (!strncmp(bank->name, "gpf0", 4))
+		return 0;
+#endif
+
 	type = bank->type;
 
 	if (cfg_type >= PINCFG_TYPE_NUM || !type->fld_width[cfg_type])
@@ -516,12 +630,63 @@ static int samsung_pinconf_group_get(struct pinctrl_dev *pctldev,
 	return 0;
 }
 
+/* show whole PUD, DRV, CON_PDN and PUD_PDN register status */
+static void samsung_pinconf_dbg_show(struct pinctrl_dev *pctldev,
+				struct seq_file *s, unsigned pin)
+{
+	struct samsung_pinctrl_drv_data *drvdata;
+	struct samsung_pin_bank *bank;
+	void __iomem *reg_base;
+	u32 pin_offset;
+	unsigned long flags;
+	enum pincfg_type cfg_type;
+
+	drvdata = pinctrl_dev_get_drvdata(pctldev);
+	pin_to_reg_bank(drvdata, pin - drvdata->ctrl->base, &reg_base,
+					&pin_offset, &bank);
+
+	/* GPH ports are AUD interface (I2S, UART, PCM, SB) that should not
+	 * access when AUD power is disabled
+	 */
+	if (!strncmp(bank->name, "gph", 3))
+		return ;
+
+	spin_lock_irqsave(&bank->slock, flags);
+
+	for (cfg_type = PINCFG_TYPE_PUD; cfg_type <= PINCFG_TYPE_PUD_PDN
+					; cfg_type++) {
+		samsung_pin_dbg_show_by_type(bank, reg_base,
+					pin_offset, s, pin, cfg_type);
+	}
+
+	spin_unlock_irqrestore(&bank->slock, flags);
+}
+
+/* show group's PUD, DRV, CON_PDN and PUD_PDN register status */
+static void samsung_pinconf_group_dbg_show(struct pinctrl_dev *pctldev,
+				struct seq_file *s, unsigned group)
+{
+	struct samsung_pinctrl_drv_data *drvdata;
+	const unsigned int *pins;
+	int i;
+
+	drvdata = pinctrl_dev_get_drvdata(pctldev);
+	pins = drvdata->pin_groups[group].pins;
+
+	for (i = 0; i < drvdata->pin_groups[group].num_pins; i++) {
+		seq_printf(s, "\n\t%s:", pin_get_name(pctldev, pins[i]));
+		samsung_pinconf_dbg_show(pctldev, s, pins[i]);
+	}
+}
+
 /* list of pinconfig callbacks for pinconfig vertical in the pinctrl code */
 static const struct pinconf_ops samsung_pinconf_ops = {
 	.pin_config_get		= samsung_pinconf_get,
 	.pin_config_set		= samsung_pinconf_set,
 	.pin_config_group_get	= samsung_pinconf_group_get,
 	.pin_config_group_set	= samsung_pinconf_group_set,
+	.pin_config_dbg_show	= samsung_pinconf_dbg_show,
+	.pin_config_group_dbg_show = samsung_pinconf_group_dbg_show,
 };
 
 /* gpiolib gpio_set callback function */
@@ -529,20 +694,40 @@ static void samsung_gpio_set(struct gpio_chip *gc, unsigned offset, int value)
 {
 	struct samsung_pin_bank *bank = gc_to_pin_bank(gc);
 	struct samsung_pin_bank_type *type = bank->type;
-	unsigned long flags;
 	void __iomem *reg;
 	u32 data;
 
-	reg = bank->drvdata->virt_base + bank->pctl_offset;
+#ifdef ENABLE_SENSORS_FPRINT_SECURE
+	if (!strncmp(bank->name, CONFIG_SENSORS_FP_SPI_GPIO, 4))
+		return;
+#endif
 
-	spin_lock_irqsave(&bank->slock, flags);
+#ifdef CONFIG_ESE_SECURE
+	if (!strncmp(bank->name, CONFIG_ESE_SECURE_GPIO, 4))
+		return;
+#endif
+
+#ifdef CONFIG_MST_SECURE_GPIO
+	if (!strncmp(bank->name, "gpf0", 4))
+		return;
+#endif
+
+	reg = bank->drvdata->virt_base + bank->pctl_offset;
 
 	data = readl(reg + type->reg_offset[PINCFG_TYPE_DAT]);
 	data &= ~(1 << offset);
 	if (value)
 		data |= 1 << offset;
 	writel(data, reg + type->reg_offset[PINCFG_TYPE_DAT]);
+}
 
+static void samsung_gpio_set_value(struct gpio_chip *gc, unsigned offset, int value)
+{
+	struct samsung_pin_bank *bank = gc_to_pin_bank(gc);
+	unsigned long flags;
+
+	spin_lock_irqsave(&bank->slock, flags);
+	samsung_gpio_set(gc, offset, value);
 	spin_unlock_irqrestore(&bank->slock, flags);
 }
 
@@ -574,11 +759,15 @@ static int samsung_gpio_set_direction(struct gpio_chip *gc,
 	struct samsung_pinctrl_drv_data *drvdata;
 	void __iomem *reg;
 	u32 data, mask, shift;
-	unsigned long flags;
 
 	bank = gc_to_pin_bank(gc);
 	type = bank->type;
 	drvdata = bank->drvdata;
+
+#ifdef ENABLE_SENSORS_FPRINT_SECURE
+	if (!strncmp(bank->name, CONFIG_SENSORS_FP_SPI_GPIO, 4))
+		return 0;
+#endif
 
 	reg = drvdata->virt_base + bank->pctl_offset +
 					type->reg_offset[PINCFG_TYPE_FUNC];
@@ -591,15 +780,11 @@ static int samsung_gpio_set_direction(struct gpio_chip *gc,
 		reg += 4;
 	}
 
-	spin_lock_irqsave(&bank->slock, flags);
-
 	data = readl(reg);
 	data &= ~(mask << shift);
 	if (!input)
 		data |= FUNC_OUTPUT << shift;
 	writel(data, reg);
-
-	spin_unlock_irqrestore(&bank->slock, flags);
 
 	return 0;
 }
@@ -607,15 +792,30 @@ static int samsung_gpio_set_direction(struct gpio_chip *gc,
 /* gpiolib gpio_direction_input callback function. */
 static int samsung_gpio_direction_input(struct gpio_chip *gc, unsigned offset)
 {
-	return samsung_gpio_set_direction(gc, offset, true);
+	struct samsung_pin_bank *bank = gc_to_pin_bank(gc);
+	unsigned long flags;
+	int ret;
+
+	spin_lock_irqsave(&bank->slock, flags);
+	ret = samsung_gpio_set_direction(gc, offset, true);
+	spin_unlock_irqrestore(&bank->slock, flags);
+	return ret;
 }
 
 /* gpiolib gpio_direction_output callback function. */
 static int samsung_gpio_direction_output(struct gpio_chip *gc, unsigned offset,
 							int value)
 {
+	struct samsung_pin_bank *bank = gc_to_pin_bank(gc);
+	unsigned long flags;
+	int ret;
+
+	spin_lock_irqsave(&bank->slock, flags);
 	samsung_gpio_set(gc, offset, value);
-	return samsung_gpio_set_direction(gc, offset, false);
+	ret = samsung_gpio_set_direction(gc, offset, false);
+	spin_unlock_irqrestore(&bank->slock, flags);
+
+	return ret;
 }
 
 /*
@@ -861,7 +1061,8 @@ static int samsung_pinctrl_register(struct platform_device *pdev,
 	for (bank = 0; bank < drvdata->ctrl->nr_banks; bank++) {
 		pin_bank = &drvdata->ctrl->pin_banks[bank];
 		for (pin = 0; pin < pin_bank->nr_pins; pin++) {
-			sprintf(pin_names, "%s-%d", pin_bank->name, pin);
+			snprintf(pin_names, PIN_NAME_LENGTH,
+				"%s-%d", pin_bank->name, pin);
 			pdesc = pindesc + pin_bank->pin_base + pin;
 			pdesc->name = pin_names;
 			pin_names += PIN_NAME_LENGTH;
@@ -906,7 +1107,7 @@ static void samsung_gpio_free(struct gpio_chip *chip, unsigned offset)
 static const struct gpio_chip samsung_gpiolib_chip = {
 	.request = samsung_gpio_request,
 	.free = samsung_gpio_free,
-	.set = samsung_gpio_set,
+	.set = samsung_gpio_set_value,
 	.get = samsung_gpio_get,
 	.direction_input = samsung_gpio_direction_input,
 	.direction_output = samsung_gpio_direction_output,
@@ -1059,6 +1260,22 @@ static int samsung_pinctrl_probe(struct platform_device *pdev)
 		return ret;
 	}
 
+	ctrl->pinctrl = devm_pinctrl_get(dev);
+	if (IS_ERR(ctrl->pinctrl)) {
+		dev_err(dev, "could not get pinctrl\n");
+		return PTR_ERR(ctrl->pinctrl);
+	}
+
+	ctrl->pins_default = pinctrl_lookup_state(ctrl->pinctrl,
+						 PINCTRL_STATE_DEFAULT);
+	if (IS_ERR(ctrl->pins_default))
+		dev_dbg(dev, "could not get default pinstate\n");
+
+	ctrl->pins_sleep = pinctrl_lookup_state(ctrl->pinctrl,
+					      PINCTRL_STATE_SLEEP);
+	if (IS_ERR(ctrl->pins_sleep))
+		dev_dbg(dev, "could not get sleep pinstate\n");
+
 	if (ctrl->eint_gpio_init)
 		ctrl->eint_gpio_init(drvdata);
 	if (ctrl->eint_wkup_init)
@@ -1072,15 +1289,10 @@ static int samsung_pinctrl_probe(struct platform_device *pdev)
 	return 0;
 }
 
-#ifdef CONFIG_PM
-
-/**
- * samsung_pinctrl_suspend_dev - save pinctrl state for suspend for a device
- *
- * Save data for all banks handled by this device.
- */
-static void samsung_pinctrl_suspend_dev(
-	struct samsung_pinctrl_drv_data *drvdata)
+#if defined(CONFIG_PM) || defined(CONFIG_CPU_IDLE)
+/* save gpio registers */
+static void samsung_pinctrl_save_regs(
+				struct samsung_pinctrl_drv_data *drvdata)
 {
 	struct samsung_pin_ctrl *ctrl = drvdata->ctrl;
 	void __iomem *virt_base = drvdata->virt_base;
@@ -1097,6 +1309,21 @@ static void samsung_pinctrl_suspend_dev(
 		/* Registers without a powerdown config aren't lost */
 		if (!widths[PINCFG_TYPE_CON_PDN])
 			continue;
+
+#ifdef ENABLE_SENSORS_FPRINT_SECURE
+		if (!strncmp(bank->name, CONFIG_SENSORS_FP_SPI_GPIO, 4))
+			continue;
+#endif
+
+#ifdef CONFIG_ESE_SECURE
+		if (!strncmp(bank->name, CONFIG_ESE_SECURE_GPIO, 4))
+			continue;
+#endif
+
+#ifdef CONFIG_MST_SECURE_GPIO
+		if (!strncmp(bank->name, "gpf0", 4))
+			continue;
+#endif
 
 		for (type = 0; type < PINCFG_TYPE_NUM; type++)
 			if (widths[type])
@@ -1115,27 +1342,15 @@ static void samsung_pinctrl_suspend_dev(
 				 reg, bank->pm_save[PINCFG_TYPE_FUNC]);
 		}
 	}
-
-	if (ctrl->suspend)
-		ctrl->suspend(drvdata);
 }
 
-/**
- * samsung_pinctrl_resume_dev - restore pinctrl state from suspend for a device
- *
- * Restore one of the banks that was saved during suspend.
- *
- * We don't bother doing anything complicated to avoid glitching lines since
- * we're called before pad retention is turned off.
- */
-static void samsung_pinctrl_resume_dev(struct samsung_pinctrl_drv_data *drvdata)
+/* restore gpio registers */
+static void samsung_pinctrl_restore_regs(
+				struct samsung_pinctrl_drv_data *drvdata)
 {
 	struct samsung_pin_ctrl *ctrl = drvdata->ctrl;
 	void __iomem *virt_base = drvdata->virt_base;
 	int i;
-
-	if (ctrl->resume)
-		ctrl->resume(drvdata);
 
 	for (i = 0; i < ctrl->nr_banks; i++) {
 		struct samsung_pin_bank *bank = &ctrl->pin_banks[i];
@@ -1148,6 +1363,28 @@ static void samsung_pinctrl_resume_dev(struct samsung_pinctrl_drv_data *drvdata)
 		/* Registers without a powerdown config aren't lost */
 		if (!widths[PINCFG_TYPE_CON_PDN])
 			continue;
+
+#ifdef ENABLE_SENSORS_FPRINT_SECURE
+#ifdef CONFIG_FB
+		if (vfsspi_goto_suspend) {
+			vfsspi_goto_suspend = 0;
+			pr_info("%s: vfsspi_resume smc ret=%d, en:%d\n", __func__,
+					exynos_smc(0x83000022, 0, 0, 0), vfsspi_goto_suspend);
+		}
+#endif
+		if (!strncmp(bank->name, CONFIG_SENSORS_FP_SPI_GPIO, 4))
+			continue;
+#endif
+
+#ifdef CONFIG_ESE_SECURE
+		if (!strncmp(bank->name, CONFIG_ESE_SECURE_GPIO, 4))
+			continue;
+#endif
+
+#ifdef CONFIG_MST_SECURE_GPIO
+		if (!strncmp(bank->name, "gpf0", 4))
+			continue;
+#endif
 
 		if (widths[PINCFG_TYPE_FUNC] * bank->nr_pins > 32) {
 			/* Some banks have two config registers */
@@ -1168,6 +1405,137 @@ static void samsung_pinctrl_resume_dev(struct samsung_pinctrl_drv_data *drvdata)
 			if (widths[type])
 				writel(bank->pm_save[type], reg + offs[type]);
 	}
+}
+
+#endif /* defined(CONFIG_PM) || defined(CONFIG_CPU_IDLE) */
+
+#ifdef CONFIG_CPU_IDLE
+
+/* set PDN registers */
+static void samsung_pinctrl_set_pdn_previos_state(
+			struct samsung_pinctrl_drv_data *drvdata)
+{
+	struct samsung_pin_ctrl *ctrl = drvdata->ctrl;
+	void __iomem *virt_base = drvdata->virt_base;
+	int i;
+
+	for (i = 0; i < ctrl->nr_banks; i++) {
+		struct samsung_pin_bank *bank = &ctrl->pin_banks[i];
+		void __iomem *reg = virt_base + bank->pctl_offset;
+
+		u8 *offs = bank->type->reg_offset;
+		u8 *widths = bank->type->fld_width;
+
+		if (!widths[PINCFG_TYPE_CON_PDN])
+			continue;
+
+#ifdef ENABLE_SENSORS_FPRINT_SECURE
+		if (!strncmp(bank->name, CONFIG_SENSORS_FP_SPI_GPIO, 4))
+			continue;
+#endif
+
+#ifdef CONFIG_ESE_SECURE
+		if (!strncmp(bank->name, CONFIG_ESE_SECURE_GPIO, 4))
+			continue;
+#endif
+
+#ifdef CONFIG_MST_SECURE_GPIO
+		if (!strncmp(bank->name, "gpf0", 4))
+			continue;
+#endif
+
+		/* set previous state */
+		writel(0xffffffff, reg + offs[PINCFG_TYPE_CON_PDN]);
+		writel(bank->pm_save[PINCFG_TYPE_PUD],
+				reg + offs[PINCFG_TYPE_PUD_PDN]);
+	}
+}
+
+/* notifier function for LPA mode */
+static int samsung_pinctrl_notifier(struct notifier_block *self,
+				unsigned long cmd, void *v)
+{
+	struct samsung_pinctrl_drv_data *drvdata;
+
+	switch (cmd) {
+	case LPA_ENTER:
+		list_for_each_entry(drvdata, &drvdata_list, node) {
+			struct samsung_pin_ctrl *ctrl = drvdata->ctrl;
+
+			if (!ctrl->suspend)
+				continue;
+
+			samsung_pinctrl_save_regs(drvdata);
+			samsung_pinctrl_set_pdn_previos_state(drvdata);
+		}
+		break;
+	case LPA_EXIT:
+		list_for_each_entry(drvdata, &drvdata_list, node) {
+			struct samsung_pin_ctrl *ctrl = drvdata->ctrl;
+
+			if (!ctrl->resume)
+				continue;
+
+			samsung_pinctrl_restore_regs(drvdata);
+		}
+		break;
+	}
+
+	return NOTIFY_OK;
+}
+
+#endif /* CONFIG_CPU_IDLE */
+
+#ifdef CONFIG_PM
+
+/**
+ * samsung_pinctrl_suspend_dev - save pinctrl state for suspend for a device
+ *
+ * Save data for all banks handled by this device.
+ */
+static void samsung_pinctrl_suspend_dev(
+	struct samsung_pinctrl_drv_data *drvdata)
+{
+	struct samsung_pin_ctrl *ctrl = drvdata->ctrl;
+	int ret;
+
+	if (!ctrl->suspend)
+		return;
+
+	samsung_pinctrl_save_regs(drvdata);
+	ctrl->suspend(drvdata);
+
+	if (!IS_ERR(ctrl->pins_sleep)) {
+		/* This is ignore to disable mux configuration. */
+		ctrl->pinctrl->state = NULL;
+
+		ret = pinctrl_select_state(ctrl->pinctrl, ctrl->pins_sleep);
+		if (ret)
+			dev_err(drvdata->dev, "could not set default pinstate\n");
+	}
+
+}
+
+/**
+ * samsung_pinctrl_resume_dev - restore pinctrl state from suspend for a device
+ *
+ * Restore one of the banks that was saved during suspend.
+ *
+ * We don't bother doing anything complicated to avoid glitching lines since
+ * we're called before pad retention is turned off.
+ */
+static void samsung_pinctrl_resume_dev(struct samsung_pinctrl_drv_data *drvdata)
+{
+	struct samsung_pin_ctrl *ctrl = drvdata->ctrl;
+
+	if (!ctrl->resume)
+		return;
+
+	ctrl->resume(drvdata);
+	samsung_pinctrl_restore_regs(drvdata);
+
+	/* For changing state without writing register. */
+	ctrl->pinctrl->state = ctrl->pins_default;
 }
 
 /**
@@ -1210,6 +1578,279 @@ static struct syscore_ops samsung_pinctrl_syscore_ops = {
 	.resume		= samsung_pinctrl_resume,
 };
 
+#if defined(CONFIG_SEC_GPIO_DVS) && defined(CONFIG_PINCTRL_EXYNOS)
+
+#define GET_RESULT_GPIO(a, b, c)	\
+	((a<<4 & 0xF0) | (b<<1 & 0xE) | (c & 0x1))
+
+static struct gpiomap_result_t gpiomap_result;
+
+static u32 gpiodvs_get_by_type(struct samsung_pin_bank *bank,
+				void __iomem *reg_base, u32 pin_offset,
+				unsigned pin, enum pincfg_type cfg_type)
+{
+	struct samsung_pin_bank_type *type;
+	u32 data, width, mask, shift, cfg_reg;
+
+	type = bank->type;
+
+	if (!type->fld_width[cfg_type])
+		return 0;
+
+	width = type->fld_width[cfg_type];
+	cfg_reg = type->reg_offset[cfg_type];
+	mask = (1 << width) - 1;
+	shift = pin_offset * width;
+
+	data = readl(reg_base + cfg_reg);
+
+	data >>= shift;
+	data &= mask;
+
+	return data;
+}
+
+static u8 gpiodvs_combine_data(u32 *data, unsigned char phonestate)
+{
+	u8 temp_io, temp_pdpu, temp_lh;
+
+	/* GPIO DVS
+	 * FUNC - input: 1, output: 2 eint:3 func: 0
+	 * PUD - no-pull: 0, pull-down: 1, pull-up: 2 error: 7
+	 * DATA - high: 1, low: 0
+	 */
+	if (phonestate== PHONE_INIT) {
+		switch (data[PINCFG_TYPE_FUNC]) {
+		case 0x0:	/* input */
+			temp_io = 1;
+			break;
+		case 0x1:	/* output */
+			temp_io = 2;
+			break;
+		case 0xf:	/* eint */
+			temp_io = 3;
+			break;
+		default:	/* func */
+			temp_io = 0;
+			break;
+		}
+
+		if (data[PINCFG_TYPE_PUD] == 3)
+			data[PINCFG_TYPE_PUD] = 2;
+
+		temp_pdpu = data[PINCFG_TYPE_PUD];
+		temp_lh = data[PINCFG_TYPE_DAT];
+	} else {
+		switch (data[PINCFG_TYPE_CON_PDN]) {
+		case 0x0:	/* output low */
+			temp_io = 2;
+			temp_lh = 0;
+			break;
+		case 0x1:	/* output high*/
+			temp_io = 2;
+			temp_lh = 1;
+			break;
+		case 0x2:	/* input */
+			temp_io = 1;
+			temp_lh = data[PINCFG_TYPE_DAT];
+			break;
+		case 0x3:	/* previous state */
+			temp_io = 4;
+			temp_lh = data[PINCFG_TYPE_DAT];
+			break;
+		default:	/* func */
+			pr_err("%s: invalid con pdn: %u\n", __func__,
+					data[PINCFG_TYPE_CON_PDN]);
+			temp_io = 0;
+			temp_lh = 0;
+			break;
+		}
+
+		if (data[PINCFG_TYPE_PUD_PDN] == 3)
+			data[PINCFG_TYPE_PUD_PDN] = 2;
+
+		temp_pdpu = data[PINCFG_TYPE_PUD_PDN];
+	}
+
+	return GET_RESULT_GPIO(temp_io, temp_pdpu, temp_lh);
+}
+
+static void gpiodvs_check_init_gpio(struct samsung_pinctrl_drv_data *drvdata,
+					unsigned pin)
+{
+	static unsigned int init_gpio_idx;
+	struct samsung_pin_bank *bank;
+	void __iomem *reg_base;
+	u32 pin_offset;
+	unsigned long flags;
+	enum pincfg_type type;
+	u32 data[PINCFG_TYPE_NUM];
+
+	pin_to_reg_bank(drvdata, pin - drvdata->ctrl->base,
+					&reg_base, &pin_offset, &bank);
+
+#ifdef ENABLE_SENSORS_FPRINT_SECURE
+	if (!strncmp(bank->name, CONFIG_SENSORS_FP_SPI_GPIO, 4)) {
+		init_gpio_idx++;
+		goto out;
+	}
+#endif
+
+#ifdef CONFIG_ESE_SECURE
+	if (!strncmp(bank->name, CONFIG_ESE_SECURE_GPIO, 4)) {
+		init_gpio_idx++;
+		goto out;
+	}
+#endif
+
+#ifdef CONFIG_MST_SECURE_GPIO
+	if (!strncmp(bank->name, "gpf0", 4)) {
+		init_gpio_idx++;
+		goto out;
+	}
+#endif
+
+	/* GPH ports are AUD interface (I2S, UART, PCM, SB) that should not
+	 * access when AUD power is disabled
+	 */
+	if (!strncmp(bank->name, "gph", 3)) {
+		init_gpio_idx++;
+		goto out;
+	}
+
+#ifdef CONFIG_SOC_EXYNOS5433
+	/* xxxx group is dummy for align insted of GPF0 */
+	if (!strcmp(bank->name, "xxxx"))
+		return;
+#endif
+
+	spin_lock_irqsave(&bank->slock, flags);
+	for (type = PINCFG_TYPE_FUNC; type <= PINCFG_TYPE_PUD; type++)
+		data[type] = gpiodvs_get_by_type(bank, reg_base, pin_offset,
+				pin, type);
+	spin_unlock_irqrestore(&bank->slock, flags);
+
+	gpiomap_result.init[init_gpio_idx++] =
+		gpiodvs_combine_data(data, PHONE_INIT);
+out:
+	pr_debug("%s: init[%u]=0x%02x\n", __func__, init_gpio_idx - 1,
+			gpiomap_result.init[init_gpio_idx - 1]);
+}
+
+static void gpiodvs_check_sleep_gpio(struct samsung_pinctrl_drv_data *drvdata,
+					unsigned pin)
+{
+	static unsigned int sleep_gpio_idx;
+	struct samsung_pin_bank *bank;
+	void __iomem *reg_base;
+	u32 pin_offset;
+	unsigned long flags;
+	enum pincfg_type type;
+	u32 data[PINCFG_TYPE_NUM];
+	u8 *widths;
+	const unsigned int sleep_type_mask = BIT(PINCFG_TYPE_DAT) |
+		BIT(PINCFG_TYPE_CON_PDN) | BIT(PINCFG_TYPE_PUD_PDN);
+
+	pin_to_reg_bank(drvdata, pin - drvdata->ctrl->base,
+					&reg_base, &pin_offset, &bank);
+
+#ifdef ENABLE_SENSORS_FPRINT_SECURE
+	if (!strncmp(bank->name, CONFIG_SENSORS_FP_SPI_GPIO, 4)) {
+		sleep_gpio_idx++;
+		goto out;
+	}
+#endif
+
+#ifdef CONFIG_ESE_SECURE
+	if (!strncmp(bank->name, CONFIG_ESE_SECURE_GPIO, 4)) {
+		sleep_gpio_idx++;
+		goto out;
+	}
+#endif
+
+#ifdef CONFIG_MST_SECURE_GPIO
+	if (!strncmp(bank->name, "gpf0", 4)) {
+		sleep_gpio_idx++;
+		goto out;
+	}
+#endif
+
+	/* GPH ports are AUD interface (I2S, UART, PCM, SB) that should not
+	 * access when AUD power is disabled
+	 */
+	if (!strncmp(bank->name, "gph", 3)) {
+		sleep_gpio_idx++;
+		goto out;
+	}
+
+#ifdef CONFIG_SOC_EXYNOS5433
+	/* xxxx group is dummy for align insted of GPF0 */
+	if (!strcmp(bank->name, "xxxx"))
+		return;
+#endif
+
+	widths = bank->type->fld_width;
+	if (widths[PINCFG_TYPE_CON_PDN]) {
+		spin_lock_irqsave(&bank->slock, flags);
+		for (type = PINCFG_TYPE_DAT; type <= PINCFG_TYPE_PUD_PDN; type++) {
+			if (sleep_type_mask & BIT(type))
+				data[type] = gpiodvs_get_by_type(bank, reg_base,
+						pin_offset, pin, type);
+		}
+		spin_unlock_irqrestore(&bank->slock, flags);
+
+		gpiomap_result.sleep[sleep_gpio_idx++] =
+			gpiodvs_combine_data(data, PHONE_SLEEP);
+	} else {
+		/* Alive part */
+		spin_lock_irqsave(&bank->slock, flags);
+		for (type = PINCFG_TYPE_FUNC; type <= PINCFG_TYPE_PUD; type++)
+			data[type] = gpiodvs_get_by_type(bank, reg_base, pin_offset,
+					pin, type);
+		spin_unlock_irqrestore(&bank->slock, flags);
+
+		gpiomap_result.sleep[sleep_gpio_idx++] =
+			gpiodvs_combine_data(data, PHONE_INIT);
+	}
+out:
+	pr_debug("%s: sleep[%u]=0x%02x\n", __func__, sleep_gpio_idx - 1,
+			gpiomap_result.sleep[sleep_gpio_idx - 1]);
+}
+
+static void gpiodvs_check_gpio_regs(
+				struct samsung_pinctrl_drv_data *drvdata,
+				unsigned char phonestate)
+{
+	int i, j;
+
+	for (i = 0; i < drvdata->nr_groups; i++) {
+		const unsigned int *pins = drvdata->pin_groups[i].pins;
+		for (j = 0; j < drvdata->pin_groups[i].num_pins; j++) {
+			if (phonestate  == PHONE_INIT)
+				gpiodvs_check_init_gpio(drvdata, pins[j]);
+			else
+				gpiodvs_check_sleep_gpio(drvdata, pins[j]);
+		}
+	}
+}
+
+static void check_gpio_status(unsigned char phonestate)
+{
+	struct samsung_pinctrl_drv_data *drvdata;
+
+	list_for_each_entry(drvdata, &drvdata_list, node) {
+		gpiodvs_check_gpio_regs(drvdata, phonestate);
+	}
+}
+
+
+struct gpio_dvs_t exynos8890_secgpio_dvs = {
+	.result = &gpiomap_result,
+	.check_gpio_status = check_gpio_status,
+	.get_nr_gpio = exynos8890_secgpio_get_nr_gpio,
+};
+#endif
+
 static const struct of_device_id samsung_pinctrl_dt_match[] = {
 #ifdef CONFIG_PINCTRL_EXYNOS
 	{ .compatible = "samsung,exynos3250-pinctrl",
@@ -1226,6 +1867,8 @@ static const struct of_device_id samsung_pinctrl_dt_match[] = {
 		.data = (void *)exynos5420_pin_ctrl },
 	{ .compatible = "samsung,s5pv210-pinctrl",
 		.data = (void *)s5pv210_pin_ctrl },
+	{ .compatible = "samsung,exynos8890-pinctrl",
+		.data = (void *)exynos8890_pin_ctrl },
 #endif
 #ifdef CONFIG_PINCTRL_S3C64XX
 	{ .compatible = "samsung,s3c64xx-pinctrl",
@@ -1254,6 +1897,13 @@ static struct platform_driver samsung_pinctrl_driver = {
 	},
 };
 
+#ifdef CONFIG_CPU_IDLE
+static struct notifier_block samsung_pinctrl_notifier_block = {
+	.notifier_call = samsung_pinctrl_notifier,
+	.priority = 1,
+};
+#endif /*CONFIG_CPU_IDLE */
+
 static int __init samsung_pinctrl_drv_register(void)
 {
 	/*
@@ -1263,6 +1913,9 @@ static int __init samsung_pinctrl_drv_register(void)
 	 * ops that turn off pad retention (like exynos_pm_resume).
 	 */
 	register_syscore_ops(&samsung_pinctrl_syscore_ops);
+#ifdef CONFIG_CPU_IDLE
+	exynos_pm_register_notifier(&samsung_pinctrl_notifier_block);
+#endif
 
 	return platform_driver_register(&samsung_pinctrl_driver);
 }

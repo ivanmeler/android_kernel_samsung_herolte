@@ -580,11 +580,33 @@ config SDH_BFIN_MISSING_CMD_PULLUP_WORKAROUND
 config MMC_DW
 	tristate "Synopsys DesignWare Memory Card Interface"
 	depends on HAS_DMA
-	depends on ARC || ARM || MIPS || COMPILE_TEST
+	depends on ARC || ARM || ARM64 || MIPS || COMPILE_TEST
 	help
 	  This selects support for the Synopsys DesignWare Mobile Storage IP
 	  block, this provides host support for SD and MMC interfaces, in both
 	  PIO and external DMA modes.
+
+config FMP
+	bool "Flash Memory Protector Support"
+	depends on MMC_DW
+	help
+	  The flash memory protector feature of the eMMC controller
+	  provides a on-the-fly data decryption/encryption during flash
+	  read/write.
+
+config MMC_DW_FMP_DM_CRYPT
+	bool "FMP acceleration for DM_CRYPT"
+	depends on DM_CRYPT && FMP
+	help
+	  This option accelerates dm-crypt by using the flash
+	  memory protector feature of the eMMC controller.
+
+config MMC_DW_FMP_ECRYPT_FS
+	bool "FMP acceleration for eCrypt filesystem"
+	depends on ECRYPT_FS && FMP
+	help
+	  This option activates flash memory protector of the eMMC controller to
+	  accelerate eCryptfs.
 
 config MMC_DW_IDMAC
 	bool "Internal DMAC interface"
@@ -592,6 +614,14 @@ config MMC_DW_IDMAC
 	help
 	  This selects support for the internal DMAC block within the Synopsys
 	  Designware Mobile Storage IP block. This disables the external DMA
+	  interface.
+
+config MMC_DW_64BIT_DESC
+	bool "64bit desctriptor interface"
+	depends on MMC_DW
+	help
+	  This selects support for the 64bit internal DMAC block within the Synopsys
+	  Designware Mobile Storage IP block. This disables the 32bit internal DMA
 	  interface.
 
 config MMC_DW_PLTFM
@@ -616,6 +646,13 @@ config MMC_DW_EXYNOS
 	  This selects support for Samsung Exynos SoC specific extensions to the
 	  Synopsys DesignWare Memory Card Interface driver. Select this option
 	  for platforms based on Exynos4 and Exynos5 SoC's.
+
+config MMC_DW_DEBUG
+	bool "Samsung DWMCI debug feature"
+	depends on MMC_DW
+	help
+	  This selects support for infomation logging for debugging.
+	  Select this option if this feature is needed on working.
 
 config MMC_DW_K3
 	tristate "K3 specific extensions for Synopsys DW Memory Card Interface"
@@ -646,6 +683,14 @@ config MMC_DW_ROCKCHIP
 	  This selects support for Rockchip SoC specific extensions to the
 	  Synopsys DesignWare Memory Card Interface driver. Select this option
 	  for platforms based on RK3066, RK3188 and RK3288 SoC's.
+
+config MMC_DW_FORCE_32BIT_SFR_RW
+	bool "Force to use 32bit rw for 64bit SFR rw"
+	depends on MMC_DW
+	help
+	  This selects converting 64bit SFR read/write by two separate 32bit
+	  read/write when 64bit read/write is not allowed for SFR on some DW
+	  MMC implementation. Consider using this with FIFO SFR on PIO mode.
 
 config MMC_SH_MMCIF
 	tristate "SuperH Internal MMCIF support"

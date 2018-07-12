@@ -439,6 +439,57 @@ config USB_G_ANDROID
 	  Each function can be configured and enabled/disabled
 	  dynamically from userspace through a sysfs interface.
 
+config USB_ANDROID_SAMSUNG_COMPOSITE
+	boolean "Samsung Composite function"
+	depends on USB_G_ANDROID
+	help
+	  Provides SAMSUNG composite driver.
+	  Multi Configuration.
+	  If you enable this option, android composite will be changed.
+
+config USB_ANDROID_SAMSUNG_MTP
+	boolean "Samsung MTP function"
+	depends on USB_G_ANDROID && !SEC_FACTORY
+	help
+	  Provides Media Transfer Protocol (MTP) support
+	  for samsung gadget driver.
+	  If you enable this option,
+	  google mtp will be changed to samsung mtp.
+
+config USB_LOCK_SUPPORT_FOR_MDM
+	boolean "Samsung USB_LOCK function for MDM"
+	depends on USB_G_ANDROID
+	help
+	  Support USB lock for SDS MDM function.
+	  If you enable this option,
+	  USB is not connected to the work in office.
+	  Of employees who have installed MDM(SDS).
+
+config USB_DUN_SUPPORT
+	boolean "DUN support function"
+	depends on USB_G_ANDROID
+	help
+	  Provides USB modem serial driver.
+	  This function makes connection to acm from data router.
+	  It uses misc register.
+	  Support fops : open, close, release, read, poll, llseek, ioctl
+
+config USB_NCM_SUPPORT_MTU_CHANGE
+	boolean "Samsung NCM MTU Change function"
+	depends on USB_G_ANDROID
+	help
+	   Provides NCM MTU Change support
+	   for samsung gadget driver.
+	   If you enable this option,
+	   NCM MTU Change will be able to be used.
+	  
+
+config USB_RNDIS_MULTIPACKET
+	boolean "Samsung Rndis Multi Packet support"
+	depends on USB_G_ANDROID
+	help
+		Rndis Multipacket Support.
+
 config USB_ANDROID_RNDIS_DWORD_ALIGNED
 	boolean "Use double word aligned"
 	depends on USB_G_ANDROID

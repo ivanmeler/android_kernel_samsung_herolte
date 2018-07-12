@@ -1,0 +1,15 @@
+config TRUSTONIC_TRUSTED_UI
+	tristate "TBase Trusted UI"
+	depends on TRUSTONIC_TEE
+	---help---
+	Enable Linux Kernel Tusted UI
+
+config TRUSTONIC_TRUSTED_UI_FB_BLANK
+	bool "TBase Trusted UI use fb_blank"
+	default y
+	depends on TRUSTONIC_TRUSTED_UI
+
+config TRUSTED_UI_TOUCH_ENABLE
+	bool "TBase Trusted UI use touch related code"
+	default y
+	depends on TRUSTONIC_TRUSTED_UI

@@ -1,0 +1,11 @@
+config EXYNOS_FIMC_IS
+        bool "Use FIMC-IS"
+        depends on VIDEO_EXYNOS_FIMC_IS2
+        default y
+        help
+          fimc-is
+
+source "drivers/media/platform/exynos/fimc-is2/ischain/fimc-is-v4_3_0/Kconfig"
+source "drivers/media/platform/exynos/fimc-is2/ischain/fimc-is-v4_0_0/Kconfig"
+source "drivers/media/platform/exynos/fimc-is2/ischain/fimc-is-v3_1_1/Kconfig"
+source "drivers/media/platform/exynos/fimc-is2/ischain/fimc-is-v3_11_0/Kconfig"

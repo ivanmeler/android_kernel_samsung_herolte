@@ -3,6 +3,10 @@
 #include <asm/asm-offsets.h>
 #include <asm/assembler.h>
 
+#ifdef CONFIG_RKP_CFP
+#include <asm/rkp_cfp.h>
+#endif
+
 	.text
 /*
  * Implementation of MPIDR_EL1 hash algorithm through shifting
@@ -62,7 +66,12 @@
  *  x1 = suspend finisher function pointer
  */
 ENTRY(__cpu_suspend_enter)
+#ifdef CONFIG_RKP_CFP_ROPP
+	stp	x29, lr, [sp, #-112]!
+	stp	RRK, RRS, [sp,#96]
+#else
 	stp	x29, lr, [sp, #-96]!
+#endif
 	stp	x19, x20, [sp,#16]
 	stp	x21, x22, [sp,#32]
 	stp	x23, x24, [sp,#48]
@@ -120,7 +129,12 @@ ENTRY(__cpu_suspend_enter)
 	ldp	x23, x24, [sp, #48]
 	ldp	x25, x26, [sp, #64]
 	ldp	x27, x28, [sp, #80]
+#ifdef CONFIG_RKP_CFP_ROPP
+	ldp	RRK, RRS, [sp, #96]
+	ldp	x29, lr, [sp], #112
+#else
 	ldp	x29, lr, [sp], #96
+#endif
 	ret
 ENDPROC(__cpu_suspend_enter)
 	.ltorg
@@ -149,7 +163,12 @@ cpu_resume_after_mmu:
 	ldp	x23, x24, [sp, #48]
 	ldp	x25, x26, [sp, #64]
 	ldp	x27, x28, [sp, #80]
+#ifdef CONFIG_RKP_CFP_ROPP
+	ldp	RRK, RRS, [sp, #96]
+	ldp	x29, lr, [sp], #112
+#else
 	ldp	x29, lr, [sp], #96
+#endif
 	ret
 ENDPROC(cpu_resume_after_mmu)
 

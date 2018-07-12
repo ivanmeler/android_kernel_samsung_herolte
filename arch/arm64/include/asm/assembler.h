@@ -28,6 +28,38 @@
 #include <asm/ptrace.h>
 #include <asm/thread_info.h>
 
+#ifdef CONFIG_RKP_CFP
+#include <linux/rkp_cfp.h>
+#include <asm/asm-offsets.h>
+#endif
+
+
+#ifdef CONFIG_RKP_CFP_ROPP
+	.macro	get_thread_info, rd
+	mov	\rd, sp
+	and	\rd, \rd, #~(THREAD_SIZE - 1)	// top of stack
+	.endm
+
+	/* Load the key register (RRK) with this task's return-address encryption key.
+	 * For secure, store the encrypted per thread key in rrk
+	 */
+	.macro	load_key, tsk
+#ifdef CONFIG_RKP_CFP_ROPP_HYPKEY
+	push	x29, x30
+	push	x0, x1
+	mov	x0, #0x3000
+	movk	x0, #0x8389, lsl #16
+	mov	x1, \tsk
+	add	x1, x1, #TI_RRK
+	bl	rkp_call
+	pop	x0, x1
+	pop	x29, x30
+#else
+	ldr	RRK, [\tsk, #TI_RRK]
+#endif
+	.endm
+#endif
+
 /*
  * Stack pushing/popping (register pairs only). Equivalent to store decrement
  * before, load increment after.
@@ -254,6 +286,7 @@ lr	.req	x30		// link register
  */
 	.macro	icache_line_size, reg, tmp
 	mrs	\tmp, ctr_el0			// read CTR
+	bic	\tmp, \tmp, #(1 << 0)		// clear bit 0 to change IminLine to 4
 	and	\tmp, \tmp, #0xf		// cache line size encoding
 	mov	\reg, #4			// bytes per word
 	lsl	\reg, \reg, \tmp		// actual cache line size
@@ -319,6 +352,26 @@ lr	.req	x30		// link register
  */
 	.macro	get_thread_info, rd
 	mrs	\rd, sp_el0
+	.endm
+
+	/*
+	 * mov_q - move an immediate constant into a 64-bit register using
+	 *         between 2 and 4 movz/movk instructions (depending on the
+	 *         magnitude and sign of the operand)
+	 */
+	.macro	mov_q, reg, val
+	.if (((\val) >> 31) == 0 || ((\val) >> 31) == 0x1ffffffff)
+	movz	\reg, :abs_g1_s:\val
+	.else
+	.if (((\val) >> 47) == 0 || ((\val) >> 47) == 0x1ffff)
+	movz	\reg, :abs_g2_s:\val
+	.else
+	movz	\reg, :abs_g3:\val
+	movk	\reg, :abs_g2_nc:\val
+	.endif
+	movk	\reg, :abs_g1_nc:\val
+	.endif
+	movk	\reg, :abs_g0_nc:\val
 	.endm
 
 #endif	/* __ASM_ASSEMBLER_H */

@@ -1,0 +1,261 @@
+/*
+ * sec_debug_auto_summary.c
+ *
+ * Copyright (c) 2016 Samsung Electronics Co., Ltd
+ *              http://www.samsung.com
+ *
+ *  This program is free software; you can redistribute  it and/or modify it
+ *  under  the terms of  the GNU General  Public License as published by the
+ *  Free Software Foundation;  either version 2 of the  License, or (at your
+ *  option) any later version.
+ *
+ */
+
+#include <linux/kernel.h>
+#include <linux/file.h>
+#include <linux/uaccess.h>
+#include <linux/module.h>
+#include <linux/proc_fs.h>
+#include <linux/kallsyms.h>
+#include <linux/memblock.h>
+#include <linux/sec_debug.h>
+#include <asm/sections.h>
+
+#define AUTO_SUMMARY_SIZE 0xf3c
+#define AUTO_SUMMARY_MAGIC 0xcafecafe
+#define AUTO_SUMMARY_TAIL_MAGIC 0x00c0ffee
+
+enum {
+	PRIO_LV0 = 0,
+	PRIO_LV1,
+	PRIO_LV2,
+	PRIO_LV3,
+	PRIO_LV4,
+	PRIO_LV5,
+	PRIO_LV6,
+	PRIO_LV7,
+	PRIO_LV8,
+	PRIO_LV9
+};
+
+#define SEC_DEBUG_AUTO_COMM_BUF_SIZE 10
+
+enum sec_debug_FREQ_INFO {
+	FREQ_INFO_CLD0 = 0,
+	FREQ_INFO_CLD1,
+	FREQ_INFO_INT,
+	FREQ_INFO_MIF,
+	FREQ_INFO_MAX,
+};
+
+struct sec_debug_auto_comm_buf {
+	atomic_t logging_entry;
+	atomic_t logging_disable;
+	atomic_t logging_count;
+	unsigned int offset;
+	char buf[SZ_4K];
+};
+
+struct sec_debug_auto_comm_freq_info {
+	int old_freq;
+	int new_freq;
+	u64 time_stamp;
+	u64 last_freq_info;
+};
+
+struct sec_debug_auto_summary {
+	int haeder_magic;
+	int fault_flag;
+	int lv5_log_cnt;
+	u64 lv5_log_order;
+	int order_map_cnt;
+	int order_map[SEC_DEBUG_AUTO_COMM_BUF_SIZE];
+	struct sec_debug_auto_comm_buf auto_comm_buf[SEC_DEBUG_AUTO_COMM_BUF_SIZE];
+	struct sec_debug_auto_comm_freq_info freq_info[FREQ_INFO_MAX];
+
+	/* for code diff */
+	u64 pa_text;
+	u64 pa_start_rodata;
+	int tail_magic;
+};
+
+static struct sec_debug_auto_summary *auto_summary_info;
+static char *auto_summary_buf;
+
+struct auto_summary_log_map {
+	char prio_level;
+	char max_count;
+};
+
+static const struct auto_summary_log_map init_data[SEC_DEBUG_AUTO_COMM_BUF_SIZE] = {
+	{PRIO_LV0, 0},
+	{PRIO_LV5, 8},
+	{PRIO_LV9, 0},
+	{PRIO_LV5, 0},
+	{PRIO_LV5, 0},
+	{PRIO_LV1, 1},
+	{PRIO_LV2, 2},
+	{PRIO_LV5, 0},
+	{PRIO_LV5, 8},
+	{PRIO_LV0, 0}
+};
+
+void sec_debug_auto_summary_log_disable(int type)
+{
+	if (auto_summary_info)
+		atomic_inc(&auto_summary_info->auto_comm_buf[type].logging_disable);
+}
+
+void sec_debug_auto_summary_log_once(int type)
+{
+	if (auto_summary_info) {
+		if (atomic64_read(&auto_summary_info->auto_comm_buf[type].logging_entry))
+			sec_debug_auto_summary_log_disable(type);
+		else
+			atomic_inc(&auto_summary_info->auto_comm_buf[type].logging_entry);
+	}
+}
+
+static inline void sec_debug_hook_auto_comm_lastfreq(int type, int old_freq, int new_freq, u64 time)
+{
+	if (auto_summary_info) {
+		if (type < FREQ_INFO_MAX) {
+			auto_summary_info->freq_info[type].old_freq = old_freq;
+			auto_summary_info->freq_info[type].new_freq = new_freq;
+			auto_summary_info->freq_info[type].time_stamp = time;
+		}
+	}
+}
+
+static inline void sec_debug_hook_auto_comm(int type, const char *buf, size_t size)
+{
+	struct sec_debug_auto_comm_buf *p;
+	int offset;
+
+	if (auto_summary_info) {
+		p = &auto_summary_info->auto_comm_buf[type];
+		offset = p->offset;
+
+	if (atomic64_read(&p->logging_disable))
+		return;
+
+	if (offset + size > SZ_4K)
+		return;
+
+	if (init_data[type].max_count &&
+	    (atomic64_read(&p->logging_count) > init_data[type].max_count))
+		return;
+
+	if (!(auto_summary_info->fault_flag & 1 << type)) {
+		auto_summary_info->fault_flag |= 1 << type;
+		if (init_data[type].prio_level == PRIO_LV5) {
+			auto_summary_info->lv5_log_order |= type << auto_summary_info->lv5_log_cnt * 4;
+			auto_summary_info->lv5_log_cnt++;
+		}
+		auto_summary_info->order_map[auto_summary_info->order_map_cnt++] = type;
+	}
+
+	atomic_inc(&p->logging_count);
+
+	memcpy(p->buf + offset, buf, size);
+	p->offset += size;
+	}
+}
+
+static void sec_auto_summary_init_print_buf(unsigned long base)
+{
+	auto_summary_buf = (char *)phys_to_virt(base);
+	auto_summary_info = (struct sec_debug_auto_summary *)phys_to_virt(base + SZ_4K);
+
+	memset(auto_summary_info, 0, sizeof(struct sec_debug_auto_summary));
+
+	auto_summary_info->haeder_magic = AUTO_SUMMARY_MAGIC;
+	auto_summary_info->tail_magic = AUTO_SUMMARY_TAIL_MAGIC;
+
+	auto_summary_info->pa_text = virt_to_phys(_text);
+	auto_summary_info->pa_start_rodata = virt_to_phys(__start_rodata);
+
+	register_set_auto_comm_buf(sec_debug_hook_auto_comm);
+	register_set_auto_comm_lastfreq(sec_debug_hook_auto_comm_lastfreq);
+}
+
+static int __init sec_auto_summary_log_setup(char *str)
+{
+	unsigned long size = memparse(str, &str);
+	unsigned long base = 0;
+
+	/* If we encounter any problem parsing str ... */
+	if (!size || *str != '@' || kstrtoul(str + 1, 0, &base)) {
+		pr_err("%s: failed to parse address.\n", __func__);
+		goto out;
+	}
+
+#ifdef CONFIG_NO_BOOTMEM
+	if (memblock_is_region_reserved(base, size) ||
+	    memblock_reserve(base, size)) {
+#else
+	if (reserve_bootmem(base, size, BOOTMEM_EXCLUSIVE)) {
+#endif
+		/* size is not match with -size and size + sizeof(...) */
+		pr_err("%s: failed to reserve size:0x%lx at base 0x%lx\n",
+		       __func__, size, base);
+		goto out;
+	}
+
+	sec_auto_summary_init_print_buf(base);
+
+	pr_info("%s, base:0x%lx size:0x%lx\n", __func__, base, size);
+
+out:
+	return 0;
+}
+__setup("auto_summary_log=", sec_auto_summary_log_setup);
+
+static ssize_t sec_reset_auto_summary_proc_read(struct file *file, char __user *buf, size_t len, loff_t *offset)
+{
+	loff_t pos = *offset;
+	ssize_t count;
+
+	if (!auto_summary_buf) {
+		pr_err("%s : buffer is null\n", __func__);
+		return -ENODEV;
+	}
+
+	if (reset_reason >= RR_R && reset_reason <= RR_N) {
+		pr_err("%s : reset_reason %d\n", __func__, reset_reason);
+		return -ENOENT;
+	}
+
+	if (pos >= AUTO_SUMMARY_SIZE) {
+		pr_err("%s : pos 0x%llx\n", __func__, pos);
+		return -ENOENT;
+	}
+
+	count = min(len, (size_t)(AUTO_SUMMARY_SIZE - pos));
+	if (copy_to_user(buf, auto_summary_buf + pos, count))
+		return -EFAULT;
+
+	*offset += count;
+	return count;
+}
+
+static const struct file_operations sec_reset_auto_summary_proc_fops = {
+	.owner = THIS_MODULE,
+	.read = sec_reset_auto_summary_proc_read,
+};
+
+static int __init sec_debug_auto_summary_init(void)
+{
+	struct proc_dir_entry *entry;
+
+	entry = proc_create("auto_comment", S_IWUGO, NULL,
+			    &sec_reset_auto_summary_proc_fops);
+
+	if (!entry)
+		return -ENOMEM;
+
+	proc_set_size(entry, AUTO_SUMMARY_SIZE);
+	return 0;
+}
+
+device_initcall(sec_debug_auto_summary_init);

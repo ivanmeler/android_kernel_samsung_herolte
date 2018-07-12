@@ -174,8 +174,11 @@ ld_flags       = $(LDFLAGS) $(ldflags-y)
 dtc_cpp_flags  = -Wp,-MD,$(depfile).pre.tmp -nostdinc                    \
 		 -I$(srctree)/arch/$(SRCARCH)/boot/dts                   \
 		 -I$(srctree)/arch/$(SRCARCH)/boot/dts/include           \
+		 -I$(srctree)/include                                    \
 		 -I$(srctree)/drivers/of/testcase-data                   \
-		 -undef -D__DTS__
+		 -undef -D__DTS__                                        \
+		 -DANDROID_VERSION=$(ANDROID_VERSION)                    \
+		 -DANDROID_MAJOR_VERSION=$(ANDROID_MAJOR_VERSION)
 
 # Finds the multi-part object the current object will be linked into
 modname-multi = $(sort $(foreach m,$(multi-used),\

@@ -17,6 +17,8 @@
 #define _LINUX_ANDROID_AID_H
 
 /* AIDs that the kernel treats differently */
+#define AID_SYSTEM	 KGIDT_INIT(1000) /* system server */
+
 #define AID_OBSOLETE_000 KGIDT_INIT(3001)  /* was NET_BT_ADMIN */
 #define AID_OBSOLETE_001 KGIDT_INIT(3002)  /* was NET_BT */
 #define AID_INET         KGIDT_INIT(3003)
@@ -24,5 +26,8 @@
 #define AID_NET_ADMIN    KGIDT_INIT(3005)
 #define AID_NET_BW_STATS KGIDT_INIT(3006)  /* read bandwidth statistics */
 #define AID_NET_BW_ACCT  KGIDT_INIT(3007)  /* change bandwidth statistics accounting */
+
+#define AID_USE_SEC_RESERVED	KGIDT_INIT(4444)
+#define AID_USE_ROOT_RESERVED	KGIDT_INIT(5555)
 
 #endif

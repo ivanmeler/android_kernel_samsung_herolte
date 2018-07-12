@@ -187,7 +187,7 @@ EXPORT_SYMBOL(setattr_copy);
  * the file open for write, as there can be no conflicting delegation in
  * that case.
  */
-int notify_change2(struct vfsmount *mnt, struct dentry * dentry, struct iattr * attr, struct inode **delegated_inode)
+int notify_change2(struct vfsmount *mnt, struct dentry *dentry, struct iattr *attr, struct inode **delegated_inode)
 {
 	struct inode *inode = dentry->d_inode;
 	umode_t mode = inode->i_mode;
@@ -279,7 +279,7 @@ int notify_change2(struct vfsmount *mnt, struct dentry * dentry, struct iattr * 
 }
 EXPORT_SYMBOL(notify_change2);
 
-int notify_change(struct dentry * dentry, struct iattr * attr, struct inode **delegated_inode)
+int notify_change(struct dentry *dentry, struct iattr *attr, struct inode **delegated_inode)
 {
 	return notify_change2(NULL, dentry, attr, delegated_inode);
 }

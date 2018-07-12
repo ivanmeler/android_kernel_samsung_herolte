@@ -37,6 +37,10 @@
 #include "../base.h"
 #include "power.h"
 
+#ifdef CONFIG_SEC_DEBUG
+#include <linux/sec_debug.h>
+#endif
+
 typedef int (*pm_callback_t)(struct device *);
 
 /*
@@ -186,6 +190,17 @@ void device_pm_move_last(struct device *dev)
 	pr_debug("PM: Moving %s:%s to end of list\n",
 		 dev->bus ? dev->bus->name : "No Bus", dev_name(dev));
 	list_move_tail(&dev->power.entry, &dpm_list);
+}
+
+/**
+ * device_pm_move_first - Move device to first of the PM core's list of devices.
+ * @dev: Device to move in dpm_list.
+ */
+void device_pm_move_first(struct device *dev)
+{
+	pr_debug("PM: Moving %s:%s to first of list\n",
+		 dev->bus ? dev->bus->name : "No Bus", dev_name(dev));
+	list_move(&dev->power.entry, &dpm_list);
 }
 
 static ktime_t initcall_debug_start(struct device *dev)
@@ -368,6 +383,7 @@ static void dpm_show_time(ktime_t starttime, pm_message_t state, char *info)
 	usecs = usecs64;
 	if (usecs == 0)
 		usecs = 1;
+
 	pr_info("PM: %s%s%s of devices complete after %ld.%03ld msecs\n",
 		info ?: "", info ? " " : "", pm_verb(state.event),
 		usecs / USEC_PER_MSEC, usecs % USEC_PER_MSEC);
@@ -386,7 +402,9 @@ static int dpm_run_callback(pm_callback_t cb, struct device *dev,
 
 	pm_dev_dbg(dev, state, info);
 	trace_device_pm_callback_start(dev, info, state.event);
+	exynos_ss_suspend(cb, dev, ESS_FLAG_IN);
 	error = cb(dev);
+	exynos_ss_suspend(cb, dev, ESS_FLAG_OUT);
 	trace_device_pm_callback_end(dev, error);
 	suspend_report_result(cb, error);
 
@@ -418,6 +436,9 @@ static void dpm_watchdog_handler(unsigned long data)
 	struct dpm_watchdog *wd = (void *)data;
 
 	dev_emerg(wd->dev, "**** DPM device timeout ****\n");
+#ifdef CONFIG_SEC_DEBUG_EXTRA_INFO
+	sec_debug_set_extra_info_dpm_timeout(dev_name(wd->dev));
+#endif
 	show_stack(wd->tsk, NULL);
 	panic("%s %s: unrecoverable failure\n",
 		dev_driver_string(wd->dev), dev_name(wd->dev));

@@ -24,7 +24,6 @@ comment "Crypto core or helper"
 config CRYPTO_FIPS
 	bool "FIPS 200 compliance"
 	depends on (CRYPTO_ANSI_CPRNG || CRYPTO_DRBG) && !CRYPTO_MANAGER_DISABLE_TESTS
-	depends on MODULE_SIG
 	help
 	  This options enables the fips boot option which is
 	  required if you want to system to operate in a FIPS 200
@@ -184,7 +183,7 @@ config CRYPTO_AUTHENC
 
 config CRYPTO_TEST
 	tristate "Testing module"
-	depends on m
+	default n
 	select CRYPTO_MANAGER
 	help
 	  Quick & dirty crypto test module.
@@ -1467,7 +1466,7 @@ comment "Random Number Generation"
 
 config CRYPTO_ANSI_CPRNG
 	tristate "Pseudo Random Number Generation for Cryptographic modules"
-	default m
+	default n
 	select CRYPTO_AES
 	select CRYPTO_RNG
 	help
@@ -1533,6 +1532,18 @@ config CRYPTO_USER_API_SKCIPHER
 
 config CRYPTO_HASH_INFO
 	bool
+
+config CRYPTO_POST_DEFERRED_INIT
+	bool "FIPS POST via deferred_module_init"
+	default n
+
+config CRYPTO_POST_LATE_INIT_SYNC
+	bool "FIPS POST via late_initcall_sync"
+	default n
+
+config CRYPTO_POST_LATE_INIT
+	bool "FIPS POST via late_initcall"
+	default n
 
 source "drivers/crypto/Kconfig"
 source crypto/asymmetric_keys/Kconfig

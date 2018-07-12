@@ -23,6 +23,8 @@
 #include <linux/bitops.h>
 #include <linux/blkdev.h>
 #include <asm/byteorder.h>
+#include <linux/ratelimit.h>
+#include <linux/android_aid.h>
 
 #include "ext4.h"
 #include "ext4_jbd2.h"
@@ -337,6 +339,9 @@ out:
 		if (!fatal)
 			fatal = err;
 	} else {
+		/* for debugging, sangwoo2.lee */
+		print_bh(sb, bitmap_bh, 0, EXT4_BLOCK_SIZE(sb));
+		/* for debugging */
 		ext4_error(sb, "bit already cleared for inode %lu", ino);
 		if (gdp && !EXT4_MB_GRP_IBITMAP_CORRUPT(grp)) {
 			int count;
@@ -698,6 +703,32 @@ out:
 	return ret;
 }
 
+/**
+ * ext4_has_free_inodes()
+ * @sbi: in-core super block structure.
+ *
+ * Check if filesystem has inodes available for allocation.
+ * On success return 1, return 0 on failure.
+ */
+static inline int ext4_has_free_inodes(struct ext4_sb_info *sbi)
+{
+	if (likely(percpu_counter_read_positive(&sbi->s_freeinodes_counter) >
+			sbi->s_r_inodes_count * 2))
+		return 1;
+
+	if (percpu_counter_read_positive(&sbi->s_freeinodes_counter) >
+			sbi->s_r_inodes_count &&
+			in_group_p(AID_USE_SEC_RESERVED))
+		return 1;
+
+	/* Hm, nope.  Are (enough) root reserved inodes available? */
+	if (uid_eq(sbi->s_resuid, current_fsuid()) ||
+	    (!gid_eq(sbi->s_resgid, GLOBAL_ROOT_GID) && in_group_p(sbi->s_resgid)) ||
+	    capable(CAP_SYS_RESOURCE) || in_group_p(AID_USE_ROOT_RESERVED))
+		return 1;
+	return 0;
+}
+
 /*
  * There are two policies for allocating an inode.  If the new inode is
  * a directory, then a forward search is made for a block group with both
@@ -771,6 +802,11 @@ struct inode *__ext4_new_inode(handle_t *handle, struct inode *dir,
 	} else
 		inode_init_owner(inode, dir, mode);
 	dquot_initialize(inode);
+
+	if (!ext4_has_free_inodes(sbi)) {
+		err = -ENOSPC;
+		goto out;
+	}
 
 	if (!goal)
 		goal = sbi->s_inode_goal;
@@ -1095,6 +1131,11 @@ fail_drop:
 	clear_nlink(inode);
 	unlock_new_inode(inode);
 out:
+	if (err == -ENOSPC) {
+		printk_ratelimited(KERN_INFO "Return ENOSPC : No free inode (%d/%u)\n",
+			(int) percpu_counter_read_positive(&sbi->s_freeinodes_counter),
+			le32_to_cpu(sbi->s_es->s_inodes_count));
+	}
 	dquot_drop(inode);
 	inode->i_flags |= S_NOQUOTA;
 	iput(inode);

@@ -1,0 +1,114 @@
+#
+# MUIC devices
+#
+
+comment "MUIC configs"
+
+config USE_MUIC
+	bool "Using MUIC device driver"
+	depends on I2C
+	default n
+	help
+	  If you say yes here you will get support for
+	  the MUIC device driver.
+
+config USE_SAFEOUT
+	bool "Using SAFEOUT device driver"
+	depends on I2C
+	default n
+	help
+	  If you say yes here you will get support for
+	  the SAFEOUT device driver.
+
+config MUIC_NOTIFIER
+	bool "MUIC notifier support"
+	depends on USE_MUIC
+	default n
+	help
+	  If you say yes here you will get support for
+	  the MUIC attached device status change notification.
+
+config MUIC_MAX77833
+        bool "Using MAX77833 MUIC"
+        depends on MFD_MAX77833 && USE_MUIC
+        default n
+        help
+          If you say yes here you will get support for 
+          for the MAX77833 MUIC chip.
+
+config HV_MUIC_MAX77833_AFC
+        bool "Using MAX77833 AFC MUIC"
+        depends on MUIC_MAX77833
+        default n
+        help
+          If you say yes here you will get support for the MAX77833 AFC MUIC.
+
+config MUIC_MAX77833_SHAKEID_WA
+        bool "Using MAX77833 MUIC SHAKE ID WA"
+        depends on MUIC_MAX77833
+        default n
+        help
+          If you say yes here you will get support for the MAX77833 MUIC SHAKE ID WA.
+
+config MUIC_MAX77833_IGNORE_ADCERR_WA
+        bool "Using MAX77833 MUIC ignore ADCERR WA"
+        depends on MUIC_MAX77833
+        default n
+        help
+          If you say yes here you will get support for the MAX77833 MUIC RESET WA. 
+
+config MUIC_MAX77833_RESET_WA
+        bool "Using MAX77833 MUIC RESET WA"
+        depends on MUIC_MAX77833
+        default n
+        help
+          If you say yes here you will get support for the MAX77833 MUIC RESET WA.
+
+config MUIC_UNIVERSAL
+	bool "UNIVERSAL MUIC"
+	depends on USE_MUIC
+	default n
+	help
+	  If you say yes here you will get support for various MUIC chips.
+
+config MUIC_UNIVERSAL_MAX77854
+	bool "MAX77854 MUIC"
+	depends on MUIC_UNIVERSAL
+	default n
+	help
+	  If you say yes here you will get support for the MAX77854 MUIC chip.
+
+config MUIC_HV
+	bool "MUIC_HV"
+	depends on MUIC_UNIVERSAL
+	default n
+	help
+	  If you say yes here you will get support for the AFC.
+
+config MUIC_HV_12V
+	bool "MUIC_HV_12V"
+	depends on MUIC_HV
+	default n
+	help
+	  If you say yes here you will get support for the AFC.
+
+config MUIC_SUPPORT_CCIC
+	bool "MUIC supports CCIC chip interface"
+	depends on MUIC_UNIVERSAL
+	default n
+	help
+	  If you say yes here you will get support for the CCIC chip.
+
+config MUIC_HV_SUPPORT_POGO_DOCK
+	bool "MUIC_HV_SUPPORT_POGO_DOCK"
+	depends on MUIC_HV
+	default n
+	help
+	  If you say yes here you will get support for the AFC pogo dock.
+
+config HICCUP_CHARGER
+	bool  "Using HICCUP charger"
+	depends on USE_MUIC && !SEC_FACTORY
+	default n
+	help
+	  If you say yes here you will get support for the hiccup charger.

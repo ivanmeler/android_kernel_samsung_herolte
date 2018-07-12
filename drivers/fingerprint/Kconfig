@@ -1,0 +1,58 @@
+#
+# Sensor  drivers configuration
+#
+menuconfig SENSORS_FINGERPRINT
+	bool "Finger Print Sensor devices"
+	help
+	  Say Y here, and a list of sensors drivers will be displayed.
+	  Everything that didn't fit into the other categories is here. This option
+	  doesn't affect the kernel.
+	  If unsure, say Y.
+
+if SENSORS_FINGERPRINT
+config SENSORS_FINGERPRINT_SYSFS
+	tristate "fingerprint sensor sysfs support"
+	default n
+	help
+	  If you say yes here you get support for
+	  fingerprint sensor FINGERPRINT_SYSFS
+config SENSORS_VFS7XXX
+	tristate "VFS7XXX fingerprint sensor support"
+	default n
+	help
+	  If you say yes here you get support for Validity's
+	  fingerprint sensor VFS7XXX.
+config SENSORS_FPRINT_SECURE
+	tristate "VFS61XX fingerprint sensor support"
+	default n
+	help
+	  If you say yes here you get support for Validity's
+	  fingerprint sensor enable secure zone.
+config SENSORS_FINGERPRINT_32BITS_PLATFORM_ONLY
+	tristate "Fingerprint sensor supports only 32bits platform"
+	default n
+	help
+	  If you say yes here the non TZ device driver will only supports
+	  32bits platform.
+config SENSORS_ET320
+	tristate "ET320 fingerprint sensor supprot"
+	default n
+	help
+	  If you say yes here you get support for Egistec's
+	  fingerprint sensor ET320.
+config SENSORS_FINGERPRINT_DUALIZATION
+	tristate "Fingerprint sensor supports dualization et320 and viper2"
+	default n
+	help
+	  If you say yes here vendor pin check will be enabled.
+config SENSORS_FP_LOCKSCREEN_MODE
+	tristate "fingerprint sensor support fast wake up"
+	default n
+	help
+	  If you say yes here you can use lockscreen mode for optimizing
+config SENSORS_FP_TKEY_NOTI
+	tristate "fingerprint sensor support tkey notification"
+	default n
+	help
+	  If you say yes here you can use fingerprint sensor tkey notification
+endif

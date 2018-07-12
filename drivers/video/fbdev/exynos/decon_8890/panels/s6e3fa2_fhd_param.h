@@ -1,0 +1,374 @@
+#ifndef __S6E3FA2_WQHD_PARAM_H__
+#define __S6E3FA2_WQHD_PARAM_H__
+
+#include <linux/types.h>
+#include <linux/kernel.h>
+
+
+struct lcd_seq_info {
+	unsigned char	*cmd;
+	unsigned int	len;
+	unsigned int	sleep;
+};
+
+#define POWER_IS_ON(pwr)			(pwr <= FB_BLANK_NORMAL)
+#define UNDER_MINUS_20(temperature)	(temperature <= -20)
+#define UNDER_0(temperature)	(temperature <= 0)
+
+enum {
+	OVER_ZERO,
+	UNDER_ZERO,
+	UNDER_MINUS_TWENTY,
+	TEMP_MAX
+};
+
+#define NORMAL_TEMPERATURE			25	/* 25 degrees Celsius */
+#define EXTEND_BRIGHTNESS	365
+#define UI_MAX_BRIGHTNESS 	255
+#define UI_MIN_BRIGHTNESS 	0
+#define UI_DEFAULT_BRIGHTNESS 134
+
+#define S6E3FA2_MTP_ADDR 			0xC8
+#define S6E3FA2_MTP_SIZE 			33
+#define S6E3FA2_MTP_DATE_SIZE 		S6E3FA2_MTP_SIZE + 9
+#define S6E3FA2_COORDINATE_REG		0xA1
+#define S6E3FA2_COORDINATE_LEN		4
+#define S6E3FA2_HBMGAMMA_REG		0xB4
+#define S6E3FA2_HBMGAMMA_LEN		31
+
+
+
+#define S6E3FA2_ID_REG				0x04
+#define S6E3FA2_ID_LEN				3
+#define S6E3FA2_CODE_REG			0xD6
+#define S6E3FA2_CODE_LEN			5
+#define TSET_REG			0xB8 /* TSET: Global para 8th */
+#define TSET_LEN			9
+#define TSET_MINUS_OFFSET			0x03
+#define ELVSS_REG			0xB6
+#define ELVSS_LEN			23   /* elvss: Global para 22th */
+#define ELVSS_LEN_MAX			3
+
+#define VINT_REG					0xF4
+#define VINT_LEN					3
+
+#define GAMMA_CMD_CNT 		36
+#define AID_CMD_CNT			5
+#define ELVSS_CMD_CNT		3
+
+#define S6E3FA2_WQXGA_ID1 		0x404013
+#define S6E3FA2_WQXGA_ID2 		0x404014
+
+
+#define S6E3FA2_HBM_ELVSS_INDEX		21
+#define S6E3FA2_HBM_ELVSS_COMP		0x06
+#define S6E3FA2_A2_LINE_ID		0x40
+#define S6E3FA2_A3_LINE_ID		0x80
+#define S6E3FA2_RDDPM_ADDR		0x0A
+#define S6E3FA2_RDDSM_ADDR		0x0E
+#define S6E3FA2_LCDTYPE_FHD	0
+
+#define S6E3FA2_MAX_BRIGHTNESS	350
+#define S6E3FA2_HBM_BRIGHTNESS	600
+
+static const unsigned int VINT_DIM_TABLE[] = {
+	5,	6,	7,	8,	9,
+	10,	11,	12,	13,	14
+};
+
+static const unsigned char VINT_TABLE[] = {
+	0x18, 0x19, 0x1A, 0x1B, 0x1C,
+	0x1D, 0x1E, 0x1F, 0x20, 0x21
+};
+
+static const unsigned char SEQ_TEST_KEY_ON_F0[] = {
+	0xF0,
+	0x5A, 0x5A
+};
+
+static const unsigned char SEQ_TEST_KEY_OFF_F0[] = {
+	0xF0,
+	0xA5, 0xA5
+};
+
+static const unsigned char SEQ_TEST_KEY_ON_F1[] = {
+	0xF1,
+	0x5A, 0x5A,
+};
+
+static const unsigned char SEQ_TEST_KEY_OFF_F1[] = {
+	0xF1,
+	0xA5, 0xA5,
+};
+
+static const unsigned char SEQ_TEST_KEY_ON_FC[] = {
+	0xFC,
+	0x5A, 0x5A
+};
+
+static const unsigned char SEQ_TEST_KEY_OFF_FC[] = {
+	0xFC,
+	0xA5, 0xA5
+};
+
+static const unsigned char SEQ_SLEEP_OUT[] = {
+	0x11
+};
+
+static const unsigned char SEQ_SLEEP_IN[] = {
+	0x10
+};
+
+static const unsigned char SEQ_DISPLAY_ON[] = {
+	0x29
+};
+
+static const unsigned char SEQ_DISPLAY_OFF[] = {
+	0x28
+};
+
+static const unsigned char SEQ_REG_FF[] = {
+	0xFF,
+	0x00, 0x00, 0x20, 0x00,
+};
+
+static const unsigned char SEQ_GAMMA_CONTROL_SET_350CD[] = {
+	0xCA,
+	0x01, 0x00, 0x01, 0x00, 0x01, 0x00, 0x80, 0x80, 0x80,
+	0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
+	0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80, 0x80,
+	0x80, 0x80, 0x80, 0x00, 0x00, 0x00,
+};
+
+static const unsigned char SEQ_GAMMA_CONDITION_SET[] = {
+	0xCA,
+	0x01, 0x00, 0x01, 0x00, 0x01, 0x00,
+	0x80, 0x80, 0x80,
+	0x80, 0x80, 0x80,
+	0x80, 0x80, 0x80,
+	0x80, 0x80, 0x80,
+	0x80, 0x80, 0x80,
+	0x80, 0x80, 0x80,
+	0x80, 0x80, 0x80,
+	0x80, 0x80, 0x80,
+	0x00, 0x00, 0x00,
+	0x00, 0x00
+};
+
+static const unsigned char SEQ_AOR_CONTROL[] = {
+	0xB2,
+	0x00, 0x0E, 0x00, 0x0E,
+};
+
+static const unsigned char SEQ_ELVSS_SET[] = {
+	0xB6,
+	0x98,				/* ACL OFF, T > 0 C */
+	0x04, 0x00, 0x00, 0x00, 0x00,
+	0x00, 0x03, 0x55, 0x54, 0x20,
+	0x00, 0x0A, 0xAA, 0xAF, 0x0F,	/* Temp offset */
+	0x02, 0x11, 0x11, 0x10,		/* CAPS offset */
+	0x00				/* Dummy for HBM ELVSS */
+};
+
+static const unsigned char SEQ_GAMMA_UPDATE[] = {
+	0xF7,
+	0x03
+};
+
+static const unsigned char SEQ_GAMMA_UPDATE_L[] = {
+	0xF7,
+	0x00,
+};
+
+static const unsigned char SEQ_TSET_GLOBAL[] = {
+	0xB0,
+	0x05
+};
+
+static const unsigned char SEQ_TSET[] = {
+	0xB8,
+	0x19
+};
+
+static const unsigned char SEQ_TE_ON[] = {
+	0x35
+};
+static const unsigned char SEQ_TE_OFF[] = {
+	0x34,
+};
+
+static const unsigned char SEQ_GPARAM_TE[] = {
+	0xB0,
+	0x02
+};
+
+static const unsigned char SEQ_TE_ON_SET1[] = {
+	0xFD,
+	0x0A
+};
+
+static const unsigned char SEQ_TE_ON_SET2[] = {
+	0xFE,
+	0x80
+};
+
+static const unsigned char SEQ_TE_ON_SET3[] = {
+	0xFE,
+	0x00
+};
+
+static const unsigned char SEQ_ERR_FG[] = {
+	0xED,
+	0x01, 0x00
+};
+
+#if 0
+static const unsigned char SEQ_MIC_ENABLE[] = {
+	0xF9,
+	0x0B,
+};
+#endif
+static const unsigned char SEQ_ACL_OFF[] = {
+	0x55,
+	0x00
+};
+
+static const unsigned char SEQ_ACL_15[] = {
+	0x55,
+	0x02,
+};
+
+static const unsigned char SEQ_ACL_OFF_OPR_AVR[] = {
+	0xB5,
+	0x41
+};
+
+static const unsigned char SEQ_ACL_ON_OPR_AVR[] = {
+	0xB5,
+	0x51
+};
+
+static const unsigned char SEQ_TOUCH_HSYNC_ON_RevG[] = {
+	0xBD,
+	0x05, 0x02, 0x02
+};
+
+static const unsigned char SEQ_TOUCH_HSYNC_ON[] = {
+	0xBD,
+	0x85, 0x02, 0x0C
+};
+
+static const unsigned char SEQ_NORMAL_DISP[] = {
+	0x13,
+};
+
+static const unsigned char SEQ_PARTIAL_DISP[] = {
+	0x12,
+};
+
+static const unsigned char SEQ_GPARAM_HBM_ELVSS[] = {
+	0xB0,
+	0x15
+};
+
+static const unsigned char SEQ_IDLE_MODE[] = {
+	0x39,
+};
+
+static const unsigned char SEQ_NORMAL_MODE[] = {
+	0x38,
+};
+
+static const unsigned char SEQ_PCD_SET_DET_LOW[] = {
+	0xCC,
+	0x5C, 0x51,
+};
+
+
+enum {
+	HBM_STATUS_OFF,
+	HBM_STATUS_ON,
+	HBM_STATUS_MAX,
+};
+
+enum {
+	ACL_STATUS_0P,
+	ACL_STATUS_8P,
+	ACL_STATUS_MAX
+};
+
+enum {
+	ACL_OPR_16_FRAME,
+	ACL_OPR_32_FRAME,
+	ACL_OPR_MAX
+};
+
+
+#if defined(CONFIG_SEC_FACTORY) && defined(CONFIG_EXYNOS_DECON_LCD_MCD)
+
+static const unsigned char SEQ_MCD_ON_SET1[][2] = {
+	{0xF4, 0x84},
+	{0xB0, 0x04}, {0xCB, 0xB4}, {0xB0, 0x08}, {0xCB, 0xE3},
+	{0xB0, 0x09}, {0xCB, 0x02}, {0xB0, 0x11}, {0xCB, 0x00},
+	{0xB0, 0x12}, {0xCB, 0x1A}, {0xB0, 0x13}, {0xCB, 0xC0},
+	{0xB0, 0x14}, {0xCB, 0x1A}, {0xB0, 0x1F}, {0xCB, 0x03},
+	{0xB0, 0x20}, {0xCB, 0x22}, {0xB0, 0x21}, {0xCB, 0x3D},
+	{0xB0, 0x22}, {0xCB, 0xA2}, {0xB0, 0x23}, {0xCB, 0xD2},
+	{0xB0, 0x27}, {0xCB, 0x44}, {0xB0, 0x28}, {0xCB, 0x45},
+	{0xB0, 0x33}, {0xCB, 0xD2}, {0xB0, 0x37}, {0xCB, 0x04},
+	{0xB0, 0x38}, {0xCB, 0x05}, {0xB0, 0x45}, {0xCB, 0x00},
+	{0xB0, 0x05}, {0xF6, 0x3A}
+};
+
+static const unsigned char SEQ_MCD_ON_SET2[][2] = {
+	{0xB0, 0x03}, {0xBB, 0x30}
+};
+
+static const unsigned char SEQ_MCD_OFF_SET1[][2] = {
+	{0xB0, 0x04}, {0xCB, 0xF4}, {0xB0, 0x08}, {0xCB, 0xE1},
+	{0xB0, 0x09}, {0xCB, 0x06}, {0xB0, 0x11}, {0xCB, 0x15},
+	{0xB0, 0x12}, {0xCB, 0x99}, {0xB0, 0x13}, {0xCB, 0x00},
+	{0xB0, 0x14}, {0xCB, 0x00}, {0xB0, 0x1F}, {0xCB, 0x12},
+	{0xB0, 0x20}, {0xCB, 0xCE}, {0xB0, 0x21}, {0xCB, 0x00},
+	{0xB0, 0x22}, {0xCB, 0x00}, {0xB0, 0x23}, {0xCB, 0xD1},
+	{0xB0, 0x27}, {0xCB, 0x42}, {0xB0, 0x28}, {0xCB, 0x43},
+	{0xB0, 0x33}, {0xCB, 0xD1}, {0xB0, 0x37}, {0xCB, 0x02},
+	{0xB0, 0x38}, {0xCB, 0x03}, {0xB0, 0x45}, {0xCB, 0x06},
+	{0xB0, 0x05}, {0xF6, 0x59}
+};
+
+static const unsigned char SEQ_MCD_OFF_SET2[][2] = {
+	{0xB0, 0x03}, {0xBB, 0x00}, {0xF4, 0x8B}
+};
+
+#endif
+
+
+#ifdef CONFIG_LCD_ALPM
+static const unsigned char SEQ_ALPM2NIT_MODE_ON[] = {
+	0x53, 0x23
+};
+
+static const unsigned char SEQ_NORMAL_MODE_ON[] = {
+	0x53, 0x00
+};
+
+static const unsigned char SEQ_GLOBAL_PARAM_21[] = {
+	0xB0,
+	0x15
+};
+#endif
+
+
+enum {
+	HBM_INTER_OFF = 0,
+	HBM_COLORBLIND_ON,
+	HBM_GALLERY_ON,
+};
+
+// 384 ~ 550
+static const char HBM_INTER_22TH_OFFSET[] = {
+	0x02, 0x04, 0x06, 0x06, 0x06, 0x06, 0x06, 0x06
+};
+
+#endif /* __S6E3FA2_PARAM_H__ */

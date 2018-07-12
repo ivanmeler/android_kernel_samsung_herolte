@@ -1271,6 +1271,13 @@ static void regulator_supply_alias(struct device **dev, const char **supply)
 	}
 }
 
+static int _regulator_get_disable_time(struct regulator_dev *rdev)
+{
+	if (!rdev->desc->ops->disable_time)
+		return rdev->desc->disable_time;
+	return rdev->desc->ops->disable_time(rdev);
+}
+
 static struct regulator_dev *regulator_dev_lookup(struct device *dev,
 						  const char *supply,
 						  int *ret)
@@ -1945,7 +1952,16 @@ EXPORT_SYMBOL_GPL(regulator_enable);
 
 static int _regulator_do_disable(struct regulator_dev *rdev)
 {
-	int ret;
+	int ret, delay;
+
+	/* Query before disabling in case configuration dependent.  */
+	ret = _regulator_get_disable_time(rdev);
+	if (ret >= 0) {
+		delay = ret;
+	} else {
+		rdev_warn(rdev, "disable_time() failed: %d\n", ret);
+		delay = 0;
+	}
 
 	trace_regulator_disable(rdev_get_name(rdev));
 
@@ -1968,6 +1984,18 @@ static int _regulator_do_disable(struct regulator_dev *rdev)
 	 */
 	if (rdev->desc->off_on_delay)
 		rdev->last_off_jiffy = jiffies;
+
+	/* Allow the regulator to ramp; it would be useful to extend
+	 * this for bulk operations so that the regulators can ramp
+	 * together.  */
+	trace_regulator_disable_delay(rdev_get_name(rdev));
+
+	if (delay >= 1000) {
+		mdelay(delay / 1000);
+		udelay(delay % 1000);
+	} else if (delay) {
+		udelay(delay);
+	}
 
 	trace_regulator_disable_complete(rdev_get_name(rdev));
 

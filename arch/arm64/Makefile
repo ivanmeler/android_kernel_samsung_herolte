@@ -10,7 +10,12 @@
 #
 # Copyright (C) 1995-2001 by Russell King
 
+ifeq ($(CONFIG_RELOCATABLE_KERNEL), y) 
+LDFLAGS_vmlinux	:=-p --no-undefined -X -pie -Bsymbolic
+else 
 LDFLAGS_vmlinux	:=-p --no-undefined -X
+endif 
+
 CPPFLAGS_vmlinux.lds = -DTEXT_OFFSET=$(TEXT_OFFSET)
 OBJCOPYFLAGS	:=-O binary -R .note -R .note.gnu.build-id -R .comment -S
 GZFLAGS		:=-9

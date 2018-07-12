@@ -8,6 +8,9 @@
 # published by the Free Software Foundation.
 #
 
+#Keep this at the top
+obj-$(CONFIG_CRYPTO_FIPS) += first_file_asm.o
+
 obj-$(CONFIG_CRYPTO_SHA1_ARM64_CE) += sha1-ce.o
 sha1-ce-y := sha1-ce-glue.o sha1-ce-core.o
 
@@ -36,3 +39,6 @@ CFLAGS_aes-glue-ce.o	:= -DUSE_V8_CRYPTO_EXTENSIONS
 
 $(obj)/aes-glue-%.o: $(src)/aes-glue.c FORCE
 	$(call if_changed_rule,cc_o_c)
+
+#Keep this at the bottom
+obj-$(CONFIG_CRYPTO_FIPS) += last_file_asm.o

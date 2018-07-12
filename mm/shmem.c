@@ -911,6 +911,10 @@ static struct page *shmem_alloc_page(gfp_t gfp,
 	pvma.vm_policy = mpol_shared_policy_lookup(&info->policy, index);
 
 	page = alloc_page_vma(gfp, &pvma, 0);
+	if (page && is_cma_pageblock(page)) {
+		 __free_page(page);
+		 page = alloc_pages(gfp & ~__GFP_MOVABLE, 0);
+	}
 
 	/* Drop reference taken by mpol_shared_policy_lookup() */
 	mpol_cond_put(pvma.vm_policy);

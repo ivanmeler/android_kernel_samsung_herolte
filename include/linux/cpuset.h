@@ -47,6 +47,7 @@ extern nodemask_t cpuset_mems_allowed(struct task_struct *p);
 #define cpuset_current_mems_allowed (current->mems_allowed)
 void cpuset_init_current_mems_allowed(void);
 int cpuset_nodemask_valid_mems_allowed(nodemask_t *nodemask);
+extern int is_top_task(struct task_struct *p);
 
 extern int __cpuset_node_allowed_softwall(int node, gfp_t gfp_mask);
 extern int __cpuset_node_allowed_hardwall(int node, gfp_t gfp_mask);

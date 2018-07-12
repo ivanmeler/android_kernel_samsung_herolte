@@ -248,6 +248,8 @@ static void binder_selftest_alloc_size(struct binder_alloc *alloc,
 	 * Only BUFFER_NUM - 1 buffer sizes are adjustable since
 	 * we need one giant buffer before getting to the last page.
 	 */
+	if (BINDER_MIN_ALLOC)
+		front_sizes[0] += BINDER_MIN_ALLOC - PAGE_SIZE;
 	back_sizes[0] += alloc->buffer_size - end_offset[BUFFER_NUM - 1];
 	binder_selftest_free_seq(alloc, front_sizes, seq, 0,
 				 end_offset[BUFFER_NUM - 1]);

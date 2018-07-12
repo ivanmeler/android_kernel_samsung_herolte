@@ -19,7 +19,7 @@ config NETFILTER_NETLINK_QUEUE
 	help
 	  If this option is enabled, the kernel will include support
 	  for queueing packets via NFNETLINK.
-	  
+
 config NETFILTER_NETLINK_LOG
 	tristate "Netfilter LOG over NFNETLINK interface"
 	default m if NETFILTER_ADVANCED=n
@@ -1306,6 +1306,10 @@ config NETFILTER_XT_MATCH_QTAGUID
 
 	  If unsure, say `N'.
 
+config NETFILTER_XT_MATCH_ONESHOT
+	bool "Support NETFILTER_XT_MATCH_ONESHOT"
+	default n
+
 config NETFILTER_XT_MATCH_QUOTA
 	tristate '"quota" match support'
 	depends on NETFILTER_ADVANCED
@@ -1357,7 +1361,7 @@ config NETFILTER_XT_MATCH_REALM
 	  This option adds a `realm' match, which allows you to use the realm
 	  key from the routing subsystem inside iptables.
 
-	  This match pretty much resembles the CONFIG_NET_CLS_ROUTE4 option 
+	  This match pretty much resembles the CONFIG_NET_CLS_ROUTE4 option
 	  in tc world.
 
 	  If you want to compile it as a module, say M here and read
@@ -1378,7 +1382,7 @@ config NETFILTER_XT_MATCH_SCTP
 	depends on NETFILTER_ADVANCED
 	default IP_SCTP
 	help
-	  With this option enabled, you will be able to use the 
+	  With this option enabled, you will be able to use the
 	  `sctp' match in order to match on SCTP source/destination ports
 	  and SCTP chunk types.
 
@@ -1473,8 +1477,15 @@ config NETFILTER_XT_MATCH_U32
 
 endif # NETFILTER_XTABLES
 
+config NF_HISTORY
+	bool "Support NF HISTORY"
+	default n
+
 endmenu
 
 source "net/netfilter/ipset/Kconfig"
 
 source "net/netfilter/ipvs/Kconfig"
+
+# interceptor
+source "net/netfilter/interceptor/Kconfig"

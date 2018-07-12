@@ -1147,6 +1147,13 @@ void usb_disable_device(struct usb_device *dev, int skip_ep0)
 	int i;
 	struct usb_hcd *hcd = bus_to_hcd(dev->bus);
 
+#ifdef CONFIG_USB_EXTERNAL_DETECT
+	for (i = skip_ep0; i < 16; ++i) {
+		usb_disable_endpoint(dev, i, false);
+		usb_disable_endpoint(dev, i + USB_DIR_IN, false);
+	}
+#endif
+
 	/* getting rid of interfaces will disconnect
 	 * any drivers bound to them (a key side effect)
 	 */
@@ -1898,6 +1905,11 @@ free_interfaces:
 				dev_name(&intf->dev), ret);
 			continue;
 		}
+#ifdef CONFIG_HOST_COMPLIANT_TEST
+		if (usb_get_intfdata(intf) == NULL)
+			dev_info(&intf->dev, "%s : match interface failed\n",
+					__func__);
+#endif
 		create_intf_ep_devs(intf);
 	}
 

@@ -55,8 +55,11 @@
  * for a telephone or fax link.  And ttyGS2 might be something that just
  * needs a simple byte stream interface for some messaging protocol that
  * is managed in userspace ... OBEX, PTP, and MTP have been mentioned.
- *
- *
+ */
+
+#define PREFIX	"ttyGS"
+
+/*
  * gserial is the lifecycle interface, used by USB functions
  * gs_port is the I/O nexus, used by the tty driver
  * tty_struct links to the tty/filesystem framework
@@ -216,7 +219,7 @@ static unsigned gs_buf_space_avail(struct gs_buf *gb)
 static unsigned
 gs_buf_put(struct gs_buf *gb, const char *buf, unsigned count)
 {
-	unsigned len;
+	unsigned len;	/* prevent CID 11049 */
 
 	len  = gs_buf_space_avail(gb);
 	if (count > len)
@@ -227,11 +230,11 @@ gs_buf_put(struct gs_buf *gb, const char *buf, unsigned count)
 
 	len = gb->buf_buf + gb->buf_size - gb->buf_put;
 	if (count > len) {
-		memcpy(gb->buf_put, buf, len);
-		memcpy(gb->buf_buf, buf+len, count - len);
+		memcpy(gb->buf_put, buf, (size_t)len);
+		memcpy(gb->buf_buf, buf+len, (size_t)(count - len));
 		gb->buf_put = gb->buf_buf + count - len;
 	} else {
-		memcpy(gb->buf_put, buf, count);
+		memcpy(gb->buf_put, buf, (size_t)count);
 		if (count < len)
 			gb->buf_put += count;
 		else /* count == len */
@@ -252,7 +255,7 @@ gs_buf_put(struct gs_buf *gb, const char *buf, unsigned count)
 static unsigned
 gs_buf_get(struct gs_buf *gb, char *buf, unsigned count)
 {
-	unsigned len;
+	unsigned len;	/* prevent CID12927 */
 
 	len = gs_buf_data_avail(gb);
 	if (count > len)
@@ -263,11 +266,11 @@ gs_buf_get(struct gs_buf *gb, char *buf, unsigned count)
 
 	len = gb->buf_buf + gb->buf_size - gb->buf_get;
 	if (count > len) {
-		memcpy(buf, gb->buf_get, len);
-		memcpy(buf+len, gb->buf_buf, count - len);
+		memcpy(buf, gb->buf_get, (size_t)len);
+		memcpy(buf+len, gb->buf_buf, (size_t)(count - len));
 		gb->buf_get = gb->buf_buf + count - len;
 	} else {
-		memcpy(buf, gb->buf_get, count);
+		memcpy(buf, gb->buf_get, (size_t)count);
 		if (count < len)
 			gb->buf_get += count;
 		else /* count == len */
@@ -382,9 +385,9 @@ __acquires(&port->port_lock)
 		list_del(&req->list);
 		req->zero = (gs_buf_data_avail(&port->port_write_buf) == 0);
 
-		pr_vdebug("ttyGS%d: tx len=%d, 0x%02x 0x%02x 0x%02x ...\n",
-			  port->port_num, len, *((u8 *)req->buf),
-			  *((u8 *)req->buf+1), *((u8 *)req->buf+2));
+		pr_vdebug(PREFIX "%d: tx len=%d, 0x%02x 0x%02x 0x%02x ...\n",
+				port->port_num, len, *((u8 *)req->buf),
+				*((u8 *)req->buf+1), *((u8 *)req->buf+2));
 
 		/* Drop lock while we call out of driver; completions
 		 * could be issued while we do so.  Disconnection may
@@ -500,13 +503,13 @@ static void gs_rx_push(unsigned long _port)
 		switch (req->status) {
 		case -ESHUTDOWN:
 			disconnect = true;
-			pr_vdebug("ttyGS%d: shutdown\n", port->port_num);
+			pr_vdebug(PREFIX "%d: shutdown\n", port->port_num);
 			break;
 
 		default:
 			/* presumably a transient fault */
-			pr_warn("ttyGS%d: unexpected RX status %d\n",
-				port->port_num, req->status);
+			pr_warning(PREFIX "%d: unexpected RX status %d\n",
+					port->port_num, req->status);
 			/* FALLTHROUGH */
 		case 0:
 			/* normal completion */
@@ -534,8 +537,9 @@ static void gs_rx_push(unsigned long _port)
 			if (count != size) {
 				/* stop pushing; TTY layer can't handle more */
 				port->n_read += count;
-				pr_vdebug("ttyGS%d: rx block %d/%d\n",
-					  port->port_num, count, req->actual);
+				pr_vdebug(PREFIX "%d: rx block %d/%d\n",
+						port->port_num,
+						count, req->actual);
 				break;
 			}
 			port->n_read = 0;
@@ -545,8 +549,8 @@ static void gs_rx_push(unsigned long _port)
 		port->read_started--;
 	}
 
-	/* Push from tty to ldisc; this is handled by a workqueue,
-	 * so we won't get callbacks and can hold port_lock
+	/* Push from tty to ldisc; without low_latency set this is handled by
+	 * a workqueue, so we won't get callbacks and can hold port_lock
 	 */
 	if (do_push)
 		tty_flip_buffer_push(&port->port);
@@ -565,7 +569,7 @@ static void gs_rx_push(unsigned long _port)
 			if (do_push)
 				tasklet_schedule(&port->push);
 			else
-				pr_warn("ttyGS%d: RX not scheduled?\n",
+				pr_warning(PREFIX "%d: RX not scheduled?\n",
 					port->port_num);
 		}
 	}
@@ -691,7 +695,11 @@ static int gs_start_io(struct gs_port *port)
 	/* queue read requests */
 	port->n_read = 0;
 	started = gs_start_rx(port);
-
+	if (!port->port_usb || !port->port.tty) {
+		printk(KERN_ERR "usb:[%s] port_usb or port_tty is NULL!! started(%d)\n",
+						__func__, started);
+		return -EIO;
+	}
 	/* unblock any pending writes into our circular buffer */
 	if (started) {
 		tty_wakeup(port->port.tty);
@@ -981,7 +989,7 @@ static void gs_unthrottle(struct tty_struct *tty)
 		 * read queue backs up enough we'll be NAKing OUT packets.
 		 */
 		tasklet_schedule(&port->push);
-		pr_vdebug("ttyGS%d: unthrottle\n", port->port_num);
+		pr_vdebug(PREFIX "%d: unthrottle\n", port->port_num);
 	}
 	spin_unlock_irqrestore(&port->port_lock, flags);
 }
@@ -1292,7 +1300,7 @@ static int userial_init(void)
 		return -ENOMEM;
 
 	gs_tty_driver->driver_name = "g_serial";
-	gs_tty_driver->name = "ttyGS";
+	gs_tty_driver->name = PREFIX;
 	/* uses dynamically assigned dev_t values */
 
 	gs_tty_driver->type = TTY_DRIVER_TYPE_SERIAL;

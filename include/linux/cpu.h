@@ -91,6 +91,7 @@ enum {
 					* Called on the new cpu, just before
 					* enabling interrupts. Must not sleep,
 					* must not fail */
+#define CPU_DOWN_LATE_PREPARE	0x000B
 
 /* Used for CPU hotplug events occurring while tasks are frozen due to a suspend
  * operation in progress
@@ -106,6 +107,8 @@ enum {
 #define CPU_DYING_FROZEN	(CPU_DYING | CPU_TASKS_FROZEN)
 #define CPU_STARTING_FROZEN	(CPU_STARTING | CPU_TASKS_FROZEN)
 
+#define CPUS_UP_PREPARE		0x0001
+#define CPUS_DOWN_COMPLETE	0x0002
 
 #ifdef CONFIG_SMP
 /* Need to know about CPUs going up/down? */
@@ -128,16 +131,24 @@ enum {
 
 #ifdef CONFIG_HOTPLUG_CPU
 extern int register_cpu_notifier(struct notifier_block *nb);
+extern int register_cpus_notifier(struct notifier_block *nb);
 extern int __register_cpu_notifier(struct notifier_block *nb);
 extern void unregister_cpu_notifier(struct notifier_block *nb);
+extern void unregister_cpus_notifier(struct notifier_block *nb);
 extern void __unregister_cpu_notifier(struct notifier_block *nb);
 #else
 
 #ifndef MODULE
 extern int register_cpu_notifier(struct notifier_block *nb);
+extern int register_cpus_notifier(struct notifier_block *nb);
 extern int __register_cpu_notifier(struct notifier_block *nb);
 #else
 static inline int register_cpu_notifier(struct notifier_block *nb)
+{
+	return 0;
+}
+
+static inline int register_cpus_notifier(struct notifier_block *nb)
 {
 	return 0;
 }
@@ -152,12 +163,17 @@ static inline void unregister_cpu_notifier(struct notifier_block *nb)
 {
 }
 
+static inline void unregister_cpus_notifier(struct notifier_block *nb)
+{
+}
+
 static inline void __unregister_cpu_notifier(struct notifier_block *nb)
 {
 }
 #endif
 
 int cpu_up(unsigned int cpu);
+int cpus_up(struct cpumask *cpus);
 void notify_cpu_starting(unsigned int cpu);
 extern void cpu_maps_update_begin(void);
 extern void cpu_maps_update_done(void);
@@ -175,12 +191,21 @@ static inline int register_cpu_notifier(struct notifier_block *nb)
 	return 0;
 }
 
+static inline int register_cpus_notifier(struct notifier_block *nb)
+{
+	return 0;
+}
+
 static inline int __register_cpu_notifier(struct notifier_block *nb)
 {
 	return 0;
 }
 
 static inline void unregister_cpu_notifier(struct notifier_block *nb)
+{
+}
+
+static inline void unregister_cpus_notifier(struct notifier_block *nb)
 {
 }
 
@@ -213,7 +238,6 @@ extern struct bus_type cpu_subsys;
 extern void cpu_hotplug_begin(void);
 extern void cpu_hotplug_done(void);
 extern void get_online_cpus(void);
-extern bool try_get_online_cpus(void);
 extern void put_online_cpus(void);
 extern void cpu_hotplug_disable(void);
 extern void cpu_hotplug_enable(void);
@@ -225,13 +249,13 @@ extern void cpu_hotplug_enable(void);
 #define __unregister_hotcpu_notifier(nb)	__unregister_cpu_notifier(nb)
 void clear_tasks_mm_cpumask(int cpu);
 int cpu_down(unsigned int cpu);
+int cpus_down(struct cpumask *cpus);
 
 #else		/* CONFIG_HOTPLUG_CPU */
 
 static inline void cpu_hotplug_begin(void) {}
 static inline void cpu_hotplug_done(void) {}
 #define get_online_cpus()	do { } while (0)
-#define try_get_online_cpus()	true
 #define put_online_cpus()	do { } while (0)
 #define cpu_hotplug_disable()	do { } while (0)
 #define cpu_hotplug_enable()	do { } while (0)

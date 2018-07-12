@@ -1,0 +1,19 @@
+config VPNCLIENT_SECURITY
+   tristate "VpnClient Security module"
+   default y
+   help
+     If you say Y here, VpnClient security module will be built in kernel.
+
+     To compile this as a module, choose M here: the
+     module will be called vpnclient.
+
+config VPNCLIENT_PROC_UID
+   int "UID for special group"
+   depends on VPNCLIENT_SECURITY
+   default 1000
+
+config VPNCLIENT_PROC_GID
+   int "GID for special group"
+   depends on VPNCLIENT_SECURITY
+   default 1000
+

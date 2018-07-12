@@ -54,6 +54,13 @@ config ANDROID_BINDER_IPC_SELFTEST
           exhaustively with combinations of various buffer sizes and
           alignments.
 
+config SEC_TRACE_BINDERCNT
+	bool "Trace process binder count"
+	default n
+	---help---
+	  This feature can be used to monitor binder transactions count to
+	  a designated process.
+
 config ASHMEM
 	bool "Enable the Anonymous Shared Memory Subsystem"
 	default n
@@ -65,6 +72,24 @@ config ASHMEM
 
 	  It is, in theory, a good memory allocator for low-memory devices,
 	  because it can discard shared memory units when under memory pressure.
+
+config ANDROID_LOGGER
+	tristate "Android log driver"
+	default n
+	depends on !EXYNOS_SNAPSHOT_PSTORE
+	---help---
+	  This adds support for system-wide logging using four log buffers.
+
+	  These are:
+
+	      1: main
+	      2: events
+	      3: radio
+	      4: system
+
+	  Log reading and writing is performed via normal Linux reads and
+	  optimized writes. This optimization avoids logging having too
+	  much overhead in the system.
 
 config ANDROID_TIMED_OUTPUT
 	bool "Timed output class driver"
@@ -88,6 +113,15 @@ config ANDROID_LOW_MEMORY_KILLER_AUTODETECT_OOM_ADJ_VALUES
 	  Detect oom_adj values written to
 	  /sys/module/lowmemorykiller/parameters/adj and convert them
 	  to oom_score_adj values.
+
+config ANDROID_INTF_ALARM_DEV
+	bool "Android alarm driver"
+	depends on RTC_CLASS
+	default n
+	---help---
+	  Provides non-wakeup and rtc backed wakeup alarms based on rtc or
+	  elapsed realtime, and a non-wakeup alarm on the monotonic clock.
+	  Also exports the alarm interface to user-space.
 
 config SYNC
 	bool "Synchronization framework"

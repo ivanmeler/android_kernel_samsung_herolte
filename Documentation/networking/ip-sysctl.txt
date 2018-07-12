@@ -1275,6 +1275,7 @@ accept_ra_pinfo - BOOLEAN
 
 	Functional default: enabled if accept_ra is enabled.
 			    disabled if accept_ra is disabled.
+				
 
 accept_ra_rt_info_min_plen - INTEGER
 	Minimum prefix length of Route Information in RA.

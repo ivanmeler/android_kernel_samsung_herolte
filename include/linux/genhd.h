@@ -85,6 +85,9 @@ struct disk_stats {
 	unsigned long ticks[2];
 	unsigned long io_ticks;
 	unsigned long time_in_queue;
+	unsigned long discard_sectors;
+	unsigned long discard_ios;
+	unsigned long flush_ios;
 };
 
 #define PARTITION_META_INFO_VOLNAMELTH	64
@@ -138,6 +141,10 @@ struct hd_struct {
 #define GENHD_FL_NATIVE_CAPACITY		128
 #define GENHD_FL_BLOCK_EVENTS_ON_EXCL_WRITE	256
 #define GENHD_FL_NO_PART_SCAN			512
+#ifdef CONFIG_USB_STORAGE_DETECT
+#define GENHD_FL_MEDIA_PRESENT	1024
+#define GENHD_FL_IF_USB	2048
+#endif
 
 enum {
 	DISK_EVENT_MEDIA_CHANGE			= 1 << 0, /* media changed */
@@ -397,6 +404,16 @@ static inline void part_dec_in_flight(struct hd_struct *part, int rw)
 static inline int part_in_flight(struct hd_struct *part)
 {
 	return atomic_read(&part->in_flight[0]) + atomic_read(&part->in_flight[1]);
+}
+
+static inline int part_in_flight_read(struct hd_struct *part)
+{
+	return atomic_read(&part->in_flight[0]);
+}
+
+static inline int part_in_flight_write(struct hd_struct *part)
+{
+	return atomic_read(&part->in_flight[1]);
 }
 
 static inline struct partition_meta_info *alloc_part_info(struct gendisk *disk)

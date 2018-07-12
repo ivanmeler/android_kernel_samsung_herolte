@@ -210,10 +210,10 @@ static void persistent_ram_ecc_old(struct persistent_ram_zone *prz)
 			size = buffer->data + prz->buffer_size - block;
 		numerr = persistent_ram_decode_rs8(prz, block, size, par);
 		if (numerr > 0) {
-			pr_devel("error in block %p, %d\n", block, numerr);
+			pr_info("error in block %p, %d\n", block, numerr);
 			prz->corrected_bytes += numerr;
 		} else if (numerr < 0) {
-			pr_devel("uncorrectable error in block %p\n", block);
+			pr_info("uncorrectable error in block %p\n", block);
 			prz->bad_blocks++;
 		}
 		block += prz->ecc_info.block_size;
@@ -438,10 +438,19 @@ static void *persistent_ram_vmap(phys_addr_t start, size_t size,
 	page_start = start - offset_in_page(start);
 	page_count = DIV_ROUND_UP(size + offset_in_page(start), PAGE_SIZE);
 
+#ifndef CONFIG_EXYNOS_SNAPSHOT_PSTORE
 	if (memtype)
 		prot = pgprot_noncached(PAGE_KERNEL);
 	else
 		prot = pgprot_writecombine(PAGE_KERNEL);
+#else
+	/*
+	 * If using exynos-snapshot, we can get the debug information
+	 * from tracing data of exynos-snapshot. So we don't need noncacheable
+	 * region that could cause performace problems.
+	 */
+	prot = PAGE_KERNEL;
+#endif
 
 	pages = kmalloc_array(page_count, sizeof(struct page *), GFP_KERNEL);
 	if (!pages) {
@@ -522,13 +531,13 @@ static int persistent_ram_post_init(struct persistent_ram_zone *prz, u32 sig,
 			pr_info("found existing invalid buffer, size %zu, start %zu\n",
 				buffer_size(prz), buffer_start(prz));
 		else {
-			pr_debug("found existing buffer, size %zu, start %zu\n",
+			pr_info("found existing buffer, size %zu, start %zu\n",
 				 buffer_size(prz), buffer_start(prz));
 			persistent_ram_save_old(prz);
 			return 0;
 		}
 	} else {
-		pr_debug("no valid data in buffer (sig = 0x%08x)\n",
+		pr_info("no valid data in buffer (sig = 0x%08x)\n",
 			 prz->buffer->sig);
 	}
 

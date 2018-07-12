@@ -181,6 +181,11 @@ config INPUT_KEYRESET
 	---help---
 	  Say Y here if you want to reboot when some keys are pressed;
 
+config GLOVE_TOUCH
+	tristate "Glove touch"
+	help
+	  Say Y here if you want glove touch.
+
 config INPUT_KEYCOMBO
 	tristate "Key combo"
 	depends on INPUT
@@ -189,6 +194,63 @@ config INPUT_KEYCOMBO
 
 	  To compile this driver as a module, choose M here: the
 	  module will be called keycombo.
+
+config HALL
+	tristate "Enable HALL"
+	default n
+	help
+	  Enable Hall Feature
+
+config HALL_LOOPCHECK_WA
+	tristate "Enable HALL"
+	default n
+	help
+	  Enable Hall loop-check for workaround
+
+config SENSORS_HALL_IRQ_CTRL
+	bool "SENSORS_HALL_IRQ_CTRL"
+	depends on !SEC_FACTORY
+	default n
+	help
+	  Say Y here to enable the IRQ control function
+
+config CERTIFY_HALL
+	tristate "Enable CERTIFY HALL"
+	default n
+	help
+	  Enable Certify Hall Feature
+
+config CERTIFY_HALL_NFC_WA
+        tristate "Enable CERTIFY HALL"
+        default n
+        help
+          Enable Certify Hall & NFC workaround
+
+config SENSORS_HALL_FOLDER
+	bool "HALL for FOLDER"
+	depends on HALL
+	default n
+	help
+	  Say Y here to use HALL IC for FOLDER.
+
+config V_HALL_FOLDING
+	bool "Valley HALL for Folding work"
+	depends on HALL
+	default n
+	help
+	  Say Y here to use Valley HALL IC for Folding work.
+
+config HALL_SW_LID
+	bool "Send event SW_LID"
+	default n
+	help
+	  Say Y here to send event SW_LID
+
+config HALL_M1120
+	tristate "Enable HALL M1120"
+	default n
+	help
+	  Enable Hall M1120 Feature
 
 comment "Input Device Drivers"
 
@@ -201,6 +263,8 @@ source "drivers/input/joystick/Kconfig"
 source "drivers/input/tablet/Kconfig"
 
 source "drivers/input/touchscreen/Kconfig"
+
+source "drivers/input/wacom/Kconfig"
 
 source "drivers/input/misc/Kconfig"
 

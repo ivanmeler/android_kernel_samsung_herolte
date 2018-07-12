@@ -1,0 +1,75 @@
+ /* Copyright (c) 2012-2014, The Linux Foundation. All rights reserved.
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 and
+ * only version 2 as published by the Free Software Foundation.
+ *
+ * This program is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ */
+
+/{
+	pinctrl@14CC0000 {
+		tdmb_pwr_on: tdmb-pwr-on {
+			samsung,pins = "gpe6-7";
+			samsung,pin-function = <1>; /* OUTPUT */
+			samsung,pin-pud = <0>;	/* PULL NONE */
+		};
+		tdmb_pwr_off: tdmb-pwr-off {
+			samsung,pins = "gpe6-7";
+			samsung,pin-function = <1>; /* OUTPUT */
+			samsung,pin-pud = <1>;	/* PULL DOWN */
+			samsung,pin-drv = <0>;
+		};
+	};
+
+	pinctrl@10580000 {
+		tdmb_irq_on: tdmb-irq-on {
+			samsung,pins = "gpa1-1";
+			samsung,pin-function = <0xf>; /* EXT_INT31[3] */
+			samsung,pin-pud = <0>;	/* PULL NONE */
+		};
+		tdmb_irq_off: tdmb-irq-off {
+			samsung,pins = "gpa1-1";
+			samsung,pin-function = <0>; /* INPUT */
+			samsung,pin-pud = <1>;	/* PULL DOWN */
+		};
+	};
+
+	spi_5: spi@14d90000 {
+		#address-cells = <1>;
+		#size-cells = <0>;
+		num-cs = <1>;
+
+		dma-mode;
+		dmas = <&pdma0 21
+			&pdma0 20>;
+		dma-names = "tx", "rx";
+
+		status = "ok";
+
+		tdmb-spi@0 {
+			compatible = "tdmb_spi_comp";
+			reg = <0>;
+			spi-max-frequency = <9600000>;
+			controller-data {
+				cs-gpio = <&gpe3 5 0>;
+				samsung,spi-feedback-delay = <0>;
+			};
+		};
+	};
+
+	tdmb_data {
+		compatible = "samsung,tdmb";
+		pinctrl-names = "tdmb_on", "tdmb_off";
+		pinctrl-0 = <&tdmb_pwr_on &tdmb_irq_on>;
+		pinctrl-1 = <&tdmb_pwr_off &tdmb_irq_off>;
+		tdmb_pwr_en = <&gpe6 7 0>;
+		tdmb_irq = <&gpa1 1 0>;
+		tdmb_use_irq;
+		tdmb_xtal_freq = <24576>;
+	};
+
+};

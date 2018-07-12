@@ -102,7 +102,6 @@ void __iomem *ioremap_cache(phys_addr_t phys_addr, size_t size)
 				__builtin_return_address(0));
 }
 EXPORT_SYMBOL(ioremap_cache);
-
 /*
  * Must be called after early_fixmap_init
  */

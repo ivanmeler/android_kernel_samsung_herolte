@@ -1778,8 +1778,13 @@ static void __jbd2_journal_temp_unlink_buffer(struct journal_head *jh)
 
 	__blist_del_buffer(list, jh);
 	jh->b_jlist = BJ_None;
-	if (test_clear_buffer_jbddirty(bh))
-		mark_buffer_dirty(bh);	/* Expose it to the VM */
+	if (test_clear_buffer_jbddirty(bh)) {
+#ifdef CONFIG_JOURNAL_DATA_TAG
+		if (transaction->t_journal->j_flags & JBD2_JOURNAL_TAG)
+			set_buffer_jmeta(bh);
+#endif
+		mark_buffer_dirty_sync(bh); /* Expose it to the VM */
+	}
 }
 
 /*

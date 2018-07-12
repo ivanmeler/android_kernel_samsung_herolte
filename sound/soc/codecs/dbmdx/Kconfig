@@ -1,0 +1,24 @@
+#
+# SoC audio configuration
+#
+
+config SND_SOC_DBMDX
+	bool "DSPG Voice Trigger/Enhancement Chip"
+	default n
+	help
+		DSPG Voice Trigger/Enhancement Chip
+
+
+config SND_SOC_DBMDX_SND_CAPTURE
+	bool "DSPG Capture Device Support"
+	depends on SND_SOC_DBMDX
+	default n
+	help
+		DSPG Capture Device Support
+
+
+
+
+
+
+

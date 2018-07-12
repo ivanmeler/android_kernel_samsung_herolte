@@ -18,6 +18,9 @@
 
 #include <asm/ioctls.h>
 
+#include "./internal.h"
+#include <linux/namei.h>
+
 /* So that the fiemap access checks can't overflow on 32 bit machines. */
 #define FIEMAP_MAX_EXTENTS	(UINT_MAX / sizeof(struct fiemap_extent))
 
@@ -590,6 +593,35 @@ int do_vfs_ioctl(struct file *filp, unsigned int fd, unsigned int cmd,
 
 	case FIGETBSZ:
 		return put_user(inode->i_sb->s_blocksize, argp);
+
+	case FS_IOC_CI_LOOKUP: {
+		struct ci_lookup_data *data;
+		struct path p;
+
+		data = (struct ci_lookup_data *)
+			kmalloc(sizeof(*data), GFP_KERNEL);
+		if (!data)
+			return -ENOMEM;
+
+		if (copy_from_user(data, (struct ci_lookup_data __user *)arg,
+				sizeof(*data))) {
+			error = -EFAULT;
+			goto err;
+		}
+
+		error = vfs_path_lookup(filp->f_dentry, filp->f_path.mnt,
+				data->d, LOOKUP_CASE_INSENSITIVE, &p);
+		if (error)
+			goto err;
+
+		error = copy_to_user((struct ci_lookup_data __user *)arg,
+				p.dentry->d_name.name,
+				strlen(p.dentry->d_name.name)) ? -EFAULT : 0;
+		path_put(&p);
+err:
+		kfree(data);
+		return error;
+	}
 
 	default:
 		if (S_ISREG(inode->i_mode))

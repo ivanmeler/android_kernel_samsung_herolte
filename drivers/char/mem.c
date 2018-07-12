@@ -28,6 +28,14 @@
 #include <linux/io.h>
 #include <linux/aio.h>
 
+#ifdef CONFIG_KNOX_KAP
+#include <linux/knox_kap.h>
+#endif
+
+#ifdef CONFIG_MST_LDO
+#include <linux/mst_ctrl.h>
+#endif
+
 #include <asm/uaccess.h>
 
 #ifdef CONFIG_IA64
@@ -840,6 +848,12 @@ static const struct memdev {
 	 [9] = { "urandom", 0666, &urandom_fops, NULL },
 #ifdef CONFIG_PRINTK
 	[11] = { "kmsg", 0644, &kmsg_fops, NULL },
+#endif
+#ifdef CONFIG_KNOX_KAP
+	[13] = { "knox_kap", 0664, &knox_kap_fops, NULL },
+#endif
+#ifdef CONFIG_MST_LDO
+	[14] = { "mst_ctrl", 0666, &mst_ctrl_fops, NULL },
 #endif
 };
 

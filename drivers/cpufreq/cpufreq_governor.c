@@ -22,6 +22,10 @@
 
 #include "cpufreq_governor.h"
 
+#ifdef CONFIG_CPU_THERMAL_IPA
+#include "cpu_load_metric.h"
+#endif
+
 static struct attribute_group *get_sysfs_attr(struct dbs_data *dbs_data)
 {
 	if (have_governor_per_policy())
@@ -154,6 +158,10 @@ void dbs_check_cpu(struct dbs_data *dbs_data, int cpu)
 
 		if (load > max_load)
 			max_load = load;
+
+#ifdef CONFIG_CPU_THERMAL_IPA
+		update_cpu_metric(j, cur_wall_time, idle_time, wall_time, policy);
+#endif
 	}
 
 	dbs_data->cdata->gov_check_cpu(cpu, max_load);

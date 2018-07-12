@@ -1,0 +1,367 @@
+/* linux/drivers/media/platform/exynos/fimg2d_v5/g2d1shot_regs.h
+ *
+ * Copyright (c) 2015 Samsung Electronics Co., Ltd.
+ *	http://www.samsung.com/
+ *
+ * Register Definitions for Samsung Graphics 2D Hardware
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+*/
+
+#ifndef __G2D1SHOT_REGS_H
+#define __G2D1SHOT_REGS_H __FILE__
+
+/* Macros */
+#define G2D_ADDR(v)		((v) << 0)
+#define G2D_STRIDE(v)		(((v) & (0x1ffff)) << 0)
+#define G2D_OFFSET(v)		(((v) & (0x3fff)) << 0)
+#define G2D_SIZE(w, h)		((((h) & 0x1fff) << 16) | (((w) & 0x1fff) << 0))
+#define G2D_COLOR(v)		((v) << 0)
+
+/* Actual image width = COMP_IMAGE_WIDWTH + 1'b1
+ * Actual image height = COMP_IMAGE_HEIGHT + 1'b1
+ * So COMP_SET_WH() macro calculates minus one. */
+#define G2D_COMP_SET_WH(v)	((((v) & 0x3fff) - 1))
+
+#define G2D_COMP_ALIGN_ADDR		16
+#define G2D_COMP_ALIGN_WIDTH		16
+#define G2D_COMP_ALIGN_HEIGHT		4
+
+#define LAYER_OFFSET(n)		((0x100) * (n))
+#define LAYER_SET(n, name)	(LAYER_OFFSET(n) + G2D_LAYER0_##name##_REG)
+
+#define G2D_LAYERn_COMMAND_REG(n)		LAYER_SET(n, COMMAND)
+#define G2D_LAYERn_SELECT_REG(n)		LAYER_SET(n, SELECT)
+#define G2D_LAYERn_DIRECT_REG(n)		LAYER_SET(n, DIRECT)
+#define G2D_LAYERn_DST_LEFT_REG(n)		LAYER_SET(n, DST_LEFT)
+#define G2D_LAYERn_DST_TOP_REG(n)		LAYER_SET(n, DST_TOP)
+#define G2D_LAYERn_DST_RIGHT_REG(n)		LAYER_SET(n, DST_RIGHT)
+#define G2D_LAYERn_DST_BOTTOM_REG(n)		LAYER_SET(n, DST_BOTTOM)
+#define G2D_LAYERn_BASE_ADDR_REG(n)		LAYER_SET(n, BASE_ADDR)
+#define G2D_LAYERn_STRIDE_REG(n)		LAYER_SET(n, STRIDE)
+#define G2D_LAYERn_COLOR_MODE_REG(n)		LAYER_SET(n, COLOR_MODE)
+#define G2D_LAYERn_LEFT_REG(n)			LAYER_SET(n, LEFT)
+#define G2D_LAYERn_TOP_REG(n)			LAYER_SET(n, TOP)
+#define G2D_LAYERn_RIGHT_REG(n)			LAYER_SET(n, RIGHT)
+#define G2D_LAYERn_BOTTOM_REG(n)		LAYER_SET(n, BOTTOM)
+#define G2D_LAYERn_BLEND_FUNCTION_REG(n)	LAYER_SET(n, BLEND_FUNCTION)
+#define G2D_LAYERn_REPEAT_MODE_REG(n)		LAYER_SET(n, REPEAT_MODE)
+#define G2D_LAYERn_PAD_VALUE_REG(n)		LAYER_SET(n, PAD_VALUE)
+#define G2D_LAYERn_SCALE_CTRL_REG(n)		LAYER_SET(n, SCALE_CTRL)
+#define G2D_LAYERn_XSCALE_REG(n)		LAYER_SET(n, XSCALE)
+#define G2D_LAYERn_YSCALE_REG(n)		LAYER_SET(n, YSCALE)
+#define G2D_LAYERn_X_PHASE_REG(n)		LAYER_SET(n, X_PHASE)
+#define G2D_LAYERn_Y_PHASE_REG(n)		LAYER_SET(n, Y_PHASE)
+#define G2D_LAYERn_COLOR_REG(n)			LAYER_SET(n, COLOR)
+#define G2D_LAYERn_ALPHA_COLOR_REG(n)		LAYER_SET(n, ALPHA_COLOR)
+#define G2D_LAYERn_HEADER_BASE_ADDR_REG(n)	LAYER_SET(n, HEADER_BASE_ADDR)
+#define G2D_LAYERn_PAYLOAD_BASE_ADDR_REG(n)	LAYER_SET(n, PAYLOAD_BASE_ADDR)
+#define G2D_LAYERn_COMP_IMAGE_WIDTH_REG(n)	LAYER_SET(n, COMP_IMAGE_WIDTH)
+#define G2D_LAYERn_COMP_IMAGE_HEIGHT_REG(n)	LAYER_SET(n, COMP_IMAGE_HEIGHT)
+
+/* Registers */
+/* 1. General Registers */
+#define G2D_SOFT_RESET_REG			(0x000)
+#define G2D_INTEN_REG				(0x004)
+#define G2D_INTC_PEND_REG			(0x00c)
+#define G2D_FIFO_STAT_REG			(0x010)
+#define G2D_VERSION_INFO_REG			(0x014)
+#define G2D_AXI_MODE_REG			(0x01c)
+#define G2D_COMP_DEBUG_ADDR_REG			(0x0f0)
+#define G2D_COMP_DEBUG_DATA_REG			(0x0f4)
+
+/* 2. G2D command Registers */
+#define G2D_BITBLT_START_REG			(0x100)
+#define G2D_BITBLT_COMMAND_REG			(0x104)
+#define G2D_LAYER_UPDATE_REG			(0x108)
+
+/* 3. Destination Registers */
+#define G2D_DST_BASE_ADDR_REG			(0x120)
+#define G2D_DST_STRIDE_REG			(0x124)
+#define G2D_DST_COLOR_MODE_REG			(0x12c)
+#define G2D_DST_LEFT_REG			(0x130)
+#define G2D_DST_TOP_REG				(0x134)
+#define G2D_DST_RIGHT_REG			(0x138)
+#define G2D_DST_BOTTOM_REG			(0x13c)
+#define G2D_DST_COLOR_REG			(0x140)
+#define G2D_DST_INIT_COLOR_REG			(0x144)
+
+/* 4. Layer0 Registers */
+#define G2D_LAYER0_COMMAND_REG			(0x200)
+#define G2D_LAYER0_SELECT_REG			(0x204)
+#define G2D_LAYER0_DIRECT_REG			(0x208)
+#define G2D_LAYER0_DST_LEFT_REG			(0x20c)
+#define G2D_LAYER0_DST_TOP_REG			(0x210)
+#define G2D_LAYER0_DST_RIGHT_REG		(0x214)
+#define G2D_LAYER0_DST_BOTTOM_REG		(0x218)
+#define G2D_LAYER0_BASE_ADDR_REG		(0x21c)
+#define G2D_LAYER0_STRIDE_REG			(0x220)
+#define G2D_LAYER0_COLOR_MODE_REG		(0x228)
+#define G2D_LAYER0_LEFT_REG			(0x22c)
+#define G2D_LAYER0_TOP_REG			(0x230)
+#define G2D_LAYER0_RIGHT_REG			(0x234)
+#define G2D_LAYER0_BOTTOM_REG			(0x238)
+
+/* BLEND_FUNCTION doesn't exist for layer 0.
+ * It is defined for access by offset. */
+#define G2D_LAYER0_BLEND_FUNCTION_REG		(0x23c)
+
+#define G2D_LAYER0_REPEAT_MODE_REG		(0x240)
+#define G2D_LAYER0_PAD_VALUE_REG		(0x244)
+#define G2D_LAYER0_SCALE_CTRL_REG		(0x248)
+#define G2D_LAYER0_XSCALE_REG			(0x24c)
+#define G2D_LAYER0_YSCALE_REG			(0x250)
+#define G2D_LAYER0_X_PHASE_REG			(0x254)
+#define G2D_LAYER0_Y_PHASE_REG			(0x258)
+#define G2D_LAYER0_COLOR_REG			(0x25c)
+#define G2D_LAYER0_ALPHA_COLOR_REG		(0x260)
+#define G2D_LAYER0_HEADER_BASE_ADDR_REG		(0x264)
+#define G2D_LAYER0_PAYLOAD_BASE_ADDR_REG	(0x268)
+#define G2D_LAYER0_COMP_IMAGE_WIDTH_REG		(0x270)
+#define G2D_LAYER0_COMP_IMAGE_HEIGHT_REG	(0x274)
+
+/* 5. Layer1 Registers */
+#define G2D_LAYER1_COMMAND_REG			(0x300)
+#define G2D_LAYER1_SELECT_REG			(0x304)
+#define G2D_LAYER1_DIRECT_REG			(0x308)
+#define G2D_LAYER1_DST_LEFT_REG			(0x30c)
+#define G2D_LAYER1_DST_TOP_REG			(0x310)
+#define G2D_LAYER1_DST_RIGHT_REG		(0x314)
+#define G2D_LAYER1_DST_BOTTOM_REG		(0x318)
+#define G2D_LAYER1_BASE_ADDR_REG		(0x31c)
+#define G2D_LAYER1_STRIDE_REG			(0x320)
+#define G2D_LAYER1_COLOR_MODE_REG		(0x328)
+#define G2D_LAYER1_LEFT_REG			(0x32c)
+#define G2D_LAYER1_TOP_REG			(0x330)
+#define G2D_LAYER1_RIGHT_REG			(0x334)
+#define G2D_LAYER1_BOTTOM_REG			(0x338)
+#define G2D_LAYER1_BLEND_FUNCTION_REG		(0x33c)
+#define G2D_LAYER1_REPEAT_MODE_REG		(0x340)
+#define G2D_LAYER1_PAD_VALUE_REG		(0x344)
+#define G2D_LAYER1_SCALE_CTRL_REG		(0x348)
+#define G2D_LAYER1_XSCALE_REG			(0x34c)
+#define G2D_LAYER1_YSCALE_REG			(0x350)
+#define G2D_LAYER1_X_PHASE_REG			(0x354)
+#define G2D_LAYER1_Y_PHASE_REG			(0x358)
+#define G2D_LAYER1_COLOR_REG			(0x35c)
+#define G2D_LAYER1_ALPHA_COLOR_REG		(0x360)
+#define G2D_LAYER1_HEADER_BASE_ADDR_REG		(0x364)
+#define G2D_LAYER1_PAYLOAD_BASE_ADDR_REG	(0x368)
+#define G2D_LAYER1_COMP_IMAGE_WIDTH_REG		(0x370)
+#define G2D_LAYER1_COMP_IMAGE_HEIGHT_REG	(0x374)
+
+/* 6. Layer2 Registers */
+#define G2D_LAYER2_COMMAND_REG			(0x400)
+#define G2D_LAYER2_SELECT_REG			(0x404)
+#define G2D_LAYER2_DIRECT_REG			(0x408)
+#define G2D_LAYER2_DST_LEFT_REG			(0x40c)
+#define G2D_LAYER2_DST_TOP_REG			(0x410)
+#define G2D_LAYER2_DST_RIGHT_REG		(0x414)
+#define G2D_LAYER2_DST_BOTTOM_REG		(0x418)
+#define G2D_LAYER2_BASE_ADDR_REG		(0x41c)
+#define G2D_LAYER2_STRIDE_REG			(0x420)
+#define G2D_LAYER2_COLOR_MODE_REG		(0x428)
+#define G2D_LAYER2_LEFT_REG			(0x42c)
+#define G2D_LAYER2_TOP_REG			(0x430)
+#define G2D_LAYER2_RIGHT_REG			(0x434)
+#define G2D_LAYER2_BOTTOM_REG			(0x438)
+#define G2D_LAYER2_BLEND_FUNCTION_REG		(0x43c)
+#define G2D_LAYER2_REPEAT_MODE_REG		(0x440)
+#define G2D_LAYER2_PAD_VALUE_REG		(0x444)
+#define G2D_LAYER2_SCALE_CTRL_REG		(0x448)
+#define G2D_LAYER2_XSCALE_REG			(0x44c)
+#define G2D_LAYER2_YSCALE_REG			(0x450)
+#define G2D_LAYER2_X_PHASE_REG			(0x454)
+#define G2D_LAYER2_Y_PHASE_REG			(0x458)
+#define G2D_LAYER2_COLOR_REG			(0x45c)
+#define G2D_LAYER2_ALPHA_COLOR_REG		(0x460)
+#define G2D_LAYER2_HEADER_BASE_ADDR_REG		(0x464)
+#define G2D_LAYER2_PAYLOAD_BASE_ADDR_REG	(0x468)
+#define G2D_LAYER2_COMP_IMAGE_WIDTH_REG		(0x470)
+#define G2D_LAYER2_COMP_IMAGE_HEIGHT_REG	(0x474)
+
+/* Bit Definitions */
+
+/* G2D_SOFT_RESET_REG */
+#define G2D_SFR_CLEAR				(1 << 1)
+#define G2D_SOFT_RESET				(1 << 0)
+
+/* G2D_INTEN_REG */
+#define G2D_INT_TYPE_EDGE			(1 << 4)
+#define G2D_INT_TYPE_LEVEL			(0 << 4)
+
+#define G2D_BLIT_INT_ENABLE			(1 << 0)
+
+/* G2D_INTC_PEND_REG */
+#define G2D_BLIT_INT_FLAG			(1 << 0)
+
+/* G2D_FIFO_STAT_REG */
+#define G2D_BLIT_FINISHED			(1 << 0)
+
+/* G2D_VERSION_INFO_REG */
+#define MG2D_VERSION_MAIN			(0xf << 28)
+#define MG2D_VERSION_SUB			(0xf << 24)
+#define MG2D_VERSION_SUBSUB			(0xf << 20)
+
+/* G2D_AXI_MODE_REG */
+#define G2D_AXI_AWUSERS_SHIFT			(16)
+#define G2D_AXI_ARUSERS_SHIFT			(8)
+#define G2D_AXI_AWCACHE_SHIFT			(4)
+#define G2D_AXI_ARCACHE_SHIFT			(0)
+
+/* G2D_COMP_DEBUG_ADDR_REG */
+#define G2D_COMP_DEBUG_ADDR_MASK		(0xf)
+#define G2D_COMP_DEBUG_ADDR_SHIFT		(0)
+
+/* G2D_COMP_DEBUG_DATA_REG */
+
+/* G2D_BITBLT_START_REG */
+#define G2D_START_BITBLT			(1 << 0)
+
+/* G2D_BITBLT_COMMAND_REG */
+#define G2D_DST_DE_PREMULT			(1 << 29)
+#define G2D_ENABLE_DITHER			(1 << 16)
+
+/* G2D_LAYER_UPDATE_REG */
+#define G2D_LAYER0_UPDATED			(1 << 0)
+#define G2D_LAYER1_UPDATED			(1 << 1)
+#define G2D_LAYER2_UPDATED			(1 << 2)
+
+/* G2D_DST_BASE_ADDR_REG */
+/* G2D_DST_STRIDE_REG */
+
+/* G2D_DST_COLOR_MODE_REG */
+#define G2D_DST_DATA_FORMAT_8888		(0 << 16)
+#define G2D_DST_DATA_FORMAT_565			(1 << 16)
+#define G2D_DST_DATA_FORMAT_4444		(2 << 16)
+#define G2D_DST_DATA_FORMAT_888			(3 << 16)
+#define G2D_DST_DATA_FORMAT_1555		(4 << 16)
+#define G2D_DST_DATA_FORMAT_5551		(5 << 16)
+#define G2D_DST_DATA_FORMAT_8			(6 << 16)
+
+#define G2D_DST_CHANNEL_SEL3_SHIFT		(12)
+#define G2D_DST_CHANNEL_SEL2_SHIFT		(8)
+#define G2D_DST_CHANNEL_SEL1_SHIFT		(4)
+#define G2D_DST_CHANNEL_SEL0_SHIFT		(0)
+
+/* G2D_DST_LEFT_REG */
+/* G2D_DST_TOP_REG */
+/* G2D_DST_RIGHT_REG */
+/* G2D_DST_BOTTOM_REG */
+
+/* G2D_DST_COLOR_REG */
+#define G2D_DST_CONSTANT_A_SHIFT		(24)
+#define G2D_DST_CONSTANT_R_SHIFT		(16)
+#define G2D_DST_CONSTANT_G_SHIFT		(8)
+#define G2D_DST_CONSTANT_B_SHIFT		(0)
+
+/* G2D_DST_INIT_COLOR_REG */
+#define G2D_DST_INIT_A_SHIFT			(24)
+#define G2D_DST_INIT_R_SHIFT			(16)
+#define G2D_DST_INIT_G_SHIFT			(8)
+#define G2D_DST_INIT_B_SHIFT			(0)
+
+/* G2D_LAYERn_COMMAND_REG */
+#define G2D_SRC_PREMULT_SHIFT			(24)
+
+#define G2D_PREMULT_PER_PIXEL_MUL_GALPHA	(0x3 << 24)
+#define G2D_PREMULT_PER_PIXEL			(0x1 << 24)
+#define G2D_ALPHA_BLEND_MODE			(1 << 20)
+#define G2D_LAYER_OPAQUE			(1 << 1)
+#define G2D_LAYER_VALID				(1 << 0)
+
+/* G2D_LAYERn_SELECT_REG */
+#define G2D_LAYER_SELECT_NORMAL			(0 << 0)
+#define G2D_LAYER_SELECT_CONSTANT_COLOR		(1 << 0)
+
+/* G2D_LAYERn_DIRECT_REG */
+#define G2D_LAYER_Y_DIR_NEGATIVE		(1 << 5)
+#define G2D_LAYER_X_DIR_NEGATIVE		(1 << 4)
+
+/* G2D_LAYERn_DST_LEFT_REG */
+/* G2D_LAYERn_DST_TOP_REG */
+/* G2D_LAYERn_DST_RIGHT_REG */
+/* G2D_LAYERn_DST_BOTTOM_REG */
+
+/* G2D_LAYERn_BASE_ADDR_REG */
+/* G2D_LAYERn_STRIDE_REG */
+
+/* G2D_LAYERn_COLOR_MODE_REG */
+#define G2D_LAYER_COMP_FORMAT			(1 << 20)
+
+#define G2D_LAYER_DATA_FORMAT_8888		(0 << 16)
+#define G2D_LAYER_DATA_FORMAT_565		(1 << 16)
+#define G2D_LAYER_DATA_FORMAT_4444		(2 << 16)
+#define G2D_LAYER_DATA_FORMAT_888		(3 << 16)
+#define G2D_LAYER_DATA_FORMAT_1555		(4 << 16)
+#define G2D_LAYER_DATA_FORMAT_5551		(5 << 16)
+#define G2D_LAYER_DATA_FORMAT_8			(6 << 16)
+
+#define G2D_LAYER_CHANNEL_SEL_A_SHIFT		(12)
+#define G2D_LAYER_CHANNEL_SEL_R_SHIFT		(8)
+#define G2D_LAYER_CHANNEL_SEL_G_SHIFT		(4)
+#define G2D_LAYER_CHANNEL_SEL_B_SHIFT		(0)
+
+/* G2D_LAYERn_LEFT_REG */
+/* G2D_LAYERn_TOP_REG */
+/* G2D_LAYERn_RIGHT_REG */
+/* G2D_LAYERn_BOTTOM_REG */
+
+/* G2D_LAYERn_BLEND_FUNCTION_REG [n = 1, 2] */
+#define G2D_DARKEN				(1 << 21)
+#define G2D_LIGHTEN				(1 << 20)
+#define G2D_INV_DST_COEFF			(1 << 18)
+#define G2D_INV_SRC_COEFF			(1 << 16)
+
+#define G2D_DST_COEFF_DA_SHIFT			(14)
+#define G2D_DST_COEFF_SA_SHIFT			(12)
+#define G2D_DST_COEFF_SHIFT			(8)
+#define G2D_SRC_COEFF_DA_SHIFT			(6)
+#define G2D_SRC_COEFF_SA_SHIFT			(4)
+#define G2D_SRC_COEFF_SHIFT			(0)
+
+/* G2D_LAYERn_REPEAT_MODE_REG */
+#define G2D_LAYER_REPEAT_X_NORMAL		(0 << 0)
+#define G2D_LAYER_REPEAT_X_PAD			(1 << 0)
+#define G2D_LAYER_REPEAT_X_REFLECT		(2 << 0)
+#define G2D_LAYER_REPEAT_X_CLAMP		(3 << 0)
+#define G2D_LAYER_REPEAT_X_NONE			(4 << 0)
+
+#define G2D_LAYER_REPEAT_Y_NORMAL		(0 << 4)
+#define G2D_LAYER_REPEAT_Y_PAD			(1 << 4)
+#define G2D_LAYER_REPEAT_Y_REFLECT		(2 << 4)
+#define G2D_LAYER_REPEAT_Y_CLAMP		(3 << 4)
+#define G2D_LAYER_REPEAT_Y_NONE			(4 << 4)
+
+#define G2D_LAYER_REPEAT_X_SET(val)		((val) & 0x7)
+#define G2D_LAYER_REPEAT_Y_SET(val)		(((val) & 0x7) << 4)
+
+/* G2D_LAYERn_PAD_REG */
+
+/* G2D_LAYERn_SCALE_CTRL_REG */
+#define G2D_LAYER_SCALE_MODE_BILINEAR		(2 << 0)
+
+/* G2D_LAYERn_XSCALE_REG */
+/* G2D_LAYERn_YSCALE_REG */
+/* G2D_LAYERn_X_PHASE_REG */
+/* G2D_LAYERn_Y_PHASE_REG */
+
+/* G2D_LAYERn_COLOR_REG */
+#define G2D_LAYER_CONSTANT_A_SHIFT		(24)
+#define G2D_LAYER_CONSTANT_R_SHIFT		(16)
+#define G2D_LAYER_CONSTANT_G_SHIFT		(8)
+#define G2D_LAYER_CONSTANT_B_SHIFT		(0)
+
+/* G2D_LAYERn_ALPHA_COLOR_REG */
+#define G2D_LAYER_DST_GLOBAL_R			(24)
+#define G2D_LAYER_DST_GLOBAL_G			(16)
+#define G2D_LAYER_DST_GLOBAL_B			(8)
+#define G2D_LAYER_DST_GLOBAL_A			(0)
+
+/* G2D_LAYERn_HEADER_BASE_ADDR_REG */
+/* G2D_LAYERn_PAYLOAD_BASE_ADDR_REG */
+/* G2D_LAYERn_COMP_IMAGE_WIDTH_REG */
+/* G2D_LAYERn_COMP_IMAGE_HEIGHT_REG */
+#endif /* __G2D1SHOT_REGS_H */

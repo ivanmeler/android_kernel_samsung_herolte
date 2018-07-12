@@ -1,0 +1,30 @@
+#
+
+# TIMA uevent configuration
+
+#
+
+
+
+menuconfig TIMA_UEVENT_MENU
+
+    tristate "TIMA uevent support"
+
+    help
+
+      TIMA uevent device and driver provides a mechanism to propogate
+
+      periodic kernel and module measurement events to observer. 
+
+
+
+config TIMA_UEVENT
+
+    bool "TIMA uevents (EXPERIMENTAL)"
+
+    depends on EXPERIMENTAL
+
+    ---help---
+
+    Generate udev events for TIMA events.
+

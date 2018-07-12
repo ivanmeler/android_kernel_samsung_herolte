@@ -57,6 +57,8 @@ enum kobject_action {
 	KOBJ_MOVE,
 	KOBJ_ONLINE,
 	KOBJ_OFFLINE,
+	KOBJ_POLICY_INIT,
+	KOBJ_POLICY_EXIT,
 	KOBJ_MAX
 };
 

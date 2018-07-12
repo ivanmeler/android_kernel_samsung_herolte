@@ -1,0 +1,10 @@
+#
+# MCOMP devices
+#
+
+config EXYNOS_MCOMP
+	bool "Exynos memory compressor"
+	default y
+	depends on ESWAP && ZONE_DMA
+	help
+	  Memory compressor

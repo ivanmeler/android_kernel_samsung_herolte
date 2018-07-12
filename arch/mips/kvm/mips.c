@@ -406,6 +406,9 @@ int kvm_arch_vcpu_ioctl_run(struct kvm_vcpu *vcpu, struct kvm_run *run)
 	/* Re-enable HTW before enabling interrupts */
 	htw_start();
 
+	/* Re-enable HTW before enabling interrupts */
+	htw_start();
+
 	kvm_guest_exit();
 	local_irq_enable();
 

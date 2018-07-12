@@ -675,6 +675,10 @@ static void flush_descriptor(journal_t *journal,
 	set_buffer_jwrite(descriptor);
 	BUFFER_TRACE(descriptor, "write");
 	set_buffer_dirty(descriptor);
+#ifdef CONFIG_JOURNAL_DATA_TAG
+	if (journal->j_flags & JBD2_JOURNAL_TAG)
+		set_buffer_journal(descriptor);
+#endif
 	write_dirty_buffer(descriptor, write_op);
 }
 #endif

@@ -29,7 +29,11 @@ struct mount {
 	struct hlist_node mnt_hash;
 	struct mount *mnt_parent;
 	struct dentry *mnt_mountpoint;
+#ifdef CONFIG_RKP_NS_PROT
+	struct vfsmount *mnt;
+#else
 	struct vfsmount mnt;
+#endif
 	union {
 		struct rcu_head mnt_rcu;
 		struct llist_node mnt_llist;
@@ -68,7 +72,11 @@ struct mount {
 
 static inline struct mount *real_mount(struct vfsmount *mnt)
 {
+#ifdef CONFIG_RKP_NS_PROT
+	return mnt->bp_mount;
+#else
 	return container_of(mnt, struct mount, mnt);
+#endif
 }
 
 static inline int mnt_has_parent(struct mount *mnt)

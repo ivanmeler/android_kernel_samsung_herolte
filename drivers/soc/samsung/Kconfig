@@ -1,0 +1,78 @@
+#
+# EXYNOS Soc drivers
+#
+menuconfig SOC_SAMSUNG
+	bool "SAMSUNG SOC drivers support"
+
+if SOC_SAMSUNG
+config EXYNOS_CHIPID
+	bool "Exynos Chip ID Driver Support"
+	depends on ARCH_EXYNOS
+	select SOC_BUS
+config EXYNOS_REBOOT
+	bool "Exynos Chip Reboot Driver Support"
+	depends on ARCH_EXYNOS
+
+config SAMSUNG_DMADEV
+	bool
+	select ARM_AMBA
+	select DMADEVICES
+	select PL330_DMA if (ARCH_EXYNOS8)
+	help
+	  Use DMA device engine for PL330 DMAC.
+
+config ECT
+	bool "Enable Exynos Characteristic Table File"
+	default n
+	depends on ARCH_EXYNOS
+
+config ECT_DUMP
+	bool "Enable Exynos Characteristic Table File Dump sysfs"
+	default n
+	depends on ECT
+
+config EXYNOS_CONTENT_PATH_PROTECTION
+	bool "Exynos Content Path Protection"
+	default y
+	help
+	  Enable content path protection of EXYNOS.
+
+config EXYNOS_HOTPLUG_GOVERNOR
+	bool "Enable Exynos dynamic hotplug governor"
+
+config SCHED_HP_EVENT
+	bool "Gathers scheduler events to decide hotplug in/out"
+	depends on EXYNOS_HOTPLUG_GOVERNOR
+	default y
+
+config HP_EVENT_THREAD_GROUP
+	bool "Gathres thread group information"
+	depends on SCHED_HP_EVENT && SCHED_HMP
+	default n
+
+config HP_EVENT_HMP_SYSTEM_LOAD
+	bool "Gathres system load information"
+	depends on SCHED_HP_EVENT && SCHED_HMP
+	default y
+
+config EXYNOS_PM_DVS
+	bool "Enable Exynos dynamic voltage setting"
+	default n
+
+config EXYNOS_OTP
+	bool "Exynos OTP (one-time programmable) support"
+	default n
+	depends on ARCH_EXYNOS
+	help
+		This option enables OTP (one-time programmable) tune bits functions
+
+config EXYNOS_MCINFO
+	bool "Exynos memory controller information"
+	default y
+
+config MCINFO_SYSFS
+	bool "Exynos memory controller information sysfs"
+	depends on EXYNOS_MCINFO
+	default	y if SYSFS
+
+endif #SOC_SAMSUNG

@@ -56,7 +56,7 @@ config ARM64
 	select HAVE_FUNCTION_TRACER
 	select HAVE_FUNCTION_GRAPH_TRACER
 	select HAVE_GENERIC_DMA_COHERENT
-	select HAVE_HW_BREAKPOINT if PERF_EVENTS
+#	select HAVE_HW_BREAKPOINT if PERF_EVENTS
 	select HAVE_MEMBLOCK
 	select HAVE_PATA_PLATFORM
 	select HAVE_PERF_EVENTS
@@ -149,7 +149,7 @@ config GENERIC_CALIBRATE_DELAY
 	def_bool y
 
 config ZONE_DMA
-	def_bool y
+	def_bool n
 
 config HAVE_GENERIC_RCU_GUP
 	def_bool y
@@ -177,6 +177,10 @@ config KERNEL_MODE_NEON
 
 config FIX_EARLYCON_MEM
 	def_bool y
+
+config GENERIC_BUG
+	def_bool y
+	depends on BUG
 
 config PGTABLE_LEVELS
 	int
@@ -211,6 +215,69 @@ config ARCH_XGENE
 	help
 	  This enables support for AppliedMicro X-Gene SOC Family
 
+menu "Samsung Exynos"
+config ARCH_EXYNOS
+	bool
+
+config SOC_EXYNOS8890
+	bool "Samsung EXYNOS8890"
+	select ARCH_EXYNOS
+	select ARCH_HAS_CPUFREQ
+	select HAVE_S3C2410_I2C if I2C
+	select HAVE_S3C2410_WATCHDOG if WATCHDOG
+	select HAVE_S3C_RTC if RTC_CLASS
+	select ARCH_SUPPORTS_MSI
+	select ARM_AMBA
+	select CLKSRC_OF
+	select USE_OF
+	select COMMON_CLK_SAMSUNG
+	select CLKSRC_EXYNOS_MCT
+	select PINCTRL
+	select PWRCAL
+	select PM_GENERIC_DOMAINS if PM
+	select SOC_SAMSUNG
+	select SAMSUNG_DMADEV
+
+config ARCH_EXYNOS8
+	bool "SAMSUNG EXYNOS8"
+	select HAVE_ARM_SCU if SMP
+	select HAVE_SMP
+	help
+	  Samsung EXYNOS8 (Mongoose/A53) SoC based systems
+
+config PWRCAL
+    bool "Exynos Power Chip Abstraction Layer"
+    help
+    Support Power CAL for Exynos SoC.
+
+config ARM_TRUSTZONE
+	bool "Support TrustZone-enabled Trusted Execution Environment"
+	default y
+	help
+	  Select if you want a kernel to be executed at non-secure world.
+	  This option should be used with related secure bootloader and
+	  TrustZone software.
+
+	  If you don't know about TrustZone, say 'N'.
+
+config ZONE_DMA_ALLOW_CUSTOM_SIZE
+	bool "Enable Platform-settable Custom Size for ZONE_DMA"
+	default n
+	depends on ZONE_DMA
+	help
+	  Select Y if you need to allow setting ZONE_DMA size for platform.
+
+config ZONE_DMA_SIZE_MBYTES
+	int "ZONE_DMA Size in MBytes"
+	range 16 4096
+	default 4096
+	depends on ZONE_DMA && ZONE_DMA_ALLOW_CUSTOM_SIZE
+	help
+	  Set DMA-able size based on bits shift value. DMA-able size
+	  must be less than total DRAM size. This value may be used
+	  to limit DMA-able address space for ZONE_DMA.
+
+endmenu
 endmenu
 
 menu "Bus support"
@@ -367,6 +434,52 @@ config ARM64_ERRATUM_845719
 	  the kernel if an affected CPU is detected.
 
 	  If unsure, say Y.
+	  
+config TIMA
+	bool "Enable TIMA(Trustzone based Integrity Measurement Archtecture feature"
+	default n
+
+config TIMA_LKMAUTH
+	bool "Enable LKM authentication by TIMA"
+	help
+	  TIMA authenticates loaded kernel modules. Disable it if you don't
+	  want TIMA enabled.
+
+config TIMA_RKP
+	depends on TIMA
+	default n
+	bool "Samsung KNOX realtime kernel protection depends on TIMA"
+	help
+	  this enables realtime kernel protection
+
+config TIMA_RKP_DEBUG
+	depends on TIMA_RKP
+	default n
+	bool "Support SS Sentinel for debugging"
+	help
+	  this enables to support sentinel
+
+config RKP_KDP
+	bool "Protection for cred structure"
+	depends on TIMA_RKP
+	depends on SAMSUNG_PRODUCT_SHIP
+	default n
+	help
+	  Prevents unauthorized cred modification.
+
+config RKP_NS_PROT
+	bool "Protection for namespace structure"
+	depends on RKP_KDP
+	default n
+	help
+	  Prevents unauthorized namespace modification.
+
+config RKP_DMAP_PROT
+	bool "Page Double Mapping protection"
+	depends on RKP_KDP
+	default n
+	help
+	  Prevents unauthorized mapping for page table.
 
 endmenu
 
@@ -439,6 +552,111 @@ config SCHED_SMT
 	  Improves the CPU scheduler's decision making when dealing with
 	  MultiThreading at a cost of slightly increased overhead in some
 	  places. If unsure say N here.
+
+config DISABLE_CPU_SCHED_DOMAIN_BALANCE
+	bool "(EXPERIMENTAL) Disable CPU level scheduler load-balancing"
+	help
+	  Disables scheduler load-balancing at CPU sched domain level.
+
+config SCHED_HMP
+	bool "(EXPERIMENTAL) Heterogenous multiprocessor scheduling"
+	depends on DISABLE_CPU_SCHED_DOMAIN_BALANCE && SCHED_MC && FAIR_GROUP_SCHED && !SCHED_AUTOGROUP
+	help
+	  Experimental scheduler optimizations for heterogeneous platforms.
+	  Attempts to introspectively select task affinity to optimize power
+	  and performance. Basic support for multiple (>2) cpu types is in place,
+	  but it has only been tested with two types of cpus.
+	  There is currently no support for migration of task groups, hence
+	  !SCHED_AUTOGROUP. Furthermore, normal load-balancing must be disabled
+	  between cpus of different type (DISABLE_CPU_SCHED_DOMAIN_BALANCE).
+
+config SCHED_HMP_PRIO_FILTER
+	bool "(EXPERIMENTAL) Filter HMP migrations by task priority"
+	depends on SCHED_HMP
+	help
+	  Enables task priority based HMP migration filter. Any task with
+	  a NICE value above the threshold will always be on low-power cpus
+	  with less compute capacity.
+
+config SCHED_HMP_PRIO_FILTER_VAL
+	int "NICE priority threshold"
+	default 5
+	depends on SCHED_HMP_PRIO_FILTER
+
+config HMP_FAST_CPU_MASK
+	string "HMP scheduler fast CPU mask"
+	depends on SCHED_HMP
+	help
+          Leave empty to use device tree information.
+	  Specify the cpuids of the fast CPUs in the system as a list string,
+	  e.g. cpuid 0+1 should be specified as 0-1.
+
+config HMP_SLOW_CPU_MASK
+	string "HMP scheduler slow CPU mask"
+	depends on SCHED_HMP
+	help
+	  Leave empty to use device tree information.
+	  Specify the cpuids of the slow CPUs in the system as a list string,
+	  e.g. cpuid 0+1 should be specified as 0-1.
+
+config HMP_VARIABLE_SCALE
+	bool "Allows changing the load tracking scale through sysfs"
+	depends on SCHED_HMP
+	help
+	  When turned on, this option exports the thresholds and load average
+	  period value for the load tracking patches through sysfs.
+	  The values can be modified to change the rate of load accumulation
+	  and the thresholds used for HMP migration.
+	  The load_avg_period_ms is the time in ms to reach a load average of
+	  0.5 for an idle task of 0 load average ratio that start a busy loop.
+	  The up_threshold and down_threshold is the value to go to a faster
+	  CPU or to go back to a slower cpu.
+	  The {up,down}_threshold are devided by 1024 before being compared
+	  to the load average.
+	  For examples, with load_avg_period_ms = 128 and up_threshold = 512,
+	  a running task with a load of 0 will be migrated to a bigger CPU after
+	  128ms, because after 128ms its load_avg_ratio is 0.5 and the real
+	  up_threshold is 0.5.
+	  This patch has the same behavior as changing the Y of the load
+	  average computation to
+	        (1002/1024)^(LOAD_AVG_PERIOD/load_avg_period_ms)
+	  but it remove intermadiate overflows in computation.
+
+config HMP_FREQUENCY_INVARIANT_SCALE
+	bool "(EXPERIMENTAL) Frequency-Invariant Tracked Load for HMP"
+	depends on HMP_VARIABLE_SCALE && CPU_FREQ
+	default y
+	help
+	  Scales the current load contribution in line with the frequency
+	  of the CPU that the task was executed on.
+	  In this version, we use a simple linear scale derived from the
+	  maximum frequency reported by CPUFreq.
+	  Restricting tracked load to be scaled by the CPU's frequency
+	  represents the consumption of possible compute capacity
+	  (rather than consumption of actual instantaneous capacity as
+	  normal) and allows the HMP migration's simple threshold
+	  migration strategy to interact more predictably with CPUFreq's
+	  asynchronous compute capacity changes.
+
+config SCHED_HMP_LITTLE_PACKING
+	bool "Small task packing for HMP"
+	depends on SCHED_HMP
+	default n
+	help
+	  Allows the HMP Scheduler to pack small tasks into CPUs in the
+	  smallest HMP domain.
+	  Controlled by two sysfs files in sys/kernel/hmp.
+	  packing_enable: 1 to enable, 0 to disable packing. Default 1.
+	  packing_limit: runqueue load ratio where a RQ is considered
+	    to be full. Default is NICE_0_LOAD * 9/8.
+
+config SCHED_HMP_DOWN_MIGRATION_COMPENSATION
+	bool "(EXPERIMENTAL) HMP down migration compensation"
+	depends on SCHED_HMP
+	help
+	  Enables down migration compensation. The down-migration compensation
+	  guarantees proper performance to the down-migrated task by frequency
+	  qos lock.
 
 config NR_CPUS
 	int "Maximum number of CPUs (2-64)"
@@ -526,6 +744,27 @@ config FORCE_MAX_ZONEORDER
 	int
 	default "14" if (ARM64_64K_PAGES && TRANSPARENT_HUGEPAGE)
 	default "11"
+
+config UNMAP_KERNEL_AT_EL0
+	bool "Unmap kernel when running in userspace (aka \"KAISER\")" if EXPERT
+	default y
+	help
+	  Speculation attacks against some high-performance processors can
+	  be used to bypass MMU permission checks and leak kernel data to
+	  userspace. This can be defended against by unmapping the kernel
+	  when running in userspace, mapping it back in on exception entry
+	  via a trampoline page in the vector table.
+
+	  If unsure, say Y.
+
+config REMOVE_M1_TLBI_ERRATUM_FOR_TVM
+	bool "Remove TLBI WA, if duplicated"
+	default n
+	depends on SOC_EXYNOS8890 && UNMAP_KERNEL_AT_EL0
+	help
+	  In some product, TLBI inst is executed in EL2. In this case, TLBI conflict
+	  WA is redundant and causes the poor performance. User can remove the TLBI WA
+	  with this config
 
 menuconfig ARMV8_DEPRECATED
 	bool "Emulate deprecated/obsolete ARMv8 instructions"
@@ -751,6 +990,11 @@ config SYSVIPC_COMPAT
 	def_bool y
 	depends on COMPAT && SYSVIPC
 
+config KEYS_COMPAT
+	def_bool y if COMPAT && KEYS
+	help
+	  This option enables support for a 32-bit keyctl syscall callback function under
+	  a 64-bit kernel.
 endmenu
 
 menu "Power management options"
@@ -764,6 +1008,16 @@ config ARM64_CPU_SUSPEND
 	def_bool PM_SLEEP
 
 endmenu
+
+config RELOCATABLE_KERNEL 
+	bool "set kernel to relocatable in both virtual and physical address"
+	default n
+	help 	
+	  This configuare will allow you to config the kernel into position independent kernel, with '--PIE' insert into LD script.
+
+config SAMSUNG_PRODUCT_SHIP
+	bool "set up for product shipping"
+	default n
 
 menu "CPU Power Management"
 
@@ -788,6 +1042,73 @@ config ARM64_ERRATUM_843419
 	  If unsure, say Y.
 
 endmenu
+
+#
+# BEGIN RKP_CFP CONFIG OPTIONS
+#
+
+menu "Control Flow Protection"
+
+config RKP_CFP
+	bool "Hyperdrive ROP protection"
+	depends on TIMA_RKP
+	# Disable RKP for now, keep getting TIMA_RKP_VMM_PANIC when doing sleep.S code for saving/restoring x17.
+	default n
+	help
+        Static binary instrumentation of direct/indirect branches to prevent 
+        return-oriented programming (ROP) attacks and jump-oriented programming (JOP) attacks.
+
+config RKP_CFP_ROPP
+	bool "Hyperdrive: encrypt return-addresses"
+	depends on TIMA_RKP
+	select RKP_CFP
+	select RKP_CFP_FIX_SMC_BUG
+	default n
+
+choice
+	prompt "ROPP key"
+	default RKP_CFP_ROPP_RANDOM_KEY
+	depends on RKP_CFP && RKP_CFP_ROPP
+	help
+	  ROPP key configuration
+
+config RKP_CFP_ROPP_HYPKEY
+	bool "Use hypervisor for key secure storage"
+	help
+        if n, use random key or zero key
+
+config RKP_CFP_ROPP_RANDOM_KEY
+	bool "Hyperdrive: use pseudo random key for return-address encryption"
+	help
+        if n, use hyp key or zero key
+
+config RKP_CFP_ROPP_ZERO_KEY
+	bool "Hyperdrive: use zero key for return-address encryption"
+	help
+        if n, use hyp key or random key
+endchoice
+
+config RKP_CFP_JOPP
+	bool "Just to function entry only, Restrict BLR jump target to a valid function entry point and no br in C code"
+	depends on TIMA_RKP
+	select RKP_CFP
+	default n
+
+config RKP_CFP_JOPP_MAGIC
+	hex "Magic number put just above function labels to restrict BLR to function entry points"
+	# depends on RKP_CFP && RKP_CFP_JOPP
+	# basically it depends on above line but it's needed for avoiding a build break
+	default "0xb3ea3bad"
+
+config RKP_CFP_FIX_SMC_BUG
+	bool "Hyperdrive: [INSECURE] hack broken smc calls to save/restore RRK after it clobbers it"
+	depends on RKP_CFP_ROPP
+	default n
+endmenu
+
+#
+# END RKP_CFP CONFIG OPTIONS
+#
 
 source "net/Kconfig"
 

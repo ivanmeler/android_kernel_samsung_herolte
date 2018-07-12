@@ -91,6 +91,14 @@
 
 #define __exit          __section(.exit.text) __exitused __cold notrace
 
+/* Used for HOTPLUG */
+#define __devinit        __section(.devinit.text) __cold notrace
+#define __devinitdata    __section(.devinit.data)
+#define __devinitconst   __section(.devinit.rodata)
+#define __devexit        __section(.devexit.text) __exitused __cold notrace
+#define __devexitdata    __section(.devexit.data)
+#define __devexitconst   __section(.devexit.rodata)
+
 /* temporary, until all users are removed */
 #define __cpuinit
 #define __cpuinitdata
@@ -115,6 +123,10 @@
 #define __INITDATA	.section	".init.data","aw",%progbits
 #define __INITRODATA	.section	".init.rodata","a",%progbits
 #define __FINITDATA	.previous
+
+#define __DEVINIT        .section	".devinit.text", "ax"
+#define __DEVINITDATA    .section	".devinit.data", "aw"
+#define __DEVINITRODATA  .section	".devinit.rodata", "a"
 
 /* temporary, until all users are removed */
 #define __CPUINIT
@@ -244,6 +256,12 @@ extern bool initcall_debug;
 	static initcall_t __initcall_##fn \
 	__used __section(.security_initcall.init) = fn
 
+#ifdef CONFIG_DEFERRED_INITCALLS
+#define deferred_initcall(fn, id) \
+	static initcall_t __initcall_##fn##id __used \
+	__attribute__((__section__(".deferred_initcall" #id ".init"))) = fn
+#endif
+
 struct obs_kernel_param {
 	const char *str;
 	int (*setup_func)(char *);
@@ -286,6 +304,10 @@ void __init parse_early_options(char *cmdline);
  * be one per module.
  */
 #define module_init(x)	__initcall(x);
+#ifdef CONFIG_DEFERRED_INITCALLS
+#define deferred_module_init(fn) deferred_initcall(fn, 0);
+#define deferred_module_init_sync(fn) deferred_initcall(fn, 0s);
+#endif
 
 /**
  * module_exit() - driver exit entry point
@@ -333,6 +355,10 @@ void __init parse_early_options(char *cmdline);
 	{ return initfn; }					\
 	int init_module(void) __attribute__((alias(#initfn)));
 
+#ifdef CONFIG_DEFERRED_INITCALLS
+#define deferred_module_init(fn) module_init(fn)
+#endif
+
 /* This is only required if you want to be unloadable. */
 #define module_exit(exitfn)					\
 	static inline exitcall_t __exittest(void)		\
@@ -363,6 +389,18 @@ void __init parse_early_options(char *cmdline);
 #define __INITDATA_OR_MODULE __INITDATA
 #define __INITRODATA_OR_MODULE __INITRODATA
 #endif /*CONFIG_MODULES*/
+
+/* Functions marked as __devexit may be discarded at kernel link time, depending
+   on config options.  Newer versions of binutils detect references from
+   retained sections to discarded sections and flag an error.  Pointers to
+   __devexit functions must use __devexit_p(function_name), the wrapper will
+   insert either the function_name or NULL, depending on the config options.
+ */
+#if defined(MODULE) || defined(CONFIG_HOTPLUG)
+#define __devexit_p(x) x
+#else
+#define __devexit_p(x) NULL
+#endif
 
 #ifdef MODULE
 #define __exit_p(x) x

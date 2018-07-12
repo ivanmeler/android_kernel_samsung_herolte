@@ -1,6 +1,6 @@
 /***************************************************************************
  * Linux PPP over X - Generic PPP transport layer sockets
- * Linux PPP over Ethernet (PPPoE) Socket Implementation (RFC 2516) 
+ * Linux PPP over Ethernet (PPPoE) Socket Implementation (RFC 2516)
  *
  * This file supplies definitions required by the PPP over Ethernet driver
  * (pppox.c).  All version information wrt this file is located in pppox.c
@@ -58,6 +58,7 @@ struct pppopns_opt {
 	__u32		xmit_sequence;
 	void		(*data_ready)(struct sock *sk_raw);
 	int		(*backlog_rcv)(struct sock *sk_raw, struct sk_buff *skb);
+	int 		ppp_flags;
 };
 
 #include <net/sock.h>
@@ -73,6 +74,8 @@ struct pppox_sock {
 		struct pppolac_opt lac;
 		struct pppopns_opt pns;
 	} proto;
+	struct timer_list recv_queue_timer;
+	spinlock_t recv_queue_lock;
 	__be16			num;
 };
 #define pppoe_dev	proto.pppoe.dev

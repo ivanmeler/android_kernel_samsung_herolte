@@ -62,3 +62,7 @@ js-rtc-y = rtc.o
 
 obj-$(CONFIG_TILE_SROM)		+= tile-srom.o
 obj-$(CONFIG_XILLYBUS)		+= xillybus/
+obj-$(CONFIG_EXYNOS_MCOMP)	+= exynos-mcomp/
+
+obj-$(CONFIG_KNOX_KAP)		+= knox_kap.o
+obj-$(CONFIG_MST_LDO)		+= mst_ctrl.o

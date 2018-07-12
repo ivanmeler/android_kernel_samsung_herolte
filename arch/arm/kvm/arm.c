@@ -672,6 +672,15 @@ static int kvm_arch_vcpu_ioctl_vcpu_init(struct kvm_vcpu *vcpu,
 	vcpu_reset_hcr(vcpu);
 
 	/*
+	 * Ensure a rebooted VM will fault in RAM pages and detect if the
+	 * guest MMU is turned off and flush the caches as needed.
+	 */
+	if (vcpu->arch.has_run_once)
+		stage2_unmap_vm(vcpu->kvm);
+
+	vcpu_reset_hcr(vcpu);
+
+	/*
 	 * Handle the "start in power-off" case by marking the VCPU as paused.
 	 */
 	if (test_bit(KVM_ARM_VCPU_POWER_OFF, vcpu->arch.features))

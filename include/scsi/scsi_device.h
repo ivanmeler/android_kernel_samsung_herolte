@@ -199,6 +199,7 @@ struct scsi_device {
 	struct scsi_dh_data	*scsi_dh_data;
 	enum scsi_device_state sdev_state;
 	unsigned long		sdev_data[0];
+	u8 bootlunID;
 } __attribute__((aligned(sizeof(unsigned long))));
 
 struct scsi_dh_devlist {

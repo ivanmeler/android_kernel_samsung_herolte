@@ -439,6 +439,7 @@ a single pte mapped, i.e.  is currently used by only one process, is accounted
 as private and not as shared.
 "Referenced" indicates the amount of memory currently marked as referenced or
 accessed.
+
 "Anonymous" shows the amount of memory that does not belong to any file.  Even
 a mapping associated with a file may contain anonymous pages: when MAP_PRIVATE
 and a page is modified, the file page is replaced by a private anonymous copy.

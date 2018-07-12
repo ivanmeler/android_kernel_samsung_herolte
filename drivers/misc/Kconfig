@@ -314,6 +314,12 @@ config ISL29003
 	  This driver can also be built as a module.  If so, the module
 	  will be called isl29003.
 
+config KNOX_KAP
+       bool "Enable KNOX KAP mode"
+       default n
+       help
+              Knox Active Protection mode
+
 config ISL29020
 	tristate "Intersil ISL29020 ambient light sensor"
 	depends on I2C
@@ -539,6 +545,13 @@ config MEMORY_STATE_TIME
 	help
 	  Memory time statistics exported to /sys/kernel/memory_state_time
 
+config TIMA_LOG
+	tristate "Support for dumping TIMA log"
+	depends on TIMA
+	default y
+	help
+		This option enables support for dumping TIMA log.
+
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"
 source "drivers/misc/cb710/Kconfig"
@@ -552,4 +565,6 @@ source "drivers/misc/mic/Kconfig"
 source "drivers/misc/genwqe/Kconfig"
 source "drivers/misc/echo/Kconfig"
 source "drivers/misc/cxl/Kconfig"
+source "drivers/misc/mcu_ipc/Kconfig"
+source "drivers/misc/modem_v1/Kconfig"
 endmenu

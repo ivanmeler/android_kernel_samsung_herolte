@@ -74,19 +74,34 @@ static phys_addr_t __init max_zone_dma_phys(void)
 	return min(offset + (1ULL << 32), memblock_end_of_DRAM());
 }
 
+#ifdef CONFIG_ZONE_DMA_ALLOW_CUSTOM_SIZE
+#ifndef CONFIG_ZONE_DMA_SIZE_MBYTES
+#define ZONE_DMA_SIZE_BYTES	((u32)-1)
+#else
+#define ZONE_DMA_SIZE_BYTES	((u32)((CONFIG_ZONE_DMA_SIZE_MBYTES << 20) - 1))
+#endif
+#endif
+
 static void __init zone_sizes_init(unsigned long min, unsigned long max)
 {
 	struct memblock_region *reg;
 	unsigned long zone_size[MAX_NR_ZONES], zhole_size[MAX_NR_ZONES];
 	unsigned long max_dma = min;
-
+#ifdef CONFIG_ZONE_DMA
+	unsigned long max_dma_phys, dma_end;
+#endif
 	memset(zone_size, 0, sizeof(zone_size));
 
-	/* 4GB maximum for 32-bit only capable devices */
-	if (IS_ENABLED(CONFIG_ZONE_DMA)) {
-		max_dma = PFN_DOWN(max_zone_dma_phys());
-		zone_size[ZONE_DMA] = max_dma - min;
-	}
+#ifdef CONFIG_ZONE_DMA
+#ifdef CONFIG_ZONE_DMA_ALLOW_CUSTOM_SIZE
+	max_dma_phys = (unsigned long)dma_to_phys(NULL,
+			(min << PAGE_SHIFT) + ZONE_DMA_SIZE_BYTES + 1);
+#else
+	max_dma_phys = (unsigned long)dma_to_phys(NULL, DMA_BIT_MASK(32) + 1);
+#endif /* CONFIG_ZONE_DMA_ALLOW_CUSTOM_SIZE */
+	max_dma = max(min, min(max, max_dma_phys >> PAGE_SHIFT));
+	zone_size[ZONE_DMA] = max_dma - min;
+#endif /* CONFIG_ZONE_DMA */
 	zone_size[ZONE_NORMAL] = max - max_dma;
 
 	memcpy(zhole_size, zone_size, sizeof(zhole_size));
@@ -98,11 +113,12 @@ static void __init zone_sizes_init(unsigned long min, unsigned long max)
 		if (start >= max)
 			continue;
 
-		if (IS_ENABLED(CONFIG_ZONE_DMA) && start < max_dma) {
-			unsigned long dma_end = min(end, max_dma);
+#ifdef CONFIG_ZONE_DMA
+		if (start < max_dma) {
+			dma_end = min(end, max_dma);
 			zhole_size[ZONE_DMA] -= dma_end - start;
 		}
-
+#endif
 		if (end > max_dma) {
 			unsigned long normal_end = min(end, max);
 			unsigned long normal_start = max(start, max_dma);
@@ -328,9 +344,14 @@ void __init mem_init(void)
 
 void free_initmem(void)
 {
+#ifdef CONFIG_DEBUG_RODATA
 	fixup_init();
+#endif
 	free_initmem_default(0);
 	free_alternatives_memory();
+#ifdef CONFIG_TIMA_RKP
+	rkp_call(RKP_DEF_INIT, 0, 0, 0, 0, 0);
+#endif
 }
 
 #ifdef CONFIG_BLK_DEV_INITRD

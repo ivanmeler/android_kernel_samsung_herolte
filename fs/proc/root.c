@@ -176,6 +176,7 @@ void __init proc_root_init(void)
 		return;
 
 	proc_self_init();
+
 	proc_thread_self_init();
 	proc_symlink("mounts", NULL, "self/mounts");
 

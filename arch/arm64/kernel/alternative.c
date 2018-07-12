@@ -101,7 +101,6 @@ static void __apply_alternatives(void *alt_region)
 		BUG_ON(alt->alt_len > alt->orig_len);
 
 		pr_info_once("patching kernel code\n");
-
 		origptr = ALT_ORIG_PTR(alt);
 		replptr = ALT_REPL_PTR(alt);
 		nr_inst = alt->alt_len / sizeof(insn);

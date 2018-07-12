@@ -12,6 +12,18 @@
 
 /* On cooling devices upper and lower limits */
 #define THERMAL_NO_LIMIT		(-1UL)
+#define TABLE_END			(~1)
+
+#define THROTTLE_ACTIVE			(1)
+#define THROTTLE_PASSIVE		(2)
+#define SW_TRIP				(3)
+#define HW_TRIP				(4)
+
+#define DISABLE				(0)
+#define ENABLE				(1)
+
+#define NORMAL_SENSOR	(0)
+#define VIRTUAL_SENSOR	(1)
 
 #endif
 

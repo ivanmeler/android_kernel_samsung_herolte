@@ -540,6 +540,7 @@ static void raid0_make_request(struct mddev *mddev, struct bio *bio)
 			split = bio;
 		}
 
+		sector = bio->bi_iter.bi_sector;
 		zone = find_zone(mddev->private, &sector);
 		tmp_dev = map_sector(mddev, zone, sector, &sector);
 		split->bi_bdev = tmp_dev->bdev;

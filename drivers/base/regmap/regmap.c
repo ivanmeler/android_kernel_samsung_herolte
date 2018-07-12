@@ -18,6 +18,7 @@
 #include <linux/of.h>
 #include <linux/rbtree.h>
 #include <linux/sched.h>
+#include <linux/delay.h>
 
 #define CREATE_TRACE_POINTS
 #include <trace/events/regmap.h>
@@ -1742,8 +1743,8 @@ EXPORT_SYMBOL_GPL(regmap_bulk_write);
  * relative. The page register has been written if that was neccessary.
  */
 static int _regmap_raw_multi_reg_write(struct regmap *map,
-				       const struct reg_default *regs,
-				       size_t num_regs)
+					const struct reg_sequence *regs,
+					size_t num_regs)
 {
 	int ret;
 	void *buf;
@@ -1799,12 +1800,12 @@ static unsigned int _regmap_register_page(struct regmap *map,
 }
 
 static int _regmap_range_multi_paged_reg_write(struct regmap *map,
-					       struct reg_default *regs,
+					       struct reg_sequence *regs,
 					       size_t num_regs)
 {
 	int ret;
 	int i, n;
-	struct reg_default *base;
+	struct reg_sequence *base;
 	unsigned int this_page = 0;
 	/*
 	 * the set of registers are not neccessarily in order, but
@@ -1842,7 +1843,7 @@ static int _regmap_range_multi_paged_reg_write(struct regmap *map,
 }
 
 static int _regmap_multi_reg_write(struct regmap *map,
-				   const struct reg_default *regs,
+				   const struct reg_sequence *regs,
 				   size_t num_regs)
 {
 	int i;
@@ -1853,6 +1854,8 @@ static int _regmap_multi_reg_write(struct regmap *map,
 			ret = _regmap_write(map, regs[i].reg, regs[i].def);
 			if (ret != 0)
 				return ret;
+			if (regs[i].delay_us)
+				udelay(regs[i].delay_us);
 		}
 		return 0;
 	}
@@ -1894,8 +1897,8 @@ static int _regmap_multi_reg_write(struct regmap *map,
 		struct regmap_range_node *range;
 		range = _regmap_range_lookup(map, reg);
 		if (range) {
-			size_t len = sizeof(struct reg_default)*num_regs;
-			struct reg_default *base = kmemdup(regs, len,
+			size_t len = sizeof(struct reg_sequence)*num_regs;
+			struct reg_sequence *base = kmemdup(regs, len,
 							   GFP_KERNEL);
 			if (!base)
 				return -ENOMEM;
@@ -1928,7 +1931,7 @@ static int _regmap_multi_reg_write(struct regmap *map,
  * A value of zero will be returned on success, a negative errno will be
  * returned in error cases.
  */
-int regmap_multi_reg_write(struct regmap *map, const struct reg_default *regs,
+int regmap_multi_reg_write(struct regmap *map, const struct reg_sequence *regs,
 			   int num_regs)
 {
 	int ret;
@@ -1961,7 +1964,7 @@ EXPORT_SYMBOL_GPL(regmap_multi_reg_write);
  * be returned in error cases.
  */
 int regmap_multi_reg_write_bypassed(struct regmap *map,
-				    const struct reg_default *regs,
+				    const struct reg_sequence *regs,
 				    int num_regs)
 {
 	int ret;
@@ -2555,7 +2558,7 @@ int regmap_register_patch(struct regmap *map, const struct reg_default *regs,
 			  int num_regs)
 {
 	struct reg_default *p;
-	int ret;
+	int ret, i;
 	bool bypass;
 
 	if (WARN_ONCE(num_regs <= 0, "invalid registers number (%d)\n",
@@ -2580,9 +2583,14 @@ int regmap_register_patch(struct regmap *map, const struct reg_default *regs,
 	map->cache_bypass = true;
 	map->async = true;
 
-	ret = _regmap_multi_reg_write(map, regs, num_regs);
-	if (ret != 0)
-		goto out;
+	for (i = 0; i < num_regs; i++) {
+		ret = _regmap_write(map, regs[i].reg, regs[i].def);
+		if (ret != 0) {
+			dev_err(map->dev, "Failed to write %x = %x: %d\n",
+				regs[i].reg, regs[i].def, ret);
+			goto out;
+		}
+	}
 
 out:
 	map->async = false;

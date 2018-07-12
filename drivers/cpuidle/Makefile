@@ -25,6 +25,7 @@ obj-$(CONFIG_MIPS_CPS_CPUIDLE)		+= cpuidle-cps.o
 ###############################################################################
 # ARM64 drivers
 obj-$(CONFIG_ARM64_CPUIDLE)		+= cpuidle-arm64.o
+obj-$(CONFIG_ARM64_EXYNOS_CPUIDLE)      += cpuidle-exynos64.o cpuidle_profiler.o
 
 ###############################################################################
 # POWERPC drivers

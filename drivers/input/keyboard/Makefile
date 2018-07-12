@@ -59,3 +59,6 @@ obj-$(CONFIG_KEYBOARD_TEGRA)		+= tegra-kbc.o
 obj-$(CONFIG_KEYBOARD_TWL4030)		+= twl4030_keypad.o
 obj-$(CONFIG_KEYBOARD_XTKBD)		+= xtkbd.o
 obj-$(CONFIG_KEYBOARD_W90P910)		+= w90p910_keypad.o
+obj-$(CONFIG_KEYBOARD_ABOV_FT16XX_TOUCH)	+= abov_touchkey.o
+obj-$(CONFIG_KEYBOARD_ABOV_TOUCH_A96TA316)	+= abov_touchkey_valley.o
+obj-$(CONFIG_KEYBOARD_CYPRESS_TOUCH_MBR31X5)	+= cypress/

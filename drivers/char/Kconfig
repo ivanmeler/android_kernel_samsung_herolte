@@ -588,6 +588,7 @@ config TELCLOCK
 
 config DEVPORT
 	bool "/dev/port character device"
+	depends on !ARM64
 	depends on ISA || PCI
 	default y
 	help
@@ -616,6 +617,8 @@ config TILE_SROM
 	  how to partition a single ROM for multiple purposes.
 
 source "drivers/char/xillybus/Kconfig"
+
+source "drivers/char/exynos-mcomp/Kconfig"
 
 endmenu
 

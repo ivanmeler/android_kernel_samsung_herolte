@@ -606,6 +606,13 @@ bool blk_rq_merge_ok(struct request *rq, struct bio *bio)
 	    !blk_write_same_mergeable(rq->bio, bio))
 		return false;
 
+#ifdef CONFIG_JOURNAL_DATA_TAG
+	/* journal tagged bio can only be merged to REQ_META request */
+	if ((bio_flagged(bio, BIO_JMETA) || bio_flagged(bio, BIO_JOURNAL)) &&
+			!(rq->cmd_flags & REQ_META))
+		return false;
+#endif
+
 	if (q->queue_flags & (1 << QUEUE_FLAG_SG_GAPS)) {
 		struct bio_vec *bprev;
 

@@ -1,0 +1,48 @@
+config EXYNOS_CAMERA_MODULE
+	bool "Use Modules"
+	depends on VIDEO_EXYNOS_FIMC_IS2
+	default y
+	help
+	  moduels
+
+source "drivers/media/platform/exynos/fimc-is2/sensor/module/Kconfig"
+
+config EXYNOS_MIPI_CSIS
+        bool "Use MIPI-CSIS"
+        depends on VIDEO_EXYNOS_FIMC_IS2
+        default y
+        help
+          This is a v4l2 driver for exynos FIMC-IS device.
+
+config EXYNOS_DEVICE_MIPI_CSIS
+	bool "Use Device MIPI-CSIS Legacy"
+	depends on EXYNOS_MIPI_CSIS
+	default n
+	help
+	  Enalbe Device MIPI-CSIS Legacy
+
+source "drivers/media/platform/exynos/fimc-is2/sensor/csi/Kconfig"
+
+config EXYNOS_DEVICE_MIPI_CSIS_VER2
+	bool "Use Device MIPI-CSIS Version 2"
+	depends on EXYNOS_MIPI_CSIS
+	default n
+	help
+	  Enalbe Device MIPI-CSIS Version 2(Including WDMA)
+
+source "drivers/media/platform/exynos/fimc-is2/sensor/csi2/Kconfig"
+
+config EXYNOS_FIMC_BNS
+        bool "Use FIMC_BNS(LITE)"
+        depends on VIDEO_EXYNOS_FIMC_IS2
+        default y
+        help
+          This is a v4l2 driver for exynos FIMC-IS device.
+
+source "drivers/media/platform/exynos/fimc-is2/sensor/flite/Kconfig"
+
+source "drivers/media/platform/exynos/fimc-is2/sensor/module_framework/Kconfig"
+source "drivers/media/platform/exynos/fimc-is2/sensor/module_framework/cis/Kconfig"
+source "drivers/media/platform/exynos/fimc-is2/sensor/module_framework/actuator/Kconfig"
+source "drivers/media/platform/exynos/fimc-is2/sensor/module_framework/flash/Kconfig"
+source "drivers/media/platform/exynos/fimc-is2/sensor/module_framework/dphy/Kconfig"

@@ -24,11 +24,18 @@
 #include <asm/assembler.h>
 #include <asm/ptrace.h>
 #include <asm/virt.h>
+#ifdef CONFIG_RKP_CFP
+#include <asm/rkp_cfp.h>
+#endif
 
 	.text
 	.align 11
 
+#ifdef CONFIG_RKP_CFP_JOPP
+VECTOR_ENTRY(__hyp_stub_vectors)
+#else
 ENTRY(__hyp_stub_vectors)
+#endif
 	ventry	el2_sync_invalid		// Synchronous EL2t
 	ventry	el2_irq_invalid			// IRQ EL2t
 	ventry	el2_fiq_invalid			// FIQ EL2t
@@ -103,6 +110,9 @@ ENDPROC(\label)
 ENTRY(__hyp_get_vectors)
 	mov	x0, xzr
 	// fall through
+#ifdef CONFIG_RKP_CFP_JOPP
+FALLTHROUGH(__hyp_set_vectors)
+#endif
 ENTRY(__hyp_set_vectors)
 	hvc	#0
 	ret

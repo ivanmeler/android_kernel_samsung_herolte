@@ -1,0 +1,21 @@
+#
+# ATMEL T TOUCH driver configuration
+#
+config TOUCHSCREEN_ATMEL_MXT1664
+	tristate "Atmel MXT T serise I2C touchscreen"
+	depends on I2C
+	help
+	  Say Y here if you have a Atmel MXT T I2C touchscreen
+	  connected to your system.
+
+	  If unsure, say N.
+
+config TOUCHSCREEN_ATMEL_MXT874U
+	tristate "Atmel MXT T serise I2C touchscreen"
+	depends on I2C
+	help
+	  Say Y here if you have a Atmel MXT T I2C touchscreen
+	  connected to your system.
+
+	  If unsure, say N.
+

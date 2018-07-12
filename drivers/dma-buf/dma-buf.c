@@ -265,6 +265,28 @@ static inline int is_dma_buf_file(struct file *file)
 }
 
 /**
+ * get_dma_buf_file - Finds dma_buf from a file descriptor
+ *
+ * @filp: [in] file descriptor to extract dma_buf.
+ *
+ * Returns the pointer to dma_buf stored in @filp after incrementing count.
+ * The returned dma_buf must be released with dma_buf_put().
+ * Returns NULL if @filp is not the file descriptor of dma_buf.
+ */
+struct dma_buf *get_dma_buf_file(struct file *filp)
+{
+	struct dma_buf *dmabuf;
+
+	if (!is_dma_buf_file(filp))
+		return NULL;
+
+	dmabuf = filp->private_data;
+
+	get_dma_buf(dmabuf);
+
+	return dmabuf;
+}
+/**
  * dma_buf_export_named - Creates a new dma_buf, and associates an anon file
  * with this buffer, so it can be exported.
  * Also connect the allocator specific data and ops to the buffer.

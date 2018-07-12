@@ -1,0 +1,66 @@
+config EXYNOS_APM
+	bool "APM Driver"
+	select MAILBOX
+	select EXYNOS_MBOX
+
+if EXYNOS_APM
+
+config EXYNOS_MBOX
+	tristate "Exynos Mailbox Controller"
+	help
+	  An implementation of the Samsung Interprocessor Communication
+	  Mailbox (IPCM). It is used to send short messages between CortexM3 cores
+	  and the Power Control Processor or Power Coprocessor firmware.
+	  Say Y here if you want to use the Exynos mailbox support.
+
+config EXYNOS8890_APM
+	bool "EXYNOS8890 APM Driver"
+	default y
+	depends on SOC_EXYNOS8890
+
+menu "EXYNOS_CL_DVFS"
+
+config EXYNOS_CL_DVFS_CPU
+	bool "EXYNOS_CL_DVFS_CPU"
+	help
+	 CPU closed loop dvfs feature
+config EXYNOS_CL_DVFS_G3D
+	bool "EXYNOS_CL_DVFS_G3D"
+	help
+	 G3D closed loop dvfs feature
+config EXYNOS_CL_DVFS_MIF
+	bool "EXYNOS_CL_DVFS_MIF"
+	help
+	 MIF closed loop dvfs feature
+
+endmenu
+
+choice
+	prompt "Default communction mode"
+	depends on EXYNOS_MBOX
+	default EXYNOS_MBOX_DEFAULT_POLLING
+	help
+
+config EXYNOS_MBOX_DEFAULT_INTERRUPT
+	bool "Interrupt"
+	select EXYNOS_MBOX_INTERRUPT
+	help
+	 This select is interrupt mode.
+config EXYNOS_MBOX_DEFAULT_POLLING
+	bool "Polling"
+	select EXYNOS_MBOX_POLLING
+	help
+	 This select is interrupt mode.
+endchoice
+
+config EXYNOS_MBOX_INTERRUPT
+	depends on EXYNOS_MBOX
+	tristate "Interrupt mode"
+config EXYNOS_MBOX_POLLING
+	depends on EXYNOS_MBOX
+	tristate "Polling mode"
+
+config EXYNOS_APM_VOLTAGE_DEBUG
+	bool "APM Voltage Debug"
+	default y
+endif

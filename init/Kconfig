@@ -1710,6 +1710,21 @@ config SLUB_DEBUG
 	  SLUB sysfs support. /sys/slab will not exist and there will be
 	  no support for cache validation etc.
 
+config SLUB_DEBUG_LIGHT
+	default n
+	bool "Enable SLUB debugging support (light-weight version)" if !SLUB_DEBUG
+	depends on SLUB
+	help
+	  SLUB DEBUG light-weight version for tracking caller addr of kmalloc/kfree
+	  only in kmalloc-128.
+
+config PTRACK_DEBUG
+	default n
+	bool "Enable Ptrack debugging support"
+	help
+	  PTRACK tracks page allocation.
+	  This option affects on booting time & running time.
+
 config COMPAT_BRK
 	bool "Disable heap randomization"
 	default y
@@ -1802,6 +1817,12 @@ config SYSTEM_TRUSTED_KEYRING
 
 	  Keys in this keyring are used by module signature checking.
 
+config DEFERRED_INITCALLS
+	bool "Deferred initcalls support"
+	default n
+	help
+	  Say 'y' here to include support for deferred initcalls
+
 config PROFILING
 	bool "Profiling support"
 	help
@@ -1840,6 +1861,7 @@ config BASE_SMALL
 menuconfig MODULES
 	bool "Enable loadable module support"
 	option modules
+	select TIMA_LKMAUTH
 	help
 	  Kernel modules are small pieces of compiled code which can
 	  be inserted in the running kernel, rather than being

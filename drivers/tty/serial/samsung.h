@@ -12,6 +12,15 @@
  * published by the Free Software Foundation.
 */
 
+#include <linux/pm_qos.h>
+
+#define S3C24XX_UART_PORT_RESUME		0x0
+#define S3C24XX_UART_PORT_SUSPEND		0x3
+#define S3C24XX_UART_PORT_LPM			0x5
+
+#define S3C24XX_SERIAL_CTRL_NUM			0x4
+#define S3C24XX_SERIAL_BUAD_NUM			0x2
+
 struct s3c24xx_uart_info {
 	char			*name;
 	unsigned int		type;
@@ -41,27 +50,51 @@ struct s3c24xx_serial_drv_data {
 	unsigned int			fifosize[CONFIG_SERIAL_SAMSUNG_UARTS];
 };
 
+struct local_buf {
+	char *buffer;
+	int size;
+	int index;
+};
+
 struct s3c24xx_uart_port {
+	struct list_head		node;
 	unsigned char			rx_claimed;
 	unsigned char			tx_claimed;
-	unsigned int			pm_level;
 	unsigned long			baudclk_rate;
 
 	unsigned int			rx_irq;
 	unsigned int			tx_irq;
 
+	int				check_separated_clk;
 	struct s3c24xx_uart_info	*info;
 	struct clk			*clk;
+	struct clk			*separated_clk;
 	struct clk			*baudclk;
 	struct uart_port		port;
 	struct s3c24xx_serial_drv_data	*drv_data;
 
+	u32				uart_irq_affinity;
+	s32				mif_qos_val;
+	s32				cpu_qos_val;
+	u32				use_default_irq;
+	unsigned long			qos_timeout;
+
+#define DOMAIN_TOP	0
+#define DOMAIN_AUD	1
+	u32				domain;
+
 	/* reference to platform data */
 	struct s3c2410_uartcfg		*cfg;
 
-#ifdef CONFIG_CPU_FREQ
-	struct notifier_block		freq_transition;
-#endif
+	struct platform_device		*pdev;
+
+	struct pm_qos_request		s3c24xx_uart_mif_qos;
+	struct pm_qos_request		s3c24xx_uart_cpu_qos;
+	struct delayed_work		qos_work;
+
+	unsigned int dbg_mode;
+
+	struct local_buf local_buf;
 };
 
 /* conversion functions */

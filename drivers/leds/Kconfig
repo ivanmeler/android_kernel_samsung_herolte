@@ -505,6 +505,47 @@ config LEDS_VERSATILE
 	  This option enabled support for the LEDs on the ARM Versatile
 	  and RealView boards. Say Y to enabled these.
 
+config LEDS_S2MPB02
+	bool "LED support for the S2MPB02"
+	depends on LEDS_CLASS
+	help
+	  This option enables support for the LEDs on the S2MPB02.
+
+config LEDS_KTD2692
+	bool "LED support for the KTD2692"
+	help
+	  If you say yes here you will get support for
+	  for the KTD2692 FLASH led chip.
+
+config LEDS_S2MPB02_MULTI_TORCH_REAR2
+	bool "LED support for second multi flash"
+	help
+	  If you say yes here you will get support for
+	  for second multi flash.
+
+config LEDS_KTD2692_MULTI_TORCH_REAR3
+	bool "LED support for third multi flash"
+	help
+	  If you say yes here you will get support for
+	  for third multi flash.
+
+config LEDS_MAX77854_RGB
+	tristate "Led max77854 rgb"
+	depends on MFD_MAX77854 && LEDS_CLASS && I2C
+	help
+	  If you say yes here you will get support for
+	  for the MAX77854 RGB led chip.
+
+config LEDS_IRIS_IRLED_SUPPORT
+	bool "IRLED support for IRIS"
+	help
+	  This option enables support for the IRLED.
+
+config LEDS_IRIS_IRLED_CERTIFICATE_SUPPORT
+	bool "IRLED SYSFS support for IRIS CERTIFICATE"
+	help
+	  This option enables support for the IRLED.
+
 comment "LED Triggers"
 source "drivers/leds/trigger/Kconfig"
 

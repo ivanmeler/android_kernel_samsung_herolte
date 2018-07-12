@@ -288,7 +288,9 @@ static unsigned int __bpf_prog_run(void *ctx, const struct bpf_insn *insn)
 	};
 	void *ptr;
 	int off;
-
+#ifdef CONFIG_RKP_CFP_JOPP
+	volatile const void *jumpto;
+#endif
 #define CONT	 ({ insn++; goto select_insn; })
 #define CONT_JMP ({ insn++; goto select_insn; })
 
@@ -300,8 +302,15 @@ static unsigned int __bpf_prog_run(void *ctx, const struct bpf_insn *insn)
 	regs[BPF_REG_X] = 0;
 
 select_insn:
+#ifdef CONFIG_RKP_CFP_JOPP
+	//make sure jump to addr is sanitized before goto
+	jumpto = (jumptable[insn->code]);
+	if (unlikely(jumpto < &&ALU_ADD_X || jumpto > &&default_label)) 
+		panic("attempt to exploit jump table");
+	goto *jumpto;
+#else
 	goto *jumptable[insn->code];
-
+#endif
 	/* ALU */
 #define ALU(OPCODE, OP)			\
 	ALU64_##OPCODE##_X:		\

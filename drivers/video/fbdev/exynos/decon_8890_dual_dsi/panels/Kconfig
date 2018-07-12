@@ -1,0 +1,30 @@
+config EXYNOS_DECON_LCD
+	depends on EXYNOS_DECON_DUAL_DSI
+	bool "Select LCD panel driver"
+
+config EXYNOS_DECON_MDNIE_LITE
+	depends on EXYNOS_DECON_LCD
+	tristate "Support MDNIE LITE"
+	default n
+
+config EXYNOS_DECON_LCD_SYSFS
+	depends on EXYNOS_DECON_LCD
+	tristate "Support LCD SYSFS"
+	default y
+
+config PANEL_AID_DIMMING
+	depends on EXYNOS_DECON_LCD
+	tristate "Support AID Dimming"
+	default n
+
+config PANEL_S6E3FA3_FHD
+	depends on EXYNOS_DECON_LCD && EXYNOS_MIPI_DSI
+	tristate "S6E3FA3 AMOLED SUPPORT FHD RESULOTION"
+
+config PANEL_S6E3HF4_FHD
+	depends on EXYNOS_DECON_LCD && EXYNOS_MIPI_DSI
+	tristate "S6E3HF4 AMOLED SUPPORT FHD RESOLUTION"
+
+config PANEL_S6E3HF3_FHD
+	depends on EXYNOS_DECON_LCD && EXYNOS_MIPI_DSI
+	tristate "S6E3HF4 AMOLED SUPPORT FHD RESOLUTION"

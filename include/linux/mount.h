@@ -65,9 +65,21 @@ struct mnt_namespace;
 struct vfsmount {
 	struct dentry *mnt_root;	/* root of the mounted tree */
 	struct super_block *mnt_sb;	/* pointer to superblock */
+#ifdef CONFIG_RKP_NS_PROT
+	struct mount *bp_mount;	/* pointer to mount*/
+#endif
 	int mnt_flags;
 	void *data;
 };
+
+#ifdef CONFIG_RKP_NS_PROT
+struct vfsmount_offset {
+	u64 bp_mount_offset;
+	u64 mnt_sb_offset;
+	u64 mnt_flags_offset;
+	u64 data_offset;
+};
+#endif
 
 struct file; /* forward dec */
 struct path;

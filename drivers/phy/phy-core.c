@@ -227,6 +227,38 @@ out:
 }
 EXPORT_SYMBOL_GPL(phy_exit);
 
+int phy_tune(struct phy *phy, int phy_state)
+{
+	int ret;
+
+	if (!phy || !phy->ops->tune)
+		return 0;
+
+	ret = phy->ops->tune(phy, phy_state);
+	if (ret < 0) {
+		dev_err(&phy->dev, "phy tune failed --> %d\n", ret);
+	} else {
+		ret = 0; /* Override possible ret == -ENOTSUPP */
+	}
+	return ret;
+}
+EXPORT_SYMBOL_GPL(phy_tune);
+
+int phy_set(struct phy *phy, int option, void *info)
+{
+	int ret;
+
+	if (!phy || !phy->ops->set)
+		return 0;
+
+	ret = phy->ops->set(phy, option, info);
+	if (ret < 0)
+		dev_err(&phy->dev, "phy set failed --> %d\n", ret);
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(phy_set);
+
 int phy_power_on(struct phy *phy)
 {
 	int ret = 0;

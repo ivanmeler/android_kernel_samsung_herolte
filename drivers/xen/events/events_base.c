@@ -547,6 +547,10 @@ static unsigned int __startup_pirq(unsigned int irq)
 	if (rc)
 		goto err;
 
+	rc = xen_evtchn_port_setup(info);
+	if (rc)
+		goto err;
+
 out:
 	unmask_evtchn(evtchn);
 	eoi_pirq(irq_get_irq_data(irq));

@@ -79,11 +79,33 @@
 #define ALIGN_STR __ALIGN_STR
 
 #ifndef ENTRY
+#ifdef CONFIG_RKP_CFP_JOPP
+#define ENTRY(name) \
+	.globl name ASM_NL \
+	nop;  \
+	ALIGN ASM_NL \
+	name:
+#else
 #define ENTRY(name) \
 	.globl name ASM_NL \
 	ALIGN ASM_NL \
 	name:
-#endif
+#endif //CONFIG_RKP_CFP_JOPP
+#endif //ENTRY
+
+
+#ifdef CONFIG_RKP_CFP_JOPP
+#define VECTOR_ENTRY(name) \
+	.globl name; \
+	ALIGN; \
+	name:
+	
+/* Fallthrough assembly coding pattern won't work anymore once you start putting data 
+ * words above FUNC_ENTRY(...).
+ */
+#define FALLTHROUGH(target) \
+    b target
+#endif //CONFIG_RKP_CFP_JOPP
 #endif /* LINKER_SCRIPT */
 
 #ifndef WEAK

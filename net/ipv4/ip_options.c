@@ -190,6 +190,10 @@ int __ip_options_echo(struct ip_options *dopt, struct sk_buff *skb,
 	if (sopt->cipso) {
 		optlen  = sptr[sopt->cipso+1];
 		dopt->cipso = dopt->optlen+sizeof(struct iphdr);
+		pr_info("[opt:8] des: 0x%p, src: 0x%p, len: %d, cipso: %d\n",
+					dptr, sptr+sopt->cipso, optlen, sopt->cipso);
+		if (optlen > 40) 
+			return -EINVAL;
 		memcpy(dptr, sptr+sopt->cipso, optlen);
 		dptr += optlen;
 		dopt->optlen += optlen;

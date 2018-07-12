@@ -245,12 +245,9 @@ int scsi_add_host_with_dma(struct Scsi_Host *shost, struct device *dev,
 
 	pm_runtime_set_active(&shost->shost_gendev);
 	pm_runtime_enable(&shost->shost_gendev);
-	device_enable_async_suspend(&shost->shost_gendev);
 
 	scsi_host_set_state(shost, SHOST_RUNNING);
 	get_device(shost->shost_gendev.parent);
-
-	device_enable_async_suspend(&shost->shost_dev);
 
 	error = device_add(&shost->shost_dev);
 	if (error)
@@ -353,6 +350,7 @@ static struct device_type scsi_host_type = {
 	.release =	scsi_host_dev_release,
 };
 
+extern void scsi_dma_set_skip_cpu_sync(void);
 /**
  * scsi_host_alloc - register a scsi host adapter instance.
  * @sht:	pointer to scsi host template
@@ -490,6 +488,12 @@ struct Scsi_Host *scsi_host_alloc(struct scsi_host_template *sht, int privsize)
 		goto fail_kthread;
 	}
 	scsi_proc_hostdir_add(shost->hostt);
+
+#if defined(CONFIG_SCSI_SKIP_CACHE_OP) || \
+	defined(CONFIG_SCSI_SKIP_CPU_SYNC)
+	scsi_dma_set_skip_cpu_sync();
+#endif
+
 	return shost;
 
  fail_kthread:

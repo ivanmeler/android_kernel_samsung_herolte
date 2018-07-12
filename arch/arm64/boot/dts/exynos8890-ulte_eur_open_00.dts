@@ -1,0 +1,99 @@
+/*
+ * SAMSUNG UNIVERSAL8890 board device tree source
+ *
+ * Copyright (c) 2015 Samsung Electronics Co., Ltd.
+ *		http://www.samsung.com
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+*/
+/dts-v1/;
+#include "exynos8890-ulte_common.dtsi"
+#include "exynos8890-ulte_gpio_00.dtsi"
+#include "exynos8890-sound-cs47l91.dtsi"
+#include "exynos8890-ulte_battery_eur_00.dtsi"
+#include "exynos8890-ulte_display_00.dtsi"
+#include "exynos8890-vlte_mst_00.dtsi"
+#include "exynos8890-vlte_fingerprint-sensor_00.dtsi"
+/ {
+
+	model = "Samsung UNIVERSAL8890 board based on EXYNOS8890";
+	model_info-chip = <8890>;
+	model_info-platform = "android";
+	model_info-subtype = "samsung";
+	model_info-hw_rev = <0>;
+	model_info-hw_rev_end = <255>;
+	compatible = "samsung,exynos8890","samsung,UNIVERSAL8890";
+
+	audio_pdata {
+		compatible = "samsung,audio-pdata";
+		seamless_voicewakeup;
+		status = "okay";
+	};
+
+	pinctrl@10580000 {
+		codec_irq: codec-irq {
+			samsung,pins = "gpa2-6";
+			samsung,pin-function = <0xf>;
+			samsung,pin-pud = <0>;
+		};
+		max98506_ctrl: max98506-ctl {
+			samsung,pins ="gpa2-2";
+			samsung,pin-function = <0>;
+			samsung,pin-pud = <0>;
+			samsung,pin-con-pdn =<2>;
+			samsung,pin-pud-pdn = <0>;
+		};
+	};
+
+	pinctrl@136D0000 {
+		max98506_i2c: max98506-i2c {
+			samsung,pins = "gpd1-0", "gpd1-1";
+			samsung,pin-pud = <0>;
+			status = "okay";
+		};
+	};
+
+	pinctrl@14CC0000 {
+		codec_reset: codec-reset {
+			samsung,pins ="gpe6-5";
+			samsung,pin-function = <1>;
+			samsung,pin-pud = <1>;
+			samsung,pin-con-pdn =<3>;
+			samsung,pin-pud-pdn = <1>;
+			samsung,pin-val = <0>;
+		};
+	};
+
+	hsi2c@13640000 {
+		status = "okay";
+		max98506@31 {
+			compatible = "maxim,max98506";
+			reg = <0x31>;
+			pinctrl-names = "default";
+			pinctrl-0 = <&max98506_i2c &max98506_ctrl>;
+			gpios = <&gpd1 0 0
+				&gpd1 1 0
+				>;
+			i2c-gpio,delay-us = <2>;
+			maxim,platform_type = <0>;
+			maxim,spk-gain = <0x14>;
+			maxim,sysclk = <12288000>;
+			maxim,vmon_slot = <0>;
+			maxim,platform_info = <0 0x4000 0x0F010203 0x0FF10203 0x00000000 40>;
+			maxim,boost_step = <
+					0x0F 0x0F 0x0F 0x0F
+					0x0F 0x0F 0x0F 0x0F
+					0x0F 0x0F 0x0F 0x0F
+					0x0F 0x0F 0x02 0x00
+					>;
+			maxim,adc_threshold = <7>;
+			maxim,registers-of-amp =
+				<0x1F 0x00>,
+				<0x21 0xC0>,
+				<0x2F 0x00>;
+		};
+	};
+
+};

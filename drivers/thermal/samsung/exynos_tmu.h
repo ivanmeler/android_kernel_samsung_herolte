@@ -26,12 +26,29 @@
 
 #include "exynos_thermal_common.h"
 
+#define FIRST_SENSOR		0
+
+#define QUAD_MODE		(0)
+#define DUAL_MODE		(1)
+#define DUAL_CPU		(2)
+#define QUAD_CPU		(4)
+
 enum calibration_type {
 	TYPE_ONE_POINT_TRIMMING,
 	TYPE_ONE_POINT_TRIMMING_25,
 	TYPE_ONE_POINT_TRIMMING_85,
 	TYPE_TWO_POINT_TRIMMING,
 	TYPE_NONE,
+};
+
+enum calibration_mode {
+	SW_MODE,
+	HW_MODE,
+};
+
+enum sensor_type {
+	NORMAL_SENSOR,
+	VIRTUAL_SENSOR,
 };
 
 enum soc_type {
@@ -42,6 +59,8 @@ enum soc_type {
 	SOC_ARCH_EXYNOS5260,
 	SOC_ARCH_EXYNOS5420_TRIMINFO,
 	SOC_ARCH_EXYNOS5440,
+	SOC_ARCH_EXYNOS7580,
+	SOC_ARCH_EXYNOS8890,
 };
 
 /**
@@ -79,17 +98,21 @@ enum soc_type {
  * @triminfo_data: register containing 2 pont trimming data
  * @triminfo_ctrl: trim info controller register.
  * @triminfo_ctrl_count: the number of trim info controller register.
+ * @triminfo_85_shift: shift bit of the 85 C trim value in triminfo_data reg.
  * @tmu_ctrl: TMU main controller register.
+ * @tmu_ctrl1: TMU main controller register.
  * @test_mux_addr_shift: shift bits of test mux address.
  * @therm_trip_mode_shift: shift bits of tripping mode in tmu_ctrl register.
  * @therm_trip_mode_mask: mask bits of tripping mode in tmu_ctrl register.
  * @therm_trip_en_shift: shift bits of tripping enable in tmu_ctrl register.
+ * @lpi0_mode_en_shift: shift bits of LIPI0 mode enable bit in tmu_ctrl1 register.
  * @tmu_status: register drescribing the TMU status.
  * @tmu_cur_temp: register containing the current temperature of the TMU.
  * @threshold_temp: register containing the base threshold level.
  * @threshold_th0: Register containing first set of rising levels.
  * @threshold_th1: Register containing second set of rising levels.
  * @threshold_th2: Register containing third set of rising levels.
+ * @threshold_th3: Register containing fourth set of rising levels.
  * @threshold_th3_l0_shift: shift bits of level0 threshold temperature.
  * @tmu_inten: register containing the different threshold interrupt
 	enable bits.
@@ -97,7 +120,18 @@ enum soc_type {
  * @inten_rise1_shift: shift bits of rising 1 interrupt bits.
  * @inten_rise2_shift: shift bits of rising 2 interrupt bits.
  * @inten_rise3_shift: shift bits of rising 3 interrupt bits.
+ * @inten_rise4_shift: shift bits of rising 4 interrupt bits.
+ * @inten_rise5_shift: shift bits of rising 5 interrupt bits.
+ * @inten_rise6_shift: shift bits of rising 6 interrupt bits.
+ * @inten_rise7_shift: shift bits of rising 7 interrupt bits.
  * @inten_fall0_shift: shift bits of falling 0 interrupt bits.
+ * @inten_fall1_shift: shift bits of falling 1 interrupt bits.
+ * @inten_fall2_shift: shift bits of falling 2 interrupt bits.
+ * @inten_fall3_shift: shift bits of falling 3 interrupt bits.
+ * @inten_fall4_shift: shift bits of falling 4 interrupt bits.
+ * @inten_fall5_shift: shift bits of falling 5 interrupt bits.
+ * @inten_fall6_shift: shift bits of falling 6 interrupt bits.
+ * @inten_fall7_shift: shift bits of falling 7 interrupt bits.
  * @tmu_intstat: Register containing the interrupt status values.
  * @tmu_intclear: Register for clearing the raised interrupt status.
  * @emul_con: TMU emulation controller register.
@@ -108,17 +142,36 @@ enum soc_type {
  */
 struct exynos_tmu_registers {
 	u32	triminfo_data;
+	u32	calib_sel_shift;
+	u32	calib_sel_mask;
 
 	u32	triminfo_ctrl[MAX_TRIMINFO_CTRL_REG];
 	u32	triminfo_ctrl_count;
 
+	u32	triminfo_85_shift;
+
 	u32	tmu_ctrl;
+	u32	tmu_ctrl1;
 	u32     test_mux_addr_shift;
+	/* vref and slope otp value */
+	u32	buf_vref_otp_reg;
+	u32	buf_vref_otp_shift;
+	u32	buf_vref_otp_mask;
+	u32	buf_slope_otp_reg;
+	u32	buf_slope_otp_shift;
+	u32	buf_slope_otp_mask;
 	u32	therm_trip_mode_shift;
 	u32	therm_trip_mode_mask;
 	u32	therm_trip_en_shift;
+	u32	lpi0_mode_en_shift;
 
 	u32	tmu_status;
+	u32	valid_mask;
+	u32	valid_p0_shift;
+	u32	valid_p1_shift;
+	u32	valid_p2_shift;
+	u32	valid_p3_shift;
+	u32	valid_p4_shift;
 
 	u32	tmu_cur_temp;
 
@@ -127,16 +180,33 @@ struct exynos_tmu_registers {
 	u32	threshold_th0;
 	u32	threshold_th1;
 	u32	threshold_th2;
+	u32	threshold_th3;
 	u32	threshold_th3_l0_shift;
 
+	u32	threshold_th4;
+	u32	threshold_th5;
+	u32	threshold_th6;
+	u32	threshold_th7;
+
 	u32	tmu_inten;
-	u32	inten_rise0_shift;
-	u32	inten_rise1_shift;
-	u32	inten_rise2_shift;
-	u32	inten_rise3_shift;
-	u32	inten_fall0_shift;
 
 	u32	tmu_intstat;
+	u32     inten_rise0_shift;
+	u32     inten_rise1_shift;
+	u32     inten_rise2_shift;
+	u32     inten_rise3_shift;
+	u32     inten_rise4_shift;
+	u32     inten_rise5_shift;
+	u32     inten_rise6_shift;
+	u32     inten_rise7_shift;
+	u32     inten_fall0_shift;
+	u32     inten_fall1_shift;
+	u32     inten_fall2_shift;
+	u32     inten_fall3_shift;
+	u32     inten_fall4_shift;
+	u32     inten_fall5_shift;
+	u32     inten_fall6_shift;
+	u32     inten_fall7_shift;
 
 	u32	tmu_intclear;
 
@@ -206,6 +276,12 @@ struct exynos_tmu_registers {
  * This structure is required for configuration of exynos_tmu driver.
  */
 struct exynos_tmu_platform_data {
+	/* ect related variables */
+	char *tmu_name;
+	int ect_hotplug_flag;
+	int ect_hotplug_interval;
+
+	u32 temp_mask;
 	u8 threshold;
 	u8 threshold_falling;
 	u8 trigger_levels[MAX_TRIP_COUNT];
@@ -225,10 +301,15 @@ struct exynos_tmu_platform_data {
 	u8 default_temp_offset;
 	u8 test_mux;
 	u8 triminfo_reload[MAX_TRIMINFO_CTRL_REG];
+	bool hotplug_enable;
+	u32 hotplug_in_threshold;
+	u32 hotplug_out_threshold;
+	u32 sensor_type;
 
 	enum calibration_type cal_type;
 	enum soc_type type;
-	struct freq_clip_table freq_tab[4];
+	enum dev_type d_type;
+	struct freq_clip_table freq_tab[MAX_TRIP_COUNT];
 	unsigned int freq_tab_count;
 	const struct exynos_tmu_registers *registers;
 	unsigned int features;

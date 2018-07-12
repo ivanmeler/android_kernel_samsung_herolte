@@ -40,3 +40,23 @@ config ION_POOL_CACHE_POLICY
 	help
 	  Choose this option if need to explicity set cache policy of the
 	  pages in the page pool.
+
+config ION_EXYNOS
+	tristate "Ion for Exynos"
+	depends on ARCH_EXYNOS && ION
+	select CMA
+	select DMA_CMA
+	help
+	  Choose this option if you wish to use ion on a Samsung Exynos.
+
+config ION_EXYNOS_STAT_LOG
+	bool "Gathering stats for Exynos ION"
+	default y
+	select TRACING
+	depends on ION_EXYNOS
+	help
+	  Say Y if you need to see some stats info via debugfs
+
+if ION_EXYNOS
+source drivers/staging/android/ion/exynos/Kconfig
+endif

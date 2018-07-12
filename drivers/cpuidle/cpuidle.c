@@ -572,6 +572,65 @@ static inline void latency_notifier_init(struct notifier_block *n)
 
 #endif /* CONFIG_SMP */
 
+#ifdef CONFIG_CPU_IDLE_STOP_IDLE_DURING_HOTPLUG
+/* during hotplug out in progress, disable cpuidle for faster hotplug out */
+static int exynos_cpuidle_hp_out_callback(struct notifier_block *nfb,
+					unsigned long action, void *hcpu)
+{
+	unsigned int cpu = (unsigned long)hcpu;
+	struct cpuidle_device *dev = per_cpu(cpuidle_devices, cpu);
+
+	if (dev) {
+		switch (action) {
+		case CPU_DOWN_PREPARE:
+			cpuidle_disable_device(dev);
+			break;
+
+		case CPU_DOWN_FAILED:
+			cpuidle_enable_device(dev);
+			break;
+		}
+	}
+	return NOTIFY_OK;
+}
+
+static struct notifier_block __refdata cpuidle_hp_out_notifier = {
+	.notifier_call = exynos_cpuidle_hp_out_callback,
+	.priority = INT_MAX,	/* want to be called first */
+};
+
+
+static int exynos_cpuidle_hp_in_callback(struct notifier_block *nfb,
+					unsigned long action, void *hcpu)
+{
+	unsigned int cpu = (unsigned long)hcpu;
+	struct cpuidle_device *dev = per_cpu(cpuidle_devices, cpu);
+
+	if (dev) {
+		switch (action) {
+		case CPU_ONLINE:
+			cpuidle_enable_device(dev);
+			break;
+		}
+	}
+	return NOTIFY_OK;
+}
+
+static struct notifier_block __refdata cpuidle_hp_in_notifier = {
+	.notifier_call = exynos_cpuidle_hp_in_callback,
+	.priority = INT_MIN,	/* want to be called last */
+};
+
+static int __init cpuidle_hotcpu_init(void)
+{
+	register_hotcpu_notifier(&cpuidle_hp_out_notifier);
+	register_hotcpu_notifier(&cpuidle_hp_in_notifier);
+
+	return 0;
+}
+device_initcall(cpuidle_hotcpu_init);
+#endif
+
 /**
  * cpuidle_init - core initializer
  */

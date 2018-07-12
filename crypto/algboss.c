@@ -67,9 +67,20 @@ static int cryptomgr_probe(void *data)
 	int err;
 
 	tmpl = crypto_lookup_template(param->template);
+
+#ifndef CONFIG_CRYPTO_FIPS
 	if (!tmpl)
 		goto out;
-
+#else
+	/* change@dtl.ksingh
+	 * Below if condition needs to test for valid point
+	 * but instead it was testing for NULL. Crypto APIs never
+	 * return NULL, hence in failure case this was causing 
+	 * kernel panic
+	 */
+	if (!tmpl || IS_ERR(tmpl))
+		goto out;
+#endif
 	do {
 		if (tmpl->create) {
 			err = tmpl->create(tmpl, param->tb);

@@ -143,7 +143,7 @@ static int apply_constraint(struct dev_pm_qos_request *req,
 	switch(req->type) {
 	case DEV_PM_QOS_RESUME_LATENCY:
 		ret = pm_qos_update_target(&qos->resume_latency,
-					   &req->data.pnode, action, value);
+					   &req->data.pnode, action, value, NULL);
 		if (ret) {
 			value = pm_qos_read_value(&qos->resume_latency);
 			blocking_notifier_call_chain(&dev_pm_notifiers,
@@ -153,7 +153,7 @@ static int apply_constraint(struct dev_pm_qos_request *req,
 		break;
 	case DEV_PM_QOS_LATENCY_TOLERANCE:
 		ret = pm_qos_update_target(&qos->latency_tolerance,
-					   &req->data.pnode, action, value);
+					   &req->data.pnode, action, value, NULL);
 		if (ret) {
 			value = pm_qos_read_value(&qos->latency_tolerance);
 			req->dev->power.set_latency_tolerance(req->dev, value);

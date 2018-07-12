@@ -1,0 +1,244 @@
+/*
+ * SAMSUNG Lucky-WM1840 Sound Card Device Tree Source
+ *
+ * Copyright (c) 2015 Samsung Electronics Co., Ltd.
+ *		http://www.samsung.com
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+*/
+
+/ {
+	spi_0: spi@14d20000 {
+		/delete-property/ dma-mode;
+		/delete-property/ dmas;
+		/delete-property/ dma-names;
+
+		num-cs = <1>;
+		status = "okay";
+
+		audio_codec: wm1840@0 {
+			compatible = "wlf,wm1840";
+			reg = <0x0>;
+			spi-max-frequency = <25000000>;
+			interrupts = <6 0 0>;
+			interrupt-parent = <&gpa2>;
+
+			gpio-controller;
+			#gpio-cells = <2>;
+
+			pinctrl-names ="default";
+			pinctrl-0 = <&codec_reset &codec_irq>;
+
+			wlf,reset = <&gpe6 5 0>;
+			wlf,init-mic-delay = <30>;
+			wlf,use-jd-gpio;
+			wlf,micd-clamp-mode = <0x8>;
+			wlf,micd-detect-debounce = <300>;
+			wlf,micd-pol-gpio = <0>;
+			wlf,micd-bias-start-time = <0x1>;
+			wlf,micd-rate = <0x7>;
+			wlf,micd-dbtime = <0x1>;
+			wlf,micd-timeout = <1000>;
+			wlf,micd-force-micbias;
+			wlf,hpdet-moisture-imp = <2000>;
+			wlf,hpdet-moisture-debounce = <40>;
+			wlf,hpdet-channel = <1>;
+			wlf,hpdet-ext-res = <33>;
+			wlf,hpdet-short-circuit-imp = <3>;
+			wlf,micd-ranges = <
+				116 226
+				173 582
+				321 115
+				752 114
+				1257 217
+			>;
+
+			wlf,micd-configs = <
+				0x0 2 0
+			>;
+
+			wlf,micbias1 = <1800 0 1 0 0>;
+			wlf,micbias2 = <2800 0 1 0 0>;
+			wlf,micbias3 = <1800 0 1 0 0>;
+			wlf,micbias4 = <1800 0 1 0 0>;
+
+			wlf,gpio-defaults = <
+				0xffffffff 0xffffffff /* GPIO1 */
+				0xffffffff 0xffffffff /* GPIO2 */
+				0xffffffff 0xffffffff /* GPIO3 */
+				0xffffffff 0xffffffff /* GPIO4 */
+				0xffffffff 0xffffffff /* GPIO5 */
+				0xffffffff 0xffffffff /* GPIO6 */
+				0xffffffff 0xffffffff /* GPIO7 */
+				0xffffffff 0xffffffff /* GPIO8 */
+				0xffffffff 0xffffffff /* MIF1SCLK / GPIO9 */
+				0xffffffff 0xffffffff /* MIF1SDA / GPIO10 */
+				0xffffffff 0xffffffff /* MIF2SCLK / GPIO11 */
+				0xffffffff 0xffffffff /* MIF2SDA / GPIO12 */
+				0xffffffff 0xffffffff /* MIF3SCLK / GPIO13 */
+				0xffffffff 0xffffffff /* MIF3SDA / GPIO14 */
+				0x00002000 0x00006000 /* AIF1TXDAT / GPIO15 */
+				0x00002000 0x00006000 /* AIF1BCLK / GPIO16 */
+				0x00002000 0x00006000 /* AIF1RXDAT / GPIO17 */
+				0x00002000 0x00006000 /* AIF1LRCLK / GPIO18 */
+				0x00002000 0x00006000 /* AIF2TXDAT / GPIO19 */
+				0x00002000 0x00006000 /* AIF2BCLK / GPIO20 */
+				0x00002000 0x00006000 /* AIF2RXDAT / GPIO21 */
+				0x00002000 0x00006000 /* AIF2LRCLK / GPIO22 */
+				0x00002000 0x00006000 /* AIF3TXDAT / GPIO23 */
+				0x00002000 0x00006000 /* AIF3BCLK / GPIO24 */
+				0x00002000 0x00006000 /* AIF3RXDAT / GPIO25 */
+				0x00002000 0x00006000 /* AIF3LRCLK / GPIO26 */
+				0x00002000 0x00006000 /* AIF4TXDAT / GPIO27 */
+				0x00002000 0x00006000 /* AIF4BCLK / GPIO28 */
+				0x00002000 0x00006000 /* AIF4RXDAT / GPIO29 */
+				0x00002000 0x00006000 /* AIF4LRCLK / GPIO30 */
+				0x00002000 0x0000e000 /* DMICCLK4 / GPIO31 */
+				0x00002000 0x0000e000 /* DMICDAT4 / GPIO32 */
+				0xffffffff 0xffffffff /* DMICCLK5 / GPIO33 */
+				0xffffffff 0xffffffff /* DMICDAT5 / GPIO34 */
+				0xffffffff 0xffffffff /* DMICCLK6 / GPIO35 */
+				0xffffffff 0xffffffff /* DMICDAT6 / GPIO36 */
+				0xffffffff 0xffffffff /* SPKCLK1 / GPIO37 */
+				0xffffffff 0xffffffff /* SPKCLK2 / GPIO38 */
+				0xffffffff 0xffffffff /* SPKDAT1 / GPIO39 */
+				0xffffffff 0xffffffff /* SPKDAT2 / GPIO40 */
+			>;
+
+			wlf,gpsw = <0x3>;
+			wlf,micd-software-compare;
+			wlf,micd-open-circuit-declare = <1>;
+			wlf,jd-wake-time = <5000>;
+
+			wlf,max-channels-clocked = <2 0 0 0>;
+			/* 0:MICVDD 1:MICBIAS1 2:MICBIAS2 3:MICBIAS3 */
+			wlf,dmic-ref = <1 2 3 3 0 0>;
+			/* 1st cell:IN1L 2rd cell:IN1R 3nd cell:IN2L 4th cell:IN2R... 12th cell:IN6R */
+			wlf,inmode = <2 2 0 0 2 2 2 2 0 0 0 0>;
+			/* 1st cell:OUT1 2nd cell:OUT2 3rd cell:OUT3... 6th cell:OUT6 */
+			wlf,out-mono = <0 1 1 0 0 0>;
+
+			wlf,rev-specific-fw;
+
+			DCVDD-supply = <&ldo31_reg>;
+			AVDD-supply = <&ldo30_reg>;
+			LDOVDD-supply = <&ldo30_reg>;
+			DBVDD1-supply = <&ldo30_reg>;
+
+			CPVDD-supply = <&ldo30_reg>;
+			DBVDD2-supply = <&ldo30_reg>;
+			DBVDD3-supply = <&ldo30_reg>;
+			DBVDD4-supply = <&ldo30_reg>;
+			SPKVDDL-supply = <&ldo30_reg>;
+			SPKVDDR-supply = <&ldo30_reg>;
+
+			adsps {
+				#address-cells = <1>;
+				#size-cells = <0>;
+
+				adsp@0FFE00 {
+					reg = <0x0FFE00>;
+					firmware {
+						TRACE {
+							wlf,wmfw-file = "trace";
+							wlf,bin-file = "None";
+							wlf,compr-caps = <1 8 0x4 1 8000 16000 24000>;
+						};
+					};
+				};
+				adsp@17FE00 {
+					reg = <0x17FE00>;
+					firmware {
+						TX_NB {
+							wlf,wmfw-file = "tx-nb";
+							wlf,bin-file = "None";
+						};
+						TX_WB {
+							wlf,wmfw-file = "tx-wb";
+							wlf,bin-file = "None";
+						};
+						TX_SWB_INTERVIEW {
+							wlf,wmfw-file = "tx-swb";
+							wlf,bin-file = "None";
+						};
+						TX_SWB_CONVERSATION {
+							wlf,wmfw-file = "tx-swb";
+							wlf,bin-file = "None";
+						};
+						TX_FB_MEETING {
+							wlf,wmfw-file = "tx-fb-meeting";
+							wlf,bin-file = "tx-fb-meeting";
+						};
+					};
+				};
+				adsp@1FFE00 {
+					reg = <0x1FFE00>;
+					firmware {
+						TX_NB {
+							wlf,wmfw-file = "tx-nb";
+							wlf,bin-file = "tx-nb";
+						};
+						TX_WB {
+							wlf,wmfw-file = "tx-wb";
+							wlf,bin-file = "tx-wb";
+						};
+						TX_SWB_INTERVIEW {
+							wlf,wmfw-file = "tx-swb";
+							wlf,bin-file = "tx-swb-interview";
+						};
+						TX_SWB_CONVERSATION {
+							wlf,wmfw-file = "tx-swb";
+							wlf,bin-file = "tx-swb-conversation";
+						};
+						TX_WB_MEETING {
+							wlf,wmfw-file = "tx-wb-meeting";
+							wlf,bin-file = "tx-wb-meeting";
+						};
+					};
+				};
+				adsp@27FE00 {
+					reg = <0x27FE00>;
+					firmware {
+						RX_NB {
+							wlf,wmfw-file = "rx-anc-nb";
+							wlf,bin-file = "rx-anc-nb";
+						};
+						RX_WB {
+							wlf,wmfw-file = "rx-anc-wb";
+							wlf,bin-file = "rx-anc-wb";
+						};
+					};
+				};
+				adsp@37FE00 {
+					reg = <0x37FE00>;
+					firmware {
+						VOICECONTROL {
+							wlf,wmfw-file = "ez2-control";
+							wlf,bin-file = "ez2-control";
+							wlf,compr-caps = <1 1 0x4 1 16000>;
+						};
+						LPSD {
+							wlf,wmfw-file = "ez2-control";
+							wlf,bin-file = "lpsd-control";
+						};
+					};
+				};
+				adsp@2FFE00 {
+					reg = <0x2FFE00>;
+					firmware {
+						DSM {
+							wlf,wmfw-file = "dsm";
+							wlf,bin-file = "None";
+						};
+					};
+				};
+			};
+			controller-data {
+				cs-gpio = <&gpe2 1 0>;
+				samsung,spi-feedback-delay = <0>;
+			};
+		};
+	};
+};

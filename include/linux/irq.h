@@ -189,6 +189,7 @@ enum {
 	IRQD_IRQ_MASKED			= (1 << 17),
 	IRQD_IRQ_INPROGRESS		= (1 << 18),
 	IRQD_WAKEUP_ARMED		= (1 << 19),
+	IRQD_GIC_MULTI_TARGET		= (1 << 28),
 };
 
 static inline bool irqd_is_setaffinity_pending(struct irq_data *d)

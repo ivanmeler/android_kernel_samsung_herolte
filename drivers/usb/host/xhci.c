@@ -659,21 +659,6 @@ int xhci_run(struct usb_hcd *hcd)
 }
 EXPORT_SYMBOL_GPL(xhci_run);
 
-static void xhci_only_stop_hcd(struct usb_hcd *hcd)
-{
-	struct xhci_hcd *xhci = hcd_to_xhci(hcd);
-
-	spin_lock_irq(&xhci->lock);
-	xhci_halt(xhci);
-
-	/* The shared_hcd is going to be deallocated shortly (the USB core only
-	 * calls this function when allocation fails in usb_add_hcd(), or
-	 * usb_remove_hcd() is called).  So we need to unset xHCI's pointer.
-	 */
-	xhci->shared_hcd = NULL;
-	spin_unlock_irq(&xhci->lock);
-}
-
 /*
  * Stop xHCI driver.
  *
@@ -689,7 +674,6 @@ void xhci_stop(struct usb_hcd *hcd)
 	struct xhci_hcd *xhci = hcd_to_xhci(hcd);
 
 	if (!usb_hcd_is_primary_hcd(hcd)) {
-		xhci_only_stop_hcd(xhci->shared_hcd);
 		return;
 	}
 
@@ -1314,6 +1298,67 @@ command_cleanup:
 	}
 	return ret;
 }
+
+#ifdef CONFIG_HOST_COMPLIANT_TEST
+int xhci_urb_enqueue_single_step(struct usb_hcd *hcd,
+		struct urb *urb, gfp_t mem_flags, int get_dev_desc)
+{
+	struct xhci_hcd *xhci = hcd_to_xhci(hcd);
+	struct xhci_td *buffer;
+	int ret = 0;
+	unsigned int slot_id, ep_index;
+	struct urb_priv *urb_priv;
+	int size, i;
+
+	xhci_info(xhci, "%s\n", __func__);
+
+	slot_id = urb->dev->slot_id;
+	ep_index = xhci_get_endpoint_index(&urb->ep->desc);
+
+	size = 1;
+	urb_priv = kzalloc(sizeof(struct urb_priv) +
+			size * sizeof(struct xhci_td *), mem_flags);
+	if (!urb_priv) {
+		xhci_err(xhci, "urb_priv: get alloc failed\n");
+		return -ENOMEM;
+	}
+
+	buffer = kzalloc(size * sizeof(struct xhci_td), mem_flags);
+	if (!buffer) {
+		xhci_err(xhci, "buffer: get alloc failed\n");
+		kfree(urb_priv);
+		return -ENOMEM;
+	}
+
+	for (i = 0; i < size; i++) {
+		urb_priv->td[i] = buffer;
+		buffer++;
+	}
+
+	urb_priv->length = size;
+	urb_priv->td_cnt = 0;
+	urb->hcpriv = urb_priv;
+
+	if (xhci->xhc_state & XHCI_STATE_DYING)
+		goto dying;
+
+	ret = xhci_queue_ctrl_tx_single_step(xhci, GFP_KERNEL,
+			urb, slot_id, ep_index, get_dev_desc);
+	if (ret)
+		goto free_priv;
+
+	return ret;
+dying:
+	xhci_warn(xhci, "xHCI host is not responding\n");
+	xhci_warn(xhci, "Ep 0x%x: URB %p submitted\n",
+			urb->ep->desc.bEndpointAddress, urb);
+	ret = -ESHUTDOWN;
+free_priv:
+	xhci_urb_free_priv(xhci, urb_priv);
+	urb->hcpriv = NULL;
+	return ret;
+}
+#endif/* CONFIG_HOST_COMPLIANT_TEST */
 
 /*
  * non-error returns are a promise to giveback() the urb later
@@ -4125,6 +4170,11 @@ int xhci_set_usb2_hardware_lpm(struct usb_hcd *hcd,
 		return -EPERM;
 
 	if (udev->usb2_hw_lpm_capable != 1)
+		return -EPERM;
+
+	/* some USB3.0 memory stick doesn't support L1 mode,
+	  * so we add XHCI_LPM_L1_DISABLE quirks for disabling L1 mode */
+	if (!(xhci->quirks & XHCI_LPM_L1_SUPPORT))
 		return -EPERM;
 
 	spin_lock_irqsave(&xhci->lock, flags);

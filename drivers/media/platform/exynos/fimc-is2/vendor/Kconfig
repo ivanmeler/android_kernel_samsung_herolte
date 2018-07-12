@@ -1,0 +1,24 @@
+config VENDER_FEATURE
+        bool "Use vendor specific features"
+        depends on VIDEO_EXYNOS_FIMC_IS2
+        default y
+        help
+          Use the vender specfic features.
+
+config VENDER_DEFAULT
+        bool "Use DEFAULT vender"
+        depends on VENDER_FEATURE
+        default n
+        help
+          Default.
+
+source "drivers/media/platform/exynos/fimc-is2/vendor/default/Kconfig"
+
+config VENDER_MCD
+        bool "Use MCD vender"
+        depends on VENDER_FEATURE
+        default n
+        help
+          MCD.
+
+source "drivers/media/platform/exynos/fimc-is2/vendor/mcd/Kconfig"
