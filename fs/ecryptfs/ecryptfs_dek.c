@@ -245,7 +245,7 @@ int parse_dek_packet(char *data,
 		memcpy(crypt_stat->sdp_dek.buf, &data[*packet_size], crypt_stat->sdp_dek.len);
 		(*packet_size) += crypt_stat->sdp_dek.len;
 	}
-	
+
 #if ECRYPTFS_DEK_DEBUG
 	DEK_LOGD("%s() : comm : %s [euid:%d]\n",
 		__func__, temp_comm, temp_euid);
@@ -303,11 +303,11 @@ void ecryptfs_set_mapping_sensitive(struct inode *ecryptfs_inode, int userid, en
 #if defined(CONFIG_MMC_DW_FMP_ECRYPT_FS) || defined(CONFIG_UFS_FMP_ECRYPT_FS)
 	struct ecryptfs_mount_crypt_stat *mount_crypt_stat = NULL;
 	struct ecryptfs_inode_info *inode_info;
-	
+
 	inode_info = ecryptfs_inode_to_private(ecryptfs_inode);
 	DEK_LOGD("%s inode: %p lower_file_count: %d\n",__func__, ecryptfs_inode,atomic_read(&inode_info->lower_file_count));
 	mount_crypt_stat = &ecryptfs_superblock_to_private(ecryptfs_inode->i_sb)->mount_crypt_stat;
-	
+
 	if (operation == TO_SENSITIVE) {
 		mapping_set_sensitive(ecryptfs_inode->i_mapping);
 	} else {
@@ -358,8 +358,8 @@ static int ecryptfs_update_crypt_flag(struct dentry *dentry, enum sdp_op operati
      * To update metadata we need to make sure keysig_list contains fekek.
      * Because our EDEK is stored along with key for protected file.
      */
-    if(list_empty(&crypt_stat->keysig_list))
-        ecryptfs_dek_copy_mount_wide_sigs_to_inode_sigs(crypt_stat, mount_crypt_stat);
+	if (list_empty(&crypt_stat->keysig_list))
+	ecryptfs_dek_copy_mount_wide_sigs_to_inode_sigs(crypt_stat, mount_crypt_stat);
 
 	mutex_lock(&crypt_stat->cs_mutex);
 	rc = ecryptfs_get_lower_file(dentry, inode);
@@ -379,7 +379,7 @@ static int ecryptfs_update_crypt_flag(struct dentry *dentry, enum sdp_op operati
 		ecryptfs_set_mapping_sensitive(inode, mount_crypt_stat->userid, TO_SENSITIVE);
 	} else {
 		crypt_stat->flags &= ~ECRYPTFS_DEK_IS_SENSITIVE;
-        crypt_stat->flags &= ~ECRYPTFS_DEK_MULTI_ENGINE;
+	crypt_stat->flags &= ~ECRYPTFS_DEK_MULTI_ENGINE;
 
 		/*
 		* Set protected to inode mapping
@@ -594,7 +594,7 @@ long ecryptfs_do_sdp_ioctl(struct file *file, unsigned int cmd, unsigned long ar
 		dek_arg_get_sdp_info req;
 
 		DEK_LOGD("ECRYPTFS_IOCTL_GET_SDP_INFO\n");
-	
+
 		memset(&req, 0, sizeof(dek_arg_get_sdp_info));
 		if(copy_from_user(&req, ubuf, sizeof(req))) {
 			DEK_LOGE("can't copy from user\n");

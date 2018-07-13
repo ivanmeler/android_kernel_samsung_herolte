@@ -103,7 +103,7 @@ unsigned int cmp_ns_integrity(void)
 {
 	struct mount *root = NULL;
 	struct nsproxy *nsp = NULL;
-	
+
 	if((in_interrupt()
 		 || in_softirq())){
 		return 0;
@@ -154,7 +154,7 @@ void rkp_init_ns(struct vfsmount *vfsmnt,struct mount *mnt)
 static int mnt_alloc_vfsmount(struct mount *mnt)
 {
 	struct vfsmount *vfsmnt = NULL;
-	
+
 	vfsmnt = kmem_cache_alloc(vfsmnt_cache, GFP_KERNEL);
 	if(!vfsmnt)
 		return 1;
@@ -697,7 +697,7 @@ static void free_vfsmnt(struct mount *mnt)
 	free_percpu(mnt->mnt_pcp);
 #endif
 #ifdef CONFIG_RKP_NS_PROT
-	if(mnt->mnt && 
+	if(mnt->mnt &&
 		rkp_from_vfsmnt_cache((unsigned long)mnt->mnt))
 		kmem_cache_free(vfsmnt_cache,mnt->mnt);
 #endif
@@ -1101,7 +1101,7 @@ vfs_kern_mount(struct file_system_type *type, int flags, const char *name, void 
 	mnt->mnt.mnt_root = root;
 	mnt->mnt.mnt_sb = root->d_sb;
 	mnt->mnt_mountpoint = mnt->mnt.mnt_root;
-#endif	
+#endif
 	mnt->mnt_parent = mnt;
 	lock_mount_hash();
 	list_add_tail(&mnt->mnt_instance, &root->d_sb->s_mounts);
@@ -1162,7 +1162,7 @@ static struct mount *clone_mnt(struct mount *old, struct dentry *root,
 
 #ifdef CONFIG_RKP_NS_PROT
 	flags = old->mnt->mnt_flags & ~(MNT_WRITE_HOLD|MNT_MARKED);
-	
+
 	/* Don't allow unprivileged users to change mount flags */
 	if (flag & CL_UNPRIVILEGED) {
 		flags |= MNT_LOCK_ATIME;
@@ -1184,7 +1184,8 @@ static struct mount *clone_mnt(struct mount *old, struct dentry *root,
 		flags |= MNT_LOCKED;
 	rkp_assign_mnt_flags(mnt->mnt,flags);
 #else
-	mnt->mnt.mnt_flags = old->mnt.mnt_flags & ~(MNT_WRITE_HOLD|MNT_MARKED);
+	mnt->mnt.mnt_flags = old->mnt.mnt_flags;
+	mnt->mnt.mnt_flags &= ~(MNT_WRITE_HOLD|MNT_MARKED|MNT_INTERNAL);
 	/* Don't allow unprivileged users to change mount flags */
 	if (flag & CL_UNPRIVILEGED) {
 		mnt->mnt.mnt_flags |= MNT_LOCK_ATIME;
@@ -1807,7 +1808,7 @@ out_unlock:
 	namespace_unlock();
 }
 
-/* 
+/*
  * Is the caller allowed to modify his namespace?
  */
 static inline bool may_mount(void)
@@ -2363,7 +2364,7 @@ static int do_loopback(struct path *path, const char *old_name,
 
 	err = -EINVAL;
 	if (mnt_ns_loop(old_path.dentry))
-		goto out; 
+		goto out;
 
 	mp = lock_mount(path);
 	err = PTR_ERR(mp);
@@ -2754,7 +2755,7 @@ static int do_new_mount(struct path *path, const char *fstype, int flags,
 	if (err)
 		mntput(mnt);
 #ifdef CONFIG_RKP_NS_PROT
-	if(!sys_sb) 
+	if(!sys_sb)
 	{
 		char *mount_point;
 		mount_point = copy_mount_string(dir_name);
@@ -2763,7 +2764,7 @@ static int do_new_mount(struct path *path, const char *fstype, int flags,
 		}
 		kfree(mount_point);
 	}
-	
+
 #endif
 	return err;
 }

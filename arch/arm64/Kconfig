@@ -434,7 +434,7 @@ config ARM64_ERRATUM_845719
 	  the kernel if an affected CPU is detected.
 
 	  If unsure, say Y.
-	  
+
 config TIMA
 	bool "Enable TIMA(Trustzone based Integrity Measurement Archtecture feature"
 	default n
@@ -1009,10 +1009,10 @@ config ARM64_CPU_SUSPEND
 
 endmenu
 
-config RELOCATABLE_KERNEL 
+config RELOCATABLE_KERNEL
 	bool "set kernel to relocatable in both virtual and physical address"
 	default n
-	help 	
+	help
 	  This configuare will allow you to config the kernel into position independent kernel, with '--PIE' insert into LD script.
 
 config SAMSUNG_PRODUCT_SHIP
@@ -1055,7 +1055,7 @@ config RKP_CFP
 	# Disable RKP for now, keep getting TIMA_RKP_VMM_PANIC when doing sleep.S code for saving/restoring x17.
 	default n
 	help
-        Static binary instrumentation of direct/indirect branches to prevent 
+        Static binary instrumentation of direct/indirect branches to prevent
         return-oriented programming (ROP) attacks and jump-oriented programming (JOP) attacks.
 
 config RKP_CFP_ROPP

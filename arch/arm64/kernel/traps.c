@@ -55,7 +55,7 @@ static const char *handler[]= {
 	"Error"
 };
 
-int show_unhandled_signals = 1;
+int show_unhandled_signals = 0;
 
 /*
  * Dump out the contents of some memory nicely...
@@ -305,7 +305,7 @@ static int __die(const char *str, int err, struct thread_info *thread,
 		dump_mem(KERN_EMERG, "Stack: ", regs->sp,
 			 THREAD_SIZE + (unsigned long)task_stack_page(tsk));
 
-#ifdef CONFIG_SEC_DEBUG_AUTO_SUMMARY		
+#ifdef CONFIG_SEC_DEBUG_AUTO_SUMMARY
 		dump_backtrace_auto_summary(NULL, tsk);
 #else
 		dump_backtrace(NULL, tsk);
@@ -506,6 +506,7 @@ static void cntfrq_read_handler(unsigned int esr, struct pt_regs *regs)
 
 	if (rt != 31)
 		asm volatile("mrs %0, cntfrq_el0" : "=r" (regs->regs[rt]));
+		//regs->regs[rt] = read_sysreg(cntfrq_el0); /* android-3.18 merge */
 	regs->pc += 4;
 }
 

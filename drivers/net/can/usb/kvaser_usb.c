@@ -602,7 +602,6 @@ static int kvaser_usb_simple_msg_async(struct kvaser_usb_net_priv *priv,
 	if (err) {
 		netdev_err(netdev, "Error transmitting URB\n");
 		usb_unanchor_urb(urb);
-		kfree(buf);
 		usb_free_urb(urb);
 		kfree(buf);
 		return err;
@@ -851,7 +850,7 @@ static void kvaser_usb_rx_can_msg(const struct kvaser_usb *dev,
 
 	skb = alloc_can_skb(priv->netdev, &cf);
 	if (!skb) {
-		stats->tx_dropped++;
+		stats->rx_dropped++;
 		return;
 	}
 
@@ -1389,7 +1388,6 @@ static netdev_tx_t kvaser_usb_start_xmit(struct sk_buff *skb,
 
 		atomic_dec(&priv->active_tx_urbs);
 		usb_unanchor_urb(urb);
-		kfree(buf);
 
 		stats->tx_dropped++;
 

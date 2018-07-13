@@ -654,9 +654,9 @@ void resched_cpu(int cpu)
 	struct rq *rq = cpu_rq(cpu);
 	unsigned long flags;
 
-	if (!raw_spin_trylock_irqsave(&rq->lock, flags))
-		return;
-	resched_curr(rq);
+	raw_spin_lock_irqsave(&rq->lock, flags);
+	if (cpu_online(cpu) || cpu == smp_processor_id())
+		resched_curr(rq);
 	raw_spin_unlock_irqrestore(&rq->lock, flags);
 }
 
@@ -2651,7 +2651,7 @@ static ssize_t heavy_task_cpu_show(struct device *dev,
             remaining_load = cfs_load - task_util;
             avg_load = remaining_load / (no_task-1);
             if(avg_load > HEAVY_TASK_LOAD_THRESHOLD)
-                count++; 
+                count++;
         }
     }
 

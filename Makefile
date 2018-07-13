@@ -1,6 +1,6 @@
 VERSION = 3
 PATCHLEVEL = 18
-SUBLEVEL = 91
+SUBLEVEL = 115
 EXTRAVERSION =
 NAME = Diseased Newt
 
@@ -213,7 +213,6 @@ obj		:= $(objtree)
 VPATH		:= $(srctree)$(if $(KBUILD_EXTMOD),:$(KBUILD_EXTMOD))
 
 export srctree objtree VPATH
-
 
 # SUBARCH tells the usermode build what the underlying arch is.  That is set
 # first, and if a usermode build is happening, the "ARCH=um" on the command
@@ -500,6 +499,7 @@ else
 export ANDROID_VERSION=990000
 KBUILD_CFLAGS += -DANDROID_VERSION=990000
 endif
+export ANDROID_MAJOR_VERSION=o
 PHONY += replace_dirs
 replace_dirs:
 ifneq ($(PLATFORM_VERSION), )
@@ -768,15 +768,15 @@ KBUILD_CFLAGS	+= $(call cc-option, -gdwarf-4,)
 endif
 
 ifdef CONFIG_RKP_CFP_JOPP
-# Don't use jump tables for switch statements, since this generates indirect jump (br) 
+# Don't use jump tables for switch statements, since this generates indirect jump (br)
 # instructions, which are very dangerous for kernel control flow integrity.
 KBUILD_CFLAGS	+= -fno-jump-tables
-endif 
+endif
 
 ifdef CONFIG_RKP_CFP_ROPP
 # Don't let gcc allocate these registers, they are reserved for use by static binary instrumentation.
 KBUILD_CFLAGS	+= -ffixed-x16 -ffixed-x17
-endif 
+endif
 
 ifdef CONFIG_DEBUG_INFO_REDUCED
 KBUILD_CFLAGS 	+= $(call cc-option, -femit-struct-debug-baseonly) \
@@ -1578,11 +1578,11 @@ image_name:
 # Clear a bunch of variables before executing the submake
 tools/: FORCE
 	$(Q)mkdir -p $(objtree)/tools
-	$(Q)$(MAKE) LDFLAGS= MAKEFLAGS="$(filter --j% -j,$(MAKEFLAGS))" O=$(objtree) subdir=tools -C $(src)/tools/
+	$(Q)$(MAKE) LDFLAGS= MAKEFLAGS="$(filter --j% -j,$(MAKEFLAGS))" O=$(O) subdir=tools -C $(src)/tools/
 
 tools/%: FORCE
 	$(Q)mkdir -p $(objtree)/tools
-	$(Q)$(MAKE) LDFLAGS= MAKEFLAGS="$(filter --j% -j,$(MAKEFLAGS))" O=$(objtree) subdir=tools -C $(src)/tools/ $*
+	$(Q)$(MAKE) LDFLAGS= MAKEFLAGS="$(filter --j% -j,$(MAKEFLAGS))" O=$(O) subdir=tools -C $(src)/tools/ $*
 
 # Single targets
 # ---------------------------------------------------------------------------

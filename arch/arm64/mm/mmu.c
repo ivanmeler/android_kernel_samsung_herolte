@@ -47,7 +47,7 @@
 #endif
 
 #ifdef CONFIG_TIMA_RKP
-#include <linux/rkp_entry.h> 
+#include <linux/rkp_entry.h>
 #endif //CONFIG_TIMA_RKP
 
 u64 idmap_t0sz = TCR_T0SZ(VA_BITS);
@@ -88,8 +88,8 @@ static void __init *early_alloc(unsigned long sz)
 void* vmm_extra_mem = 0;
 spinlock_t ro_rkp_pages_lock = __SPIN_LOCK_UNLOCKED();
 char ro_pages_stat[RO_PAGES] = {0};
-unsigned ro_alloc_last = 0; 
-int rkp_ro_mapped = 0; 
+unsigned ro_alloc_last = 0;
+int rkp_ro_mapped = 0;
 
 
 void *rkp_ro_alloc(void)
@@ -97,11 +97,11 @@ void *rkp_ro_alloc(void)
 	unsigned long flags;
 	int i, j;
 	void * alloc_addr = NULL;
-	
+
 	spin_lock_irqsave(&ro_rkp_pages_lock,flags);
-	
+
 	for (i = 0, j = ro_alloc_last; i < (RO_PAGES) ; i++) {
-		j =  (j+1) %(RO_PAGES); 
+		j =  (j+1) %(RO_PAGES);
 		if (!ro_pages_stat[j]) {
 			ro_pages_stat[j] = 1;
 			ro_alloc_last = j+1;
@@ -110,7 +110,7 @@ void *rkp_ro_alloc(void)
 		}
 	}
 	spin_unlock_irqrestore(&ro_rkp_pages_lock,flags);
-	
+
 	return alloc_addr;
 }
 
@@ -122,7 +122,7 @@ void rkp_ro_free(void *free_addr)
 	i =  ((u64)free_addr - (u64)RKP_RBUF_VA) >> PAGE_SHIFT;
 	spin_lock_irqsave(&ro_rkp_pages_lock,flags);
 	ro_pages_stat[i] = 0;
-	ro_alloc_last = i; 
+	ro_alloc_last = i;
 	spin_unlock_irqrestore(&ro_rkp_pages_lock,flags);
 }
 
@@ -137,9 +137,9 @@ unsigned int is_rkp_ro_page(u64 addr)
 static inline void __init block_to_pages(pmd_t *pmd, unsigned long addr,
 				  unsigned long end, unsigned long pfn)
 {
-	pte_t *old_pte;  
-	pmd_t new ; 
-	pte_t *pte = rkp_ro_alloc();	
+	pte_t *old_pte;
+	pmd_t new ;
+	pte_t *pte = rkp_ro_alloc();
 
 	old_pte = pte;
 
@@ -147,7 +147,7 @@ static inline void __init block_to_pages(pmd_t *pmd, unsigned long addr,
 
 	pte = pte_offset_kernel(&new, addr);
 
-	do {		
+	do {
 		if (iotable_on == 1)
 			set_pte(pte, pfn_pte(pfn, pgprot_iotable_init(PAGE_KERNEL_EXEC)));
 		else
@@ -664,7 +664,6 @@ core_initcall(map_entry_trampoline);
 void __init paging_init(void)
 {
 	map_mem();
-
 	fixup_executable();
 
 #ifdef CONFIG_TIMA_RKP

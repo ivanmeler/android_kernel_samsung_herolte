@@ -124,7 +124,7 @@ SECTIONS
 	. = ALIGN(PAGE_SIZE);
 	.rkp.dblmap : {
 		rkp_map_bitmap = .;
-		*(.rkp.dblmap) 
+		*(.rkp.dblmap)
 	}
 #ifdef CONFIG_RKP_KDP
 	 /* Creating a new section to store task credentials */
@@ -198,7 +198,7 @@ SECTIONS
 		__dynsym_start = .;
 		*(.dynsym)
 	}
-#endif 
+#endif
 
 	. = ALIGN(PAGE_SIZE);
 	__init_end = .;
@@ -228,15 +228,18 @@ SECTIONS
 	. += IDMAP_DIR_SIZE;
 	swapper_pg_dir = .;
 	. += SWAPPER_DIR_SIZE;
+
 #ifdef CONFIG_ARM64_SW_TTBR0_PAN
 	reserved_ttbr0 = .;
 	. += RESERVED_TTBR0_SIZE;
 #endif
+
 #ifdef CONFIG_UNMAP_KERNEL_AT_EL0
 	tramp_pg_dir = .;
 	. += PAGE_SIZE;
 #endif
 #endif
+
 	_end = .;
 
 	STABS_DEBUG

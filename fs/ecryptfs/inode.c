@@ -54,29 +54,29 @@
 /* Do not directly use this function. Use ECRYPTFS_OVERRIDE_CRED() instead. */
 const struct cred * ecryptfs_override_fsids(uid_t fsuid, gid_t fsgid)
 {
-	struct cred * cred; 
-	const struct cred * old_cred; 
+	struct cred * cred;
+	const struct cred * old_cred;
 
-	cred = prepare_creds(); 
-	if (!cred) 
-		return NULL; 
+	cred = prepare_creds();
+	if (!cred)
+		return NULL;
 
 	cred->fsuid = make_kuid(current_user_ns(), fsuid);
 	cred->fsgid = make_kgid(current_user_ns(), fsgid);
 
-	old_cred = override_creds(cred); 
+	old_cred = override_creds(cred);
 
-	return old_cred; 
+	return old_cred;
 }
 
 /* Do not directly use this function, use REVERT_CRED() instead. */
 void ecryptfs_revert_fsids(const struct cred * old_cred)
 {
-	const struct cred * cur_cred; 
+	const struct cred * cur_cred;
 
-	cur_cred = current->cred; 
-	revert_creds(old_cred); 
-	put_cred(cur_cred); 
+	cur_cred = current->cred;
+	revert_creds(old_cred);
+	put_cred(cur_cred);
 }
 
 #if !defined(CONFIG_SDP) || (ANDROID_VERSION >= 80000)
@@ -452,9 +452,7 @@ ecryptfs_create(struct inode *directory_inode, struct dentry *ecryptfs_dentry,
 		iput(ecryptfs_inode);
 		goto out;
 	}
-	unlock_new_inode(ecryptfs_inode);
-
-	d_instantiate(ecryptfs_dentry, ecryptfs_inode);
+	d_instantiate_new(ecryptfs_dentry, ecryptfs_inode);
 #if (ANDROID_VERSION < 80000)
 	if(d_unhashed(ecryptfs_dentry))
 		d_rehash(ecryptfs_dentry);
@@ -660,7 +658,7 @@ static struct dentry *ecryptfs_lookup(struct inode *ecryptfs_dir_inode,
 				if (!strcasecmp(ecryptfs_dentry->d_name.name, "Android")) {
 					/* App-specific directories inside; let anyone traverse */
 					dinfo->permission = PERMISSION_ROOT;
-				}	
+				}
 			}
 			else {
 				int len = strlen(ecryptfs_dentry->d_name.name);
@@ -671,18 +669,18 @@ static struct dentry *ecryptfs_lookup(struct inode *ecryptfs_dir_inode,
 				if(numeric) {
 					dinfo->userid = simple_strtoul(ecryptfs_dentry->d_name.name, NULL, 10);
 				}
-			} 
+			}
 		}
 		else {
 			struct sdcardfs_sb_info *sbi = SDCARDFS_SB(lower_dir_dentry->d_sb);
-			
+
 			/* Derive custom permissions based on parent and current node */
 			switch (parent_info->permission) {
 				case PERMISSION_ROOT:
 					if (!strcasecmp(ecryptfs_dentry->d_name.name, "data") || !strcasecmp(ecryptfs_dentry->d_name.name, "obb") || !strcasecmp(ecryptfs_dentry->d_name.name, "media")) {
 						/* App-specific directories inside; let anyone traverse */
 						dinfo->permission = PERMISSION_ANDROID;
-					} 
+					}
 					break;
                			case PERMISSION_ANDROID:
 					dinfo->permission = PERMISSION_UNDER_ANDROID;

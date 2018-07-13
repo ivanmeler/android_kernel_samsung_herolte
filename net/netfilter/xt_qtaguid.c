@@ -2295,7 +2295,7 @@ static int ctrl_cmd_tag(const char *input)
 			BUG_ON(tag_ref_entry->num_sock_tags <= 0);
 			tag_ref_entry->num_sock_tags--;
 			free_tag_ref_from_utd_entry(tag_ref_entry,
-						uid_tag_data_entry);
+						    uid_tag_data_entry);
 			spin_unlock_bh(&uid_tag_data_tree_lock);
 			spin_unlock_bh(&sock_tag_list_lock);
 			res = -ENOMEM;

@@ -219,13 +219,13 @@ static ssize_t f_hidg_read(struct file *file, char __user *buffer,
 	 * call, taking into account its current read position.
 	 */
 	if (list->pos == req->actual) {
- 		kfree(list);
+		kfree(list);
 
 		req->length = hidg->report_length;
 		ret = usb_ep_queue(hidg->out_ep, req, GFP_KERNEL);
 		if (ret < 0) {
 			free_ep_req(hidg->out_ep, req);
- 			return ret;
+			return ret;
 		}
 	} else {
 		spin_lock_irqsave(&hidg->spinlock, flags);

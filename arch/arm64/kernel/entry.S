@@ -64,7 +64,6 @@
 #endif
 	.endm
 
-
 /*
  * Bad Abort numbers
  *-----------------

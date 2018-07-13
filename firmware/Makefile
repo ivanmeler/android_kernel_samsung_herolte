@@ -12,7 +12,7 @@ fw-external-y := $(subst $(quote),,$(CONFIG_EXTRA_FIRMWARE))
 # There are three cases to care about:
 # 1. Building kernel with CONFIG_FIRMWARE_IN_KERNEL=y -- $(fw-shipped-y) should
 #    include the firmware files to include, according to .config
-# 2. 'make modules_install', which will install firmware for modules, and 
+# 2. 'make modules_install', which will install firmware for modules, and
 #    _also_ for the in-kernel drivers when CONFIG_FIRMWARE_IN_KERNEL=n
 # 3. 'make firmware_install', which installs all firmware, unconditionally.
 
@@ -145,55 +145,25 @@ fw-shipped-$(CONFIG_CCIC_S2MM005) += usbpd/s2mm005.bin
 
 fw-shipped-$(CONFIG_EPEN_WACOM_W9018) += epen/W9018_GRACE.bin
 
-TSPFIRMWARE_DIRECTORY = firmware/tsp_stm
-ifeq ($(shell test -d $(TSPFIRMWARE_DIRECTORY) && echo yes),yes)
 fw-shipped-$(CONFIG_TOUCHSCREEN_FTS) += tsp_stm/stm_z1.fw tsp_stm/stm_z2a.fw
 fw-shipped-$(CONFIG_TOUCHSCREEN_FTS7) += tsp_stm/hero2i.fw tsp_stm/hero2a.fw tsp_stm/hero_e.fw
 fw-shipped-$(CONFIG_TOUCHSCREEN_FTS7_VALLEY) += tsp_stm/fts7bd50_vlte.fw
 fw-shipped-$(CONFIG_TOUCHSCREEN_FTS7_HAECHI) += tsp_stm/fts7bd50_haechi.fw
 fw-shipped-$(CONFIG_TOUCHSCREEN_FTS8) += tsp_stm/fts9cd56_of.fw
-else
-$(warning '$(TSPFIRMWARE_DIRECTORY)' directory dose not exist)
-endif
 
-TSPFIRMWARE_DIRECTORY = firmware/tsp_sec
-ifeq ($(shell test -d $(TSPFIRMWARE_DIRECTORY) && echo yes),yes)
 fw-shipped-$(CONFIG_TOUCHSCREEN_SEC_TS) += tsp_sec/hero.bin
 fw-shipped-$(CONFIG_TOUCHSCREEN_SEC_TS) += tsp_sec/hero_ub.bin tsp_sec/hero2la.bin
 fw-shipped-$(CONFIG_TOUCHSCREEN_SEC_TS) += tsp_sec/y661_grace.fw
-else
-$(warning '$(TSPFIRMWARE_DIRECTORY)' directory dose not exist)
-endif
 
-TSPFIRMWARE_DIRECTORY = firmware/tsp_synaptics
-ifeq ($(shell test -d $(TSPFIRMWARE_DIRECTORY) && echo yes),yes)
 fw-shipped-$(CONFIG_TOUCHSCREEN_SYNAPTICS_I2C_DSX2) += tsp_synaptics/synaptics_s5300_v_ab.fw \
 	tsp_synaptics/synaptics_s5300_v_ac.fw
 fw-shipped-$(CONFIG_TOUCHSCREEN_SYNAPTICS_I2C_DSX) += tsp_synaptics/synaptics_s5100_haechi.fw
-else
-$(warning '$(TSPFIRMWARE_DIRECTORY)' directory dose not exist)
-endif
 
-TSPFIRMWARE_DIRECTORY = firmware/tsp_atmel
-ifeq ($(shell test -d $(TSPFIRMWARE_DIRECTORY) && echo yes),yes)
 fw-shipped-$(CONFIG_TOUCHSCREEN_ATMEL_MXT874U) += tsp_atmel/mxt874u_ufo.fw tsp_atmel/mxt874u_grace.fw
-else
-$(warning '$(TSPFIRMWARE_DIRECTORY)' directory dose not exist)
-endif
 
-TSPFIRMWARE_DIRECTORY = firmware/tsp_melfas
-ifeq ($(shell test -d $(TSPFIRMWARE_DIRECTORY) && echo yes),yes)
 fw-shipped-$(CONFIG_TOUCHSCREEN_MMS100S) += tsp_melfas/mms128s_ufo.fw tsp_melfas/mms128s_config_ufo.fw
-else
-$(warning '$(TSPFIRMWARE_DIRECTORY)' directory dose not exist)
-endif
 
-TSPFIRMWARE_DIRECTORY = firmware/tsp_g2tsp
-ifeq ($(shell test -d $(TSPFIRMWARE_DIRECTORY) && echo yes),yes)
 fw-shipped-$(CONFIG_TOUCHSCREEN_G2TOUCH) += tsp_g2tsp/g7400_of.bin
-else
-$(warning '$(TSPFIRMWARE_DIRECTORY)' directory dose not exist)
-endif
 
 fw-shipped-$(CONFIG_KEYBOARD_CYPRESS_TOUCH_MBR31X5) += cypress/cy8cmbr3145_grace.fw cypress/cy8cmbr3145_hero.fw
 fw-shipped-$(CONFIG_KEYBOARD_ABOV_FT16XX_TOUCH) += abov/abov_hero.fw abov/abov_hero2.fw abov/abov_valley.fw
@@ -259,7 +229,7 @@ $(obj)/%: $(obj)/%.ihex
 # Don't depend on ihex2fw if we're installing and it already exists.
 # Putting it after | in the dependencies doesn't seem sufficient when
 # we're installing after a cross-compile, because ihex2fw has dependencies
-# on stuff like /usr/lib/gcc/ppc64-redhat-linux/4.3.0/include/stddef.h and 
+# on stuff like /usr/lib/gcc/ppc64-redhat-linux/4.3.0/include/stddef.h and
 # thus wants to be rebuilt. Which it can't be, if the prebuilt kernel tree
 # is exported read-only for someone to run 'make install'.
 ifeq ($(INSTALL):$(wildcard $(obj)/ihex2fw),install:$(obj)/ihex2fw)

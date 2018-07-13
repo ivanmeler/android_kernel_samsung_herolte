@@ -2496,8 +2496,7 @@ static int ext4_add_nondir(handle_t *handle,
 	int err = ext4_add_entry(handle, dentry, inode);
 	if (!err) {
 		ext4_mark_inode_dirty(handle, inode);
-		unlock_new_inode(inode);
-		d_instantiate(dentry, inode);
+		d_instantiate_new(dentry, inode);
 		return 0;
 	}
 	drop_nlink(inode);
@@ -2731,8 +2730,7 @@ out_clear_inode:
 	err = ext4_mark_inode_dirty(handle, dir);
 	if (err)
 		goto out_clear_inode;
-	unlock_new_inode(inode);
-	d_instantiate(dentry, inode);
+	d_instantiate_new(dentry, inode);
 	if (IS_DIRSYNC(dir))
 		ext4_handle_sync(handle);
 
@@ -3215,6 +3213,7 @@ static int ext4_symlink(struct inode *dir,
 
 	if ((disk_link.len > EXT4_N_BLOCKS * 4)) {
 		inode->i_op = &ext4_symlink_inode_operations;
+		inode_nohighmem(inode);
 		ext4_set_aops(inode);
 		/*
 		 * We cannot call page_symlink() with transaction started
