@@ -17,8 +17,6 @@
 
 #include <linux/slab.h>		/* gfp_t */
 #include <linux/fs.h>		/* struct inode and struct file */
-#include <linux/mutex.h>
-
 
 #define MC_VERSION(major, minor) \
 		(((major & 0x0000ffff) << 16) | (minor & 0x0000ffff))
@@ -73,7 +71,6 @@ extern struct mc_device_ctx g_ctx;
 
 /* Debug stuff */
 struct kasnprintf_buf {
-	struct mutex mutex; 	/* Protect buf/size/off access */
 	gfp_t gfp;
 	void *buf;
 	int size;
@@ -85,7 +82,6 @@ int kasnprintf(struct kasnprintf_buf *buf, const char *fmt, ...);
 ssize_t debug_generic_read(struct file *file, char __user *user_buf,
 			   size_t count, loff_t *ppos,
 			   int (*function)(struct kasnprintf_buf *buf));
-int debug_generic_open(struct inode *inode, struct file *file);
 int debug_generic_release(struct inode *inode, struct file *file);
 
 static inline int kref_read(struct kref *kref)

@@ -258,7 +258,7 @@ static inline int map_buffer(struct task_struct *task, const void *data,
 			long gup_ret;
 			/* ExySp: for page migration */
 			unsigned int foll_flags =
-				FOLL_TOUCH | FOLL_GET | FOLL_WRITE | FOLL_CMA;
+				FOLL_TOUCH | FOLL_GET | FOLL_WRITE;
 
 			/* Buffer was allocated in user space */
 			down_read(&task->mm->mmap_sem);
@@ -471,8 +471,8 @@ void tee_mmu_buffer(const struct tee_mmu *mmu, struct mcp_buffer_map *map)
 int tee_mmu_debug_structs(struct kasnprintf_buf *buf, const struct tee_mmu *mmu)
 {
 	return kasnprintf(buf,
-			  "\t\t\tmmu %pK: %s len %u off %u table %pK type L%d\n",
+			  "\t\t\tmmu %p: %s len %u off %u table %lx type L%d\n",
 			  mmu, mmu->user ? "user" : "kernel", mmu->length,
-			  mmu->offset, (void *)mmu_table_pointer(mmu),
+			  mmu->offset, mmu_table_pointer(mmu),
 			  mmu->l1_table.page ? 1 : 2);
 }

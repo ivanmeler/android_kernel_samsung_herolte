@@ -106,51 +106,38 @@ int kasnprintf(struct kasnprintf_buf *buf, const char *fmt, ...)
 	return i;
 }
 
-static inline void kasnprintf_buf_reset(struct kasnprintf_buf *buf)
-{
-	kfree(buf->buf);
-	buf->buf = NULL;
-	buf->size = 0;
-	buf->off = 0;
-}
-
 ssize_t debug_generic_read(struct file *file, char __user *user_buf,
 			   size_t count, loff_t *ppos,
 			   int (*function)(struct kasnprintf_buf *buf))
 {
-	struct kasnprintf_buf *buf = file->private_data;
-	int ret = 0;
-
-	mutex_lock(&buf->mutex);
 	/* Add/update buffer */
-	if (!*ppos) {
-		kasnprintf_buf_reset(buf);
+	if (!file->private_data || !*ppos) {
+		struct kasnprintf_buf *buf, *old_buf;
+		int ret;
+
+		buf = kzalloc(GFP_KERNEL, sizeof(*buf));
+		if (!buf)
+			return -ENOMEM;
+
+		buf->gfp = GFP_KERNEL;
 		ret = function(buf);
 		if (ret < 0) {
-			kasnprintf_buf_reset(buf);
-			goto end;
-		}
+			kfree(buf);
+			return ret;
 		}
 
-	ret = simple_read_from_buffer(user_buf, count, ppos, buf->buf,
-									buf->off);
-	
-	end:
-		mutex_unlock(&buf->mutex);
-		return ret;
+		old_buf = file->private_data;
+		file->private_data = buf;
+		kfree(old_buf);
 	}
 
-int debug_generic_open(struct inode *inode, struct file *file)
-{
-	struct kasnprintf_buf *buf;
+	if (file->private_data) {
+		struct kasnprintf_buf *buf = file->private_data;
 
-	file->private_data = kzalloc(sizeof(*buf), GFP_KERNEL);
-	if (!file->private_data)
-		return -ENOMEM;
+		return simple_read_from_buffer(user_buf, count, ppos, buf->buf,
+					       buf->off);
+	}
 
-	buf = file->private_data;
-	mutex_init(&buf->mutex);
-	buf->gfp = GFP_KERNEL;
 	return 0;
 }
 
@@ -158,10 +145,7 @@ int debug_generic_release(struct inode *inode, struct file *file)
 {
 	struct kasnprintf_buf *buf = file->private_data;
 
-	if (!buf)
-		return 0;
-
-	kasnprintf_buf_reset(buf);
+	kfree(buf->buf);
 	kfree(buf);
 	return 0;
 }
@@ -176,7 +160,6 @@ static ssize_t debug_structs_read(struct file *file, char __user *user_buf,
 static const struct file_operations mc_debug_structs_ops = {
 	.read = debug_structs_read,
 	.llseek = default_llseek,
-	.open = debug_generic_open,
 	.release = debug_generic_release,
 };
 
@@ -467,7 +450,6 @@ static ssize_t debug_sessions_read(struct file *file, char __user *user_buf,
 static const struct file_operations mc_debug_sessions_ops = {
 	.read = debug_sessions_read,
 	.llseek = default_llseek,
-	.open = debug_generic_open,
 	.release = debug_generic_release,
 };
 
@@ -481,7 +463,6 @@ static ssize_t debug_mcpcmds_read(struct file *file, char __user *user_buf,
 static const struct file_operations mc_debug_mcpcmds_ops = {
 	.read = debug_mcpcmds_read,
 	.llseek = default_llseek,
-	.open = debug_generic_open,
 	.release = debug_generic_release,
 };
 

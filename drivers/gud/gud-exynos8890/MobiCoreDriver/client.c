@@ -829,9 +829,9 @@ void client_init(void)
 static inline int cbuf_debug_structs(struct kasnprintf_buf *buf,
 				     struct cbuf *cbuf)
 {
-	return kasnprintf(buf, "\tcbuf %pK [%d]: addr %pK uaddr %pK len %u\n",
-			  cbuf, kref_read(&cbuf->kref), (void *)cbuf->addr,
-			  (void *)cbuf->uaddr, cbuf->len);
+	return kasnprintf(buf, "\tcbuf %p [%d]: addr %lx uaddr %lx len %u\n",
+			  cbuf, kref_read(&cbuf->kref), cbuf->addr,
+			  cbuf->uaddr, cbuf->len);
 }
 
 static int client_debug_structs(struct kasnprintf_buf *buf,
@@ -842,12 +842,12 @@ static int client_debug_structs(struct kasnprintf_buf *buf,
 	int ret;
 
 	if (client->pid)
-		ret = kasnprintf(buf, "client %pK [%d]: %s (%d)%s\n",
+		ret = kasnprintf(buf, "client %p [%d]: %s (%d)%s\n",
 				 client, kref_read(&client->kref),
 				 client->comm, client->pid,
 				 is_closing ? " <closing>" : "");
 	else
-		ret = kasnprintf(buf, "client %pK [%d]: [kernel]%s\n",
+		ret = kasnprintf(buf, "client %p [%d]: [kernel]%s\n",
 				 client, kref_read(&client->kref),
 				 is_closing ? " <closing>" : "");
 

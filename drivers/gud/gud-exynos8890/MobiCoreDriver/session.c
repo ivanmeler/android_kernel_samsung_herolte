@@ -532,8 +532,8 @@ static inline int wsm_debug_structs(struct kasnprintf_buf *buf, struct wsm *wsm)
 	ssize_t ret;
 
 	ret = kasnprintf(buf,
-			 "\t\twsm %p: mmu %pK cbuf %pK va %pK len %u sva %x\n",
-			 wsm, wsm->mmu, wsm->cbuf, (void *)wsm->va, wsm->len, wsm->sva);
+			 "\t\twsm %p: mmu %p cbuf %p va %lx len %u sva %x\n",
+			 wsm, wsm->mmu, wsm->cbuf, wsm->va, wsm->len, wsm->sva);
 	if (ret < 0)
 		return ret;
 
@@ -802,7 +802,7 @@ int session_debug_structs(struct kasnprintf_buf *buf,
 	int ret;
 
 	exit_code = mcp_session_exitcode(&session->mcp_session);
-	ret = kasnprintf(buf, "\tsession %pK [%d]: %x %s ec %d%s\n", session,
+	ret = kasnprintf(buf, "\tsession %p [%d]: %x %s ec %d%s\n", session,
 			 kref_read(&session->kref), session->mcp_session.id,
 			 session->mcp_session.is_gp ? "GP" : "MC", exit_code,
 			 is_closing ? " <closing>" : "");

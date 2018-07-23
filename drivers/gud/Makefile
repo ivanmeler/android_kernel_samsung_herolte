@@ -1,7 +1,2 @@
-ifeq ($(CONFIG_SOC_EXYNOS8890_KINIBI311), y)
-obj-$(CONFIG_SOC_EXYNOS8890_KINIBI311) += gud-exynos8890_kinibi311/
-obj-$(CONFIG_TRUSTONIC_TRUSTED_UI) += TlcTui/
-else ifeq ($(CONFIG_SOC_EXYNOS8890), y)
 obj-$(CONFIG_SOC_EXYNOS8890) += gud-exynos8890/
 obj-$(CONFIG_TRUSTONIC_TRUSTED_UI) += TlcTui/
-endif
