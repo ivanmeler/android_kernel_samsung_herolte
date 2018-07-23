@@ -21,7 +21,12 @@ ifeq ($(CONFIG_MALI_T8XX),y)
         obj-y += t8xx/r9p0/
     endif
     ifeq ($(CONFIG_MALI_R12P0),y)
-    	obj-y += t8xx/r12p0_m/
+    	ifeq ($(CONFIG_DDK_VERSION_OS),"n")
+    		obj-y += t8xx/r12p0_n/
+    	endif
+    	ifeq ($(CONFIG_DDK_VERSION_OS),"m")
+    		obj-y += t8xx/r12p0_m/
+    	endif
     endif
     ifeq ($(CONFIG_MALI_R15P0),y)
     	obj-y += t8xx/r15p0/

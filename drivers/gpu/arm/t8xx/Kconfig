@@ -30,7 +30,7 @@ choice
 	prompt "version Configuration"
 	depends on MALI_T8XX
 	default MALI_R12P0 if DDK_VERSION_OS = "m"
-	default MALI_R15P0 if DDK_VERSION_OS = "n"
+	default MALI_R12P0 if DDK_VERSION_OS = "n"
 	default MALI_R22P0 if DDK_VERSION_OS = "o"
 	help
 	  Select the gpu support version.
@@ -67,7 +67,12 @@ if MALI_R9P0
 endif
 
 if MALI_R12P0
+	if DDK_VERSION_OS = "n"
+	source "drivers/gpu/arm/t8xx/r12p0_n/Kconfig"
+	endif
+	if DDK_VERSION_OS = "m"
 	source "drivers/gpu/arm/t8xx/r12p0_m/Kconfig"
+	endif
 endif
 
 if MALI_R15P0
