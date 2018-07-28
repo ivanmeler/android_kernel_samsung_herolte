@@ -84,7 +84,7 @@ static bool tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 
 /* Account for new data that has been sent to the network. */
 #ifndef CONFIG_MPTCP
-static 
+static
 #endif
 void tcp_event_new_data_sent(struct sock *sk, const struct sk_buff *skb)
 {
@@ -197,8 +197,13 @@ static void tcp_event_data_sent(struct tcp_sock *tp,
 }
 
 /* Account for an ACK we sent. */
-static inline void tcp_event_ack_sent(struct sock *sk, unsigned int pkts)
+static inline void tcp_event_ack_sent(struct sock *sk, unsigned int pkts,
+				      u32 rcv_nxt)
 {
+	struct tcp_sock *tp = tcp_sk(sk);
+
+	if (unlikely(rcv_nxt != tp->rcv_nxt))
+		return;  /* Special ACK sent by DCTCP to reflect ECN */
 	tcp_dec_quickack_mode(sk, pkts);
 	inet_csk_clear_xmit_timer(sk, ICSK_TIME_DACK);
 }
@@ -288,7 +293,7 @@ EXPORT_SYMBOL(tcp_select_initial_window);
  * frame.
  */
 #ifndef CONFIG_MPTCP
-static 
+static
 #endif
 u16 tcp_select_window(struct sock *sk)
 {
@@ -417,7 +422,7 @@ static void tcp_ecn_send(struct sock *sk, struct sk_buff *skb,
  * auto increment end seqno.
  */
 #ifndef CONFIG_MPTCP
-static 
+static
 #endif
 void tcp_init_nondata_skb(struct sk_buff *skb, u32 seq, u8 flags)
 {
@@ -440,7 +445,7 @@ void tcp_init_nondata_skb(struct sk_buff *skb, u32 seq, u8 flags)
 }
 
 #ifndef CONFIG_MPTCP
-static inline 
+static inline
 #endif
 bool tcp_urg_mode(const struct tcp_sock *tp)
 {
@@ -1003,10 +1008,10 @@ out:
  * SKB, or a fresh unique copy made by the retransmit engine.
  */
 #ifndef CONFIG_MPTCP
-static 
+static
 #endif
-int tcp_transmit_skb(struct sock *sk, struct sk_buff *skb, int clone_it,
-		        gfp_t gfp_mask)
+int __tcp_transmit_skb(struct sock *sk, struct sk_buff *skb,
+			      int clone_it, gfp_t gfp_mask, u32 rcv_nxt)
 {
 	const struct inet_connection_sock *icsk = inet_csk(sk);
 	struct inet_sock *inet;
@@ -1069,7 +1074,7 @@ int tcp_transmit_skb(struct sock *sk, struct sk_buff *skb, int clone_it,
 	th->source		= inet->inet_sport;
 	th->dest		= inet->inet_dport;
 	th->seq			= htonl(tcb->seq);
-	th->ack_seq		= htonl(tp->rcv_nxt);
+	th->ack_seq		= htonl(rcv_nxt);
 	*(((__be16 *)th) + 6)	= htons(((tcp_header_size >> 2) << 12) |
 					tcb->tcp_flags);
 
@@ -1119,7 +1124,7 @@ int tcp_transmit_skb(struct sock *sk, struct sk_buff *skb, int clone_it,
 	icsk->icsk_af_ops->send_check(sk, skb);
 
 	if (likely(tcb->tcp_flags & TCPHDR_ACK))
-		tcp_event_ack_sent(sk, tcp_skb_pcount(skb));
+		tcp_event_ack_sent(sk, tcp_skb_pcount(skb), rcv_nxt);
 
 	if (skb->len != tcp_header_size)
 		tcp_event_data_sent(tp, sk);
@@ -1148,13 +1153,23 @@ int tcp_transmit_skb(struct sock *sk, struct sk_buff *skb, int clone_it,
 	return net_xmit_eval(err);
 }
 
+#ifndef CONFIG_MPTCP
+static
+#endif
+int tcp_transmit_skb(struct sock *sk, struct sk_buff *skb, int clone_it,
+			    gfp_t gfp_mask)
+{
+	return __tcp_transmit_skb(sk, skb, clone_it, gfp_mask,
+				  tcp_sk(sk)->rcv_nxt);
+}
+
 /* This routine just queues the buffer for sending.
  *
  * NOTE: probe0 timer is not checked, do not forget tcp_push_pending_frames,
  * otherwise socket can stall.
  */
 #ifndef CONFIG_MPTCP
-static 
+static
 #endif
 void tcp_queue_skb(struct sock *sk, struct sk_buff *skb)
 {
@@ -1170,7 +1185,7 @@ void tcp_queue_skb(struct sock *sk, struct sk_buff *skb)
 
 /* Initialize TSO segments for a packet. */
 #ifndef CONFIG_MPTCP
-static 
+static
 #endif
 void tcp_set_skb_tso_segs(const struct sock *sk, struct sk_buff *skb,
 			  unsigned int mss_now)
@@ -1218,7 +1233,7 @@ static void tcp_adjust_fackets_out(struct sock *sk, const struct sk_buff *skb,
  * tweaks to fix counters
  */
 #ifndef CONFIG_MPTCP
-static 
+static
 #endif
 void tcp_adjust_pcount(struct sock *sk, const struct sk_buff *skb, int decr)
 {
@@ -1356,7 +1371,7 @@ int tcp_fragment(struct sock *sk, struct sk_buff *skb, u32 len,
  * immediately discarded.
  */
 #ifndef CONFIG_MPTCP
-static 
+static
 #endif
 int __pskb_trim_head(struct sk_buff *skb, int len)
 {
@@ -1618,7 +1633,7 @@ static void tcp_cwnd_application_limited(struct sock *sk)
 }
 
 #ifndef CONFIG_MPTCP
-static 
+static
 #endif
 void tcp_cwnd_validate(struct sock *sk, bool is_cwnd_limited)
 {
@@ -1665,7 +1680,7 @@ static bool tcp_minshall_check(const struct tcp_sock *tp)
  *  skb_pcount = skb->len / mss_now
  */
 #ifndef CONFIG_MPTCP
-static 
+static
 #endif
 void tcp_minshall_update(struct tcp_sock *tp, unsigned int mss_now,
 			 const struct sk_buff *skb)
@@ -1690,7 +1705,7 @@ static bool tcp_nagle_check(bool partial, const struct tcp_sock *tp,
 }
 /* Returns the portion of skb which can be sent right away */
 #ifndef CONFIG_MPTCP
-static 
+static
 #endif
 unsigned int tcp_mss_split_point(const struct sock *sk,
 					const struct sk_buff *skb,
@@ -1756,7 +1771,7 @@ unsigned int tcp_cwnd_test(const struct tcp_sock *tp,
  * SKB onto the wire.
  */
 #ifndef CONFIG_MPTCP
-static 
+static
 #endif
 int tcp_init_tso_segs(const struct sock *sk, struct sk_buff *skb,
 		      unsigned int mss_now)
@@ -1775,7 +1790,7 @@ int tcp_init_tso_segs(const struct sock *sk, struct sk_buff *skb,
  * sent now.
  */
 #ifndef CONFIG_MPTCP
-static inline 
+static inline
 #endif
 bool tcp_nagle_test(const struct tcp_sock *tp, const struct sk_buff *skb,
 		    unsigned int cur_mss, int nonagle)
@@ -1790,7 +1805,7 @@ bool tcp_nagle_test(const struct tcp_sock *tp, const struct sk_buff *skb,
 		return true;
 
 	/* Don't use the nagle rule for urgent data (or for the final FIN). */
-	if (tcp_urg_mode(tp) || (TCP_SKB_CB(skb)->tcp_flags & TCPHDR_FIN) 
+	if (tcp_urg_mode(tp) || (TCP_SKB_CB(skb)->tcp_flags & TCPHDR_FIN)
 #ifdef CONFIG_MPTCP
 			|| mptcp_is_data_fin(skb)
 #endif
@@ -1805,7 +1820,7 @@ bool tcp_nagle_test(const struct tcp_sock *tp, const struct sk_buff *skb,
 
 /* Does at least the first segment of SKB fit into the send window? */
 #ifndef CONFIG_MPTCP
-static 
+static
 #endif
 bool tcp_snd_wnd_test(const struct tcp_sock *tp,
 			     const struct sk_buff *skb,
@@ -2141,7 +2156,7 @@ static int tcp_mtu_probe(struct sock *sk)
  * but cannot send anything now because of SWS or another problem.
  */
 #ifndef CONFIG_MPTCP
-static 
+static
 #endif
 bool tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 			   int push_one, gfp_t gfp)
@@ -2159,7 +2174,7 @@ bool tcp_write_xmit(struct sock *sk, unsigned int mss_now, int nonagle,
 	 * exiting the loop inside tcp_mtu_probe, making sure that only one
 	 * single DSS-mapping gets probed.
 	 */
-	if (!push_one 
+	if (!push_one
 #ifdef CONFIG_MPTCP
 			&& !mptcp(tp)
 #endif
@@ -3495,7 +3510,7 @@ void tcp_send_delayed_ack(struct sock *sk)
 }
 
 /* This routine sends an ack and also updates the window. */
-void tcp_send_ack(struct sock *sk)
+void __tcp_send_ack(struct sock *sk, u32 rcv_nxt)
 {
 	struct sk_buff *buff;
 
@@ -3524,9 +3539,14 @@ void tcp_send_ack(struct sock *sk)
 
 	/* Send it off, this clears delayed acks for us. */
 	skb_mstamp_get(&buff->skb_mstamp);
-	tcp_transmit_skb(sk, buff, 0, sk_gfp_atomic(sk, GFP_ATOMIC));
+	__tcp_transmit_skb(sk, buff, 0, sk_gfp_atomic(sk, GFP_ATOMIC), rcv_nxt);
 }
-EXPORT_SYMBOL_GPL(tcp_send_ack);
+EXPORT_SYMBOL_GPL(__tcp_send_ack);
+
+void tcp_send_ack(struct sock *sk)
+{
+	__tcp_send_ack(sk, tcp_sk(sk)->rcv_nxt);
+}
 
 /* This routine sends a packet with an out of date sequence
  * number. It assumes the other end will try to ack it.
@@ -3540,7 +3560,7 @@ EXPORT_SYMBOL_GPL(tcp_send_ack);
  * out-of-date with SND.UNA-1 to probe window.
  */
 #ifndef CONFIG_MPTCP
-static 
+static
 #endif
 int tcp_xmit_probe_skb(struct sock *sk, int urgent)
 {
