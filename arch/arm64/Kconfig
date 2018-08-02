@@ -238,6 +238,14 @@ config SOC_EXYNOS8890
 	select SOC_SAMSUNG
 	select SAMSUNG_DMADEV
 
+config MODEL_HERO2LTE
+	bool "Samsung Galaxy S7E"
+	depends on SOC_EXYNOS8890
+
+config MODEL_HEROLTE
+	bool "Samsung Galaxy S7"
+	depends on SOC_EXYNOS8890
+
 config ARCH_EXYNOS8
 	bool "SAMSUNG EXYNOS8"
 	select HAVE_ARM_SCU if SMP
