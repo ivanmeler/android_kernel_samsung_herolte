@@ -805,6 +805,7 @@ static const struct snd_pci_quirk cxt5066_fixups[] = {
 	SND_PCI_QUIRK(0x17aa, 0x38af, "Lenovo IdeaPad Z560", CXT_FIXUP_MUTE_LED_EAPD),
 	SND_PCI_QUIRK(0x17aa, 0x3975, "Lenovo U300s", CXT_FIXUP_STEREO_DMIC),
 	SND_PCI_QUIRK(0x17aa, 0x3977, "Lenovo IdeaPad U310", CXT_FIXUP_STEREO_DMIC),
+	SND_PCI_QUIRK(0x17aa, 0x3978, "Lenovo G50-70", CXT_FIXUP_STEREO_DMIC),
 	SND_PCI_QUIRK(0x17aa, 0x397b, "Lenovo S205", CXT_FIXUP_STEREO_DMIC),
 	SND_PCI_QUIRK_VENDOR(0x17aa, "Thinkpad", CXT_FIXUP_THINKPAD_ACPI),
 	SND_PCI_QUIRK(0x1c06, 0x2011, "Lemote A1004", CXT_PINCFG_LEMOTE_A1004),
@@ -973,6 +974,14 @@ static const struct hda_codec_preset snd_hda_preset_conexant[] = {
 	  .patch = patch_conexant_auto },
 	{ .id = 0x14f150b9, .name = "CX20665",
 	  .patch = patch_conexant_auto },
+	{ .id = 0x14f150f1, .name = "CX20721",
+	  .patch = patch_conexant_auto },
+	{ .id = 0x14f150f2, .name = "CX20722",
+	  .patch = patch_conexant_auto },
+	{ .id = 0x14f150f3, .name = "CX20723",
+	  .patch = patch_conexant_auto },
+	{ .id = 0x14f150f4, .name = "CX20724",
+	  .patch = patch_conexant_auto },
 	{ .id = 0x14f1510f, .name = "CX20751/2",
 	  .patch = patch_conexant_auto },
 	{ .id = 0x14f15110, .name = "CX20751/2",
@@ -1007,6 +1016,10 @@ MODULE_ALIAS("snd-hda-codec-id:14f150ab");
 MODULE_ALIAS("snd-hda-codec-id:14f150ac");
 MODULE_ALIAS("snd-hda-codec-id:14f150b8");
 MODULE_ALIAS("snd-hda-codec-id:14f150b9");
+MODULE_ALIAS("snd-hda-codec-id:14f150f1");
+MODULE_ALIAS("snd-hda-codec-id:14f150f2");
+MODULE_ALIAS("snd-hda-codec-id:14f150f3");
+MODULE_ALIAS("snd-hda-codec-id:14f150f4");
 MODULE_ALIAS("snd-hda-codec-id:14f1510f");
 MODULE_ALIAS("snd-hda-codec-id:14f15110");
 MODULE_ALIAS("snd-hda-codec-id:14f15111");

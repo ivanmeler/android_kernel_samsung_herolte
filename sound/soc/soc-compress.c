@@ -68,7 +68,8 @@ out:
 static int soc_compr_open_fe(struct snd_compr_stream *cstream)
 {
 	struct snd_soc_pcm_runtime *fe = cstream->private_data;
-	struct snd_pcm_substream *fe_substream = fe->pcm->streams[0].substream;
+	struct snd_pcm_substream *fe_substream =
+		 fe->pcm->streams[cstream->direction].substream;
 	struct snd_soc_platform *platform = fe->platform;
 	struct snd_soc_dpcm *dpcm;
 	struct snd_soc_dapm_widget_list *list;
@@ -209,6 +210,11 @@ static int soc_compr_free(struct snd_compr_stream *cstream)
 		platform->driver->compr_ops->free(cstream);
 
 	if (cstream->direction == SND_COMPRESS_PLAYBACK) {
+#ifdef CONFIG_SND_SAMSUNG_SEIREN_OFFLOAD
+		if (codec_dai->playback_active)
+			goto out;
+#endif
+
 		if (snd_soc_runtime_ignore_pmdown_time(rtd)) {
 			snd_soc_dapm_stream_event(rtd,
 					SNDRV_PCM_STREAM_PLAYBACK,
@@ -220,12 +226,20 @@ static int soc_compr_free(struct snd_compr_stream *cstream)
 					   msecs_to_jiffies(rtd->pmdown_time));
 		}
 	} else {
+#ifdef CONFIG_SND_SAMSUNG_SEIREN_OFFLOAD
+		if (codec_dai->capture_active)
+			goto out;
+#endif
+
 		/* capture streams can be powered down now */
 		snd_soc_dapm_stream_event(rtd,
 			SNDRV_PCM_STREAM_CAPTURE,
 			SND_SOC_DAPM_STREAM_STOP);
 	}
 
+#ifdef CONFIG_SND_SAMSUNG_SEIREN_OFFLOAD
+out:
+#endif
 	mutex_unlock(&rtd->pcm_mutex);
 	return 0;
 }
@@ -287,6 +301,19 @@ static int soc_compr_trigger(struct snd_compr_stream *cstream, int cmd)
 	struct snd_soc_platform *platform = rtd->platform;
 	struct snd_soc_dai *codec_dai = rtd->codec_dai;
 	int ret = 0;
+
+#ifdef CONFIG_SND_SAMSUNG_SEIREN_OFFLOAD
+	/* for partial drain and drain cmd, don't acquire lock while invoking FW.
+	 * These calls will be blocked till these operation can complete which
+	 * will be a while. And during that time, app can invoke STOP, PAUSE etc
+	 */
+	if (cmd == SND_COMPR_TRIGGER_PARTIAL_DRAIN ||
+				cmd == SND_COMPR_TRIGGER_DRAIN) {
+		if (platform->driver->compr_ops &&
+					platform->driver->compr_ops->trigger)
+			return platform->driver->compr_ops->trigger(cstream, cmd);
+	}
+#endif
 
 	mutex_lock_nested(&rtd->pcm_mutex, rtd->pcm_subclass);
 
@@ -415,7 +442,8 @@ static int soc_compr_set_params_fe(struct snd_compr_stream *cstream,
 					struct snd_compr_params *params)
 {
 	struct snd_soc_pcm_runtime *fe = cstream->private_data;
-	struct snd_pcm_substream *fe_substream = fe->pcm->streams[0].substream;
+	struct snd_pcm_substream *fe_substream =
+		 fe->pcm->streams[cstream->direction].substream;
 	struct snd_soc_platform *platform = fe->platform;
 	int ret = 0, stream;
 

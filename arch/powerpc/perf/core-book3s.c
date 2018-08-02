@@ -131,7 +131,16 @@ static void pmao_restore_workaround(bool ebb) { }
 
 static bool regs_use_siar(struct pt_regs *regs)
 {
-	return !!regs->result;
+	/*
+	 * When we take a performance monitor exception the regs are setup
+	 * using perf_read_regs() which overloads some fields, in particular
+	 * regs->result to tell us whether to use SIAR.
+	 *
+	 * However if the regs are from another exception, eg. a syscall, then
+	 * they have not been setup using perf_read_regs() and so regs->result
+	 * is something random.
+	 */
+	return ((TRAP(regs) == 0xf00) && regs->result);
 }
 
 /*
@@ -387,8 +396,12 @@ static __u64 power_pmu_bhrb_to(u64 addr)
 	int ret;
 	__u64 target;
 
-	if (is_kernel_addr(addr))
-		return branch_target((unsigned int *)addr);
+	if (is_kernel_addr(addr)) {
+		if (probe_kernel_read(&instr, (void *)addr, sizeof(instr)))
+			return 0;
+
+		return branch_target(&instr);
+	}
 
 	/* Userspace: need copy instruction here then translate it */
 	pagefault_disable();

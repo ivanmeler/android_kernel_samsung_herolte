@@ -19,6 +19,7 @@
 #include <linux/ktime.h>
 #include <linux/hrtimer.h>
 #include <linux/module.h>
+#include <linux/suspend.h>
 #include <trace/events/power.h>
 
 #include "cpuidle.h"
@@ -32,7 +33,6 @@ LIST_HEAD(cpuidle_detected_devices);
 static int enabled_devices;
 static int off __read_mostly;
 static int initialized __read_mostly;
-static bool use_deepest_state __read_mostly;
 
 int cpuidle_disabled(void)
 {
@@ -66,24 +66,9 @@ int cpuidle_play_dead(void)
 }
 
 /**
- * cpuidle_use_deepest_state - Enable/disable the "deepest idle" mode.
- * @enable: Whether enable or disable the feature.
- *
- * If the "deepest idle" mode is enabled, cpuidle will ignore the governor and
- * always use the state with the greatest exit latency (out of the states that
- * are not disabled).
- *
- * This function can only be called after cpuidle_pause() to avoid races.
- */
-void cpuidle_use_deepest_state(bool enable)
-{
-	use_deepest_state = enable;
-}
-
-/**
- * cpuidle_find_deepest_state - Find the state of the greatest exit latency.
- * @drv: cpuidle driver for a given CPU.
- * @dev: cpuidle device for a given CPU.
+ * cpuidle_find_deepest_state - Find deepest state meeting specific conditions.
+ * @drv: cpuidle driver for the given CPU.
+ * @dev: cpuidle device for the given CPU.
  */
 static int cpuidle_find_deepest_state(struct cpuidle_driver *drv,
 				      struct cpuidle_device *dev)
@@ -105,6 +90,27 @@ static int cpuidle_find_deepest_state(struct cpuidle_driver *drv,
 }
 
 /**
+ * cpuidle_enter_freeze - Enter an idle state suitable for suspend-to-idle.
+ *
+ * Find the deepest state available and enter it.
+ */
+void cpuidle_enter_freeze(void)
+{
+	struct cpuidle_device *dev = __this_cpu_read(cpuidle_devices);
+	struct cpuidle_driver *drv = cpuidle_get_cpu_driver(dev);
+	int index;
+
+	index = cpuidle_find_deepest_state(drv, dev);
+	if (index >= 0)
+		cpuidle_enter(drv, dev, index);
+	else
+		arch_cpu_idle();
+
+	/* Interrupts are enabled again here. */
+	local_irq_disable();
+}
+
+/**
  * cpuidle_enter_state - enter the state and update stats
  * @dev: cpuidle device for this cpu
  * @drv: cpuidle driver for this cpu
@@ -119,6 +125,9 @@ int cpuidle_enter_state(struct cpuidle_device *dev, struct cpuidle_driver *drv,
 	ktime_t time_start, time_end;
 	s64 diff;
 
+	/* Take note of the planned idle state. */
+	sched_idle_set_state(target_state, index);
+
 	trace_cpu_idle_rcuidle(index, dev->cpu);
 	time_start = ktime_get();
 
@@ -127,7 +136,10 @@ int cpuidle_enter_state(struct cpuidle_device *dev, struct cpuidle_driver *drv,
 	time_end = ktime_get();
 	trace_cpu_idle_rcuidle(PWR_EVENT_EXIT, dev->cpu);
 
-	if (!cpuidle_state_is_coupled(dev, drv, entered_state))
+	/* The cpu is no longer idle or about to enter idle. */
+	sched_idle_set_state(NULL, -1);
+
+	if (!cpuidle_state_is_coupled(dev, drv, index))
 		local_irq_enable();
 
 	diff = ktime_to_us(ktime_sub(time_end, time_start));
@@ -166,9 +178,6 @@ int cpuidle_select(struct cpuidle_driver *drv, struct cpuidle_device *dev)
 	if (!drv || !dev || !dev->enabled)
 		return -EBUSY;
 
-	if (unlikely(use_deepest_state))
-		return cpuidle_find_deepest_state(drv, dev);
-
 	return cpuidle_curr_governor->select(drv, dev);
 }
 
@@ -200,7 +209,7 @@ int cpuidle_enter(struct cpuidle_driver *drv, struct cpuidle_device *dev,
  */
 void cpuidle_reflect(struct cpuidle_device *dev, int index)
 {
-	if (cpuidle_curr_governor->reflect && !unlikely(use_deepest_state))
+	if (cpuidle_curr_governor->reflect)
 		cpuidle_curr_governor->reflect(dev, index);
 }
 
@@ -355,6 +364,8 @@ static void __cpuidle_unregister_device(struct cpuidle_device *dev)
 	list_del(&dev->device_list);
 	per_cpu(cpuidle_devices, dev->cpu) = NULL;
 	module_put(drv->owner);
+
+	dev->registered = 0;
 }
 
 static void __cpuidle_device_init(struct cpuidle_device *dev)
@@ -560,6 +571,65 @@ static inline void latency_notifier_init(struct notifier_block *n)
 #define latency_notifier_init(x) do { } while (0)
 
 #endif /* CONFIG_SMP */
+
+#ifdef CONFIG_CPU_IDLE_STOP_IDLE_DURING_HOTPLUG
+/* during hotplug out in progress, disable cpuidle for faster hotplug out */
+static int exynos_cpuidle_hp_out_callback(struct notifier_block *nfb,
+					unsigned long action, void *hcpu)
+{
+	unsigned int cpu = (unsigned long)hcpu;
+	struct cpuidle_device *dev = per_cpu(cpuidle_devices, cpu);
+
+	if (dev) {
+		switch (action) {
+		case CPU_DOWN_PREPARE:
+			cpuidle_disable_device(dev);
+			break;
+
+		case CPU_DOWN_FAILED:
+			cpuidle_enable_device(dev);
+			break;
+		}
+	}
+	return NOTIFY_OK;
+}
+
+static struct notifier_block __refdata cpuidle_hp_out_notifier = {
+	.notifier_call = exynos_cpuidle_hp_out_callback,
+	.priority = INT_MAX,	/* want to be called first */
+};
+
+
+static int exynos_cpuidle_hp_in_callback(struct notifier_block *nfb,
+					unsigned long action, void *hcpu)
+{
+	unsigned int cpu = (unsigned long)hcpu;
+	struct cpuidle_device *dev = per_cpu(cpuidle_devices, cpu);
+
+	if (dev) {
+		switch (action) {
+		case CPU_ONLINE:
+			cpuidle_enable_device(dev);
+			break;
+		}
+	}
+	return NOTIFY_OK;
+}
+
+static struct notifier_block __refdata cpuidle_hp_in_notifier = {
+	.notifier_call = exynos_cpuidle_hp_in_callback,
+	.priority = INT_MIN,	/* want to be called last */
+};
+
+static int __init cpuidle_hotcpu_init(void)
+{
+	register_hotcpu_notifier(&cpuidle_hp_out_notifier);
+	register_hotcpu_notifier(&cpuidle_hp_in_notifier);
+
+	return 0;
+}
+device_initcall(cpuidle_hotcpu_init);
+#endif
 
 /**
  * cpuidle_init - core initializer

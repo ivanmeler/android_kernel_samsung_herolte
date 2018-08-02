@@ -112,6 +112,9 @@ enum {
 #define TCP_FASTOPEN		23	/* Enable FastOpen on listeners */
 #define TCP_TIMESTAMP		24
 #define TCP_NOTSENT_LOWAT	25	/* limit number of unsent bytes in write queue */
+#ifdef CONFIG_MPTCP
+#define MPTCP_ENABLED		26
+#endif
 
 struct tcp_repair_opt {
 	__u32	opt_code;

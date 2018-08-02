@@ -911,6 +911,10 @@ static struct page *shmem_alloc_page(gfp_t gfp,
 	pvma.vm_policy = mpol_shared_policy_lookup(&info->policy, index);
 
 	page = alloc_page_vma(gfp, &pvma, 0);
+	if (page && is_cma_pageblock(page)) {
+		 __free_page(page);
+		 page = alloc_pages(gfp & ~__GFP_MOVABLE, 0);
+	}
 
 	/* Drop reference taken by mpol_shared_policy_lookup() */
 	mpol_cond_put(pvma.vm_policy);
@@ -2140,9 +2144,11 @@ static long shmem_fallocate(struct file *file, int mode, loff_t offset,
 									NULL);
 		if (error) {
 			/* Remove the !PageUptodate pages we added */
-			shmem_undo_range(inode,
-				(loff_t)start << PAGE_CACHE_SHIFT,
-				(loff_t)index << PAGE_CACHE_SHIFT, true);
+			if (index > start) {
+				shmem_undo_range(inode,
+				    (loff_t)start << PAGE_CACHE_SHIFT,
+				    ((loff_t)index << PAGE_CACHE_SHIFT) - 1, true);
+			}
 			goto undone;
 		}
 
@@ -3404,6 +3410,14 @@ struct file *shmem_file_setup(const char *name, loff_t size, unsigned long flags
 }
 EXPORT_SYMBOL_GPL(shmem_file_setup);
 
+void shmem_set_file(struct vm_area_struct *vma, struct file *file)
+{
+	if (vma->vm_file)
+		fput(vma->vm_file);
+	vma->vm_file = file;
+	vma->vm_ops = &shmem_vm_ops;
+}
+
 /**
  * shmem_zero_setup - setup a shared anonymous mapping
  * @vma: the vma to be mmapped is prepared by do_mmap_pgoff
@@ -3417,10 +3431,7 @@ int shmem_zero_setup(struct vm_area_struct *vma)
 	if (IS_ERR(file))
 		return PTR_ERR(file);
 
-	if (vma->vm_file)
-		fput(vma->vm_file);
-	vma->vm_file = file;
-	vma->vm_ops = &shmem_vm_ops;
+	shmem_set_file(vma, file);
 	return 0;
 }
 

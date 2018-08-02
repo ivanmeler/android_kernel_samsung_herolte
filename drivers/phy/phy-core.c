@@ -179,6 +179,7 @@ int phy_init(struct phy *phy)
 	ret = phy_pm_runtime_get_sync(phy);
 	if (ret < 0 && ret != -ENOTSUPP)
 		return ret;
+	ret = 0; /* Override possible ret == -ENOTSUPP */
 
 	mutex_lock(&phy->mutex);
 	if (phy->init_count == 0 && phy->ops->init) {
@@ -187,8 +188,6 @@ int phy_init(struct phy *phy)
 			dev_err(&phy->dev, "phy init failed --> %d\n", ret);
 			goto out;
 		}
-	} else {
-		ret = 0; /* Override possible ret == -ENOTSUPP */
 	}
 	++phy->init_count;
 
@@ -209,6 +208,7 @@ int phy_exit(struct phy *phy)
 	ret = phy_pm_runtime_get_sync(phy);
 	if (ret < 0 && ret != -ENOTSUPP)
 		return ret;
+	ret = 0; /* Override possible ret == -ENOTSUPP */
 
 	mutex_lock(&phy->mutex);
 	if (phy->init_count == 1 && phy->ops->exit) {
@@ -227,43 +227,76 @@ out:
 }
 EXPORT_SYMBOL_GPL(phy_exit);
 
-int phy_power_on(struct phy *phy)
+int phy_tune(struct phy *phy, int phy_state)
 {
 	int ret;
 
-	if (!phy)
+	if (!phy || !phy->ops->tune)
 		return 0;
+
+	ret = phy->ops->tune(phy, phy_state);
+	if (ret < 0) {
+		dev_err(&phy->dev, "phy tune failed --> %d\n", ret);
+	} else {
+		ret = 0; /* Override possible ret == -ENOTSUPP */
+	}
+	return ret;
+}
+EXPORT_SYMBOL_GPL(phy_tune);
+
+int phy_set(struct phy *phy, int option, void *info)
+{
+	int ret;
+
+	if (!phy || !phy->ops->set)
+		return 0;
+
+	ret = phy->ops->set(phy, option, info);
+	if (ret < 0)
+		dev_err(&phy->dev, "phy set failed --> %d\n", ret);
+
+	return ret;
+}
+EXPORT_SYMBOL_GPL(phy_set);
+
+int phy_power_on(struct phy *phy)
+{
+	int ret = 0;
+
+	if (!phy)
+		goto out;
 
 	if (phy->pwr) {
 		ret = regulator_enable(phy->pwr);
 		if (ret)
-			return ret;
+			goto out;
 	}
 
 	ret = phy_pm_runtime_get_sync(phy);
 	if (ret < 0 && ret != -ENOTSUPP)
-		return ret;
+		goto err_pm_sync;
+
+	ret = 0; /* Override possible ret == -ENOTSUPP */
 
 	mutex_lock(&phy->mutex);
 	if (phy->power_count == 0 && phy->ops->power_on) {
 		ret = phy->ops->power_on(phy);
 		if (ret < 0) {
 			dev_err(&phy->dev, "phy poweron failed --> %d\n", ret);
-			goto out;
+			goto err_pwr_on;
 		}
-	} else {
-		ret = 0; /* Override possible ret == -ENOTSUPP */
 	}
 	++phy->power_count;
 	mutex_unlock(&phy->mutex);
 	return 0;
 
-out:
+err_pwr_on:
 	mutex_unlock(&phy->mutex);
 	phy_pm_runtime_put_sync(phy);
+err_pm_sync:
 	if (phy->pwr)
 		regulator_disable(phy->pwr);
-
+out:
 	return ret;
 }
 EXPORT_SYMBOL_GPL(phy_power_on);

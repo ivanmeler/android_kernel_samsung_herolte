@@ -30,10 +30,14 @@ static const int cfq_back_penalty = 2;
 static const int cfq_slice_sync = HZ / 10;
 static int cfq_slice_async = HZ / 25;
 static const int cfq_slice_async_rq = 2;
-static int cfq_slice_idle = HZ / 125;
+/* Explicitly set cfq_slice_idle to 0 */
+static int cfq_slice_idle = 0;
+/* static int cfq_slice_idle = HZ / 125; */
 static int cfq_group_idle = HZ / 125;
 static const int cfq_target_latency = HZ * 3/10; /* 300 ms */
 static const int cfq_hist_divisor = 4;
+static int cfq_max_async_dispatch = 4;
+static int cfq_throttle_async = 1;
 
 /*
  * offset from end of service tree
@@ -374,6 +378,8 @@ struct cfq_data {
 	unsigned int cfq_slice[2];
 	unsigned int cfq_slice_async_rq;
 	unsigned int cfq_slice_idle;
+	unsigned int cfq_max_async_dispatch;
+	unsigned int cfq_throttle_async;
 	unsigned int cfq_group_idle;
 	unsigned int cfq_latency;
 	unsigned int cfq_target_latency;
@@ -3209,8 +3215,17 @@ static bool cfq_may_dispatch(struct cfq_data *cfqd, struct cfq_queue *cfqq)
 
 	/*
 	 * If this is an async queue and we have sync IO in flight, let it wait
+	 * but only if device does not support hw_tag && cfq_throttle_async==1.
 	 */
-	if (cfqd->rq_in_flight[BLK_RW_SYNC] && !cfq_cfqq_sync(cfqq))
+	if (cfqd->rq_in_flight[BLK_RW_SYNC] && !cfq_cfqq_sync(cfqq)
+			&& !cfqd->hw_tag && cfqd->cfq_throttle_async)
+		return false;
+
+	/*
+	 * Let it wait if too many async requests are dispatched.
+	 */
+	if (cfqd->rq_in_flight[BLK_RW_ASYNC] >= cfqd->cfq_max_async_dispatch
+			&& !cfq_cfqq_sync(cfqq))
 		return false;
 
 	max_dispatch = max_t(unsigned int, cfqd->cfq_quantum / 2, 1);
@@ -4461,6 +4476,8 @@ static int cfq_init_queue(struct request_queue *q, struct elevator_type *e)
 	cfqd->cfq_target_latency = cfq_target_latency;
 	cfqd->cfq_slice_async_rq = cfq_slice_async_rq;
 	cfqd->cfq_slice_idle = cfq_slice_idle;
+	cfqd->cfq_max_async_dispatch = cfq_max_async_dispatch;
+	cfqd->cfq_throttle_async = cfq_throttle_async;
 	cfqd->cfq_group_idle = cfq_group_idle;
 	cfqd->cfq_latency = 1;
 	cfqd->hw_tag = -1;
@@ -4510,6 +4527,8 @@ SHOW_FUNCTION(cfq_fifo_expire_async_show, cfqd->cfq_fifo_expire[0], 1);
 SHOW_FUNCTION(cfq_back_seek_max_show, cfqd->cfq_back_max, 0);
 SHOW_FUNCTION(cfq_back_seek_penalty_show, cfqd->cfq_back_penalty, 0);
 SHOW_FUNCTION(cfq_slice_idle_show, cfqd->cfq_slice_idle, 1);
+SHOW_FUNCTION(cfq_max_async_dispatch_show, cfqd->cfq_max_async_dispatch, 0);
+SHOW_FUNCTION(cfq_throttle_async_show, cfqd->cfq_throttle_async, 0);
 SHOW_FUNCTION(cfq_group_idle_show, cfqd->cfq_group_idle, 1);
 SHOW_FUNCTION(cfq_slice_sync_show, cfqd->cfq_slice[1], 1);
 SHOW_FUNCTION(cfq_slice_async_show, cfqd->cfq_slice[0], 1);
@@ -4543,6 +4562,8 @@ STORE_FUNCTION(cfq_back_seek_max_store, &cfqd->cfq_back_max, 0, UINT_MAX, 0);
 STORE_FUNCTION(cfq_back_seek_penalty_store, &cfqd->cfq_back_penalty, 1,
 		UINT_MAX, 0);
 STORE_FUNCTION(cfq_slice_idle_store, &cfqd->cfq_slice_idle, 0, UINT_MAX, 1);
+STORE_FUNCTION(cfq_max_async_dispatch_store, &cfqd->cfq_max_async_dispatch, 1, UINT_MAX, 0);
+STORE_FUNCTION(cfq_throttle_async_store, &cfqd->cfq_throttle_async, 0, 1, 0);
 STORE_FUNCTION(cfq_group_idle_store, &cfqd->cfq_group_idle, 0, UINT_MAX, 1);
 STORE_FUNCTION(cfq_slice_sync_store, &cfqd->cfq_slice[1], 1, UINT_MAX, 1);
 STORE_FUNCTION(cfq_slice_async_store, &cfqd->cfq_slice[0], 1, UINT_MAX, 1);
@@ -4565,6 +4586,8 @@ static struct elv_fs_entry cfq_attrs[] = {
 	CFQ_ATTR(slice_async),
 	CFQ_ATTR(slice_async_rq),
 	CFQ_ATTR(slice_idle),
+	CFQ_ATTR(max_async_dispatch),
+	CFQ_ATTR(throttle_async),
 	CFQ_ATTR(group_idle),
 	CFQ_ATTR(low_latency),
 	CFQ_ATTR(target_latency),
@@ -4620,8 +4643,12 @@ static int __init cfq_init(void)
 	 */
 	if (!cfq_slice_async)
 		cfq_slice_async = 1;
+	
+	/* Do not touch cfq_slice_idle if it is zero */
+	/*
 	if (!cfq_slice_idle)
 		cfq_slice_idle = 1;
+	 */
 
 #ifdef CONFIG_CFQ_GROUP_IOSCHED
 	if (!cfq_group_idle)

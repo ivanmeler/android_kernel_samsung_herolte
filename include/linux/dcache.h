@@ -160,6 +160,8 @@ struct dentry_operations {
 	char *(*d_dname)(struct dentry *, char *, int);
 	struct vfsmount *(*d_automount)(struct path *);
 	int (*d_manage)(struct dentry *, bool);
+	void (*d_canonical_path)(const struct path *, struct path *);
+	struct inode *(*d_select_inode)(struct dentry *, unsigned);
 } ____cacheline_aligned;
 
 /*
@@ -222,6 +224,10 @@ struct dentry_operations {
 #define DCACHE_FILE_TYPE		0x00400000 /* Other file type */
 
 #define DCACHE_MAY_FREE			0x00800000
+#define DCACHE_OP_SELECT_INODE		0x02000000 /* Unioned entry: dcache op selects inode */
+
+#define DCACHE_ENCRYPTED_WITH_KEY	0x04000000 /* dir is encrypted with a valid key */
+#define DCACHE_WILL_INVALIDATE		0x80000000 /* will be invalidated */
 
 extern seqlock_t rename_lock;
 
@@ -230,7 +236,7 @@ extern seqlock_t rename_lock;
  */
 extern void d_instantiate(struct dentry *, struct inode *);
 extern struct dentry * d_instantiate_unique(struct dentry *, struct inode *);
-extern struct dentry * d_materialise_unique(struct dentry *, struct inode *);
+#define d_materialise_unique(d, i) d_splice_alias(i, d)
 extern int d_instantiate_no_diralias(struct dentry *, struct inode *);
 extern void __d_drop(struct dentry *dentry);
 extern void d_drop(struct dentry *dentry);
@@ -468,4 +474,69 @@ static inline unsigned long vfs_pressure_ratio(unsigned long val)
 {
 	return mult_frac(val, sysctl_vfs_cache_pressure, 100);
 }
+
+
+/**
+ * d_inode - Get the actual inode of this dentry
+ * @dentry: The dentry to query
+ *
+ * This is the helper normal filesystems should use to get at their own inodes
+ * in their own dentries and ignore the layering superimposed upon them.
+ */
+static inline struct inode *d_inode(const struct dentry *dentry)
+{
+	return dentry->d_inode;
+}
+
+/**
+ * d_inode_rcu - Get the actual inode of this dentry with ACCESS_ONCE()
+ * @dentry: The dentry to query
+ *
+ * This is the helper normal filesystems should use to get at their own inodes
+ * in their own dentries and ignore the layering superimposed upon them.
+ */
+static inline struct inode *d_inode_rcu(const struct dentry *dentry)
+{
+	return ACCESS_ONCE(dentry->d_inode);
+}
+
+/**
+ * d_backing_inode - Get upper or lower inode we should be using
+ * @upper: The upper layer
+ *
+ * This is the helper that should be used to get at the inode that will be used
+ * if this dentry were to be opened as a file.  The inode may be on the upper
+ * dentry or it may be on a lower dentry pinned by the upper.
+ *
+ * Normal filesystems should not use this to access their own inodes.
+ */
+static inline struct inode *d_backing_inode(const struct dentry *upper)
+{
+	struct inode *inode = upper->d_inode;
+
+	return inode;
+}
+
+/**
+ * d_backing_dentry - Get upper or lower dentry we should be using
+ * @upper: The upper layer
+ *
+ * This is the helper that should be used to get the dentry of the inode that
+ * will be used if this dentry were opened as a file.  It may be the upper
+ * dentry or it may be a lower dentry pinned by the upper.
+ *
+ * Normal filesystems should not use this to access their own dentries.
+ */
+static inline struct dentry *d_backing_dentry(struct dentry *upper)
+{
+	return upper;
+}
+
+struct name_snapshot {
+	const char *name;
+	char inline_name[DNAME_INLINE_LEN];
+};
+void take_dentry_name_snapshot(struct name_snapshot *, struct dentry *);
+void release_dentry_name_snapshot(struct name_snapshot *);
+
 #endif	/* __LINUX_DCACHE_H */

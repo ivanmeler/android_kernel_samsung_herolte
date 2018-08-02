@@ -1,0 +1,28 @@
+menuconfig SWITCH
+	tristate "Switch class support"
+	help
+	  Say Y here to enable switch class support. This allows
+	  monitoring switches by userspace via sysfs and uevent.
+
+if SWITCH
+
+config SWITCH_GPIO
+	tristate "GPIO Swith support"
+	depends on GPIOLIB
+	help
+	  Say Y here to enable GPIO based switch support.
+
+config SWITCH_ARIZONA
+	tristate "Wolfson Arizona Switch support"
+	depends on MFD_ARIZONA && INPUT && SND_SOC
+	help
+	  Say Y here to enable support for external accessory detection
+	  with Wolfson Arizona devices. These are audio CODECs with
+	  advanced audio accessory detection support.
+
+config SWITCH_PTT
+	tristate "PTT Headset support"
+	help
+	  Say Y here to enable support for PTT headset accessory detection.
+
+endif # SWITCH

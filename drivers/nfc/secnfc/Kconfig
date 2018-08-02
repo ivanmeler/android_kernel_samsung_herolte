@@ -1,0 +1,58 @@
+#
+# Samsung System LSI - Near Field Communication (NFC) devices
+#
+
+config SEC_NFC_SENN3AB
+    bool "Samsung NFC driver"
+    default n
+    help
+      SAMSUNG NFC Driver.
+      This driver provides support for SAMSUNG NFC products.
+      You should select your NFC product and interface.
+
+      Say Y here to compile support for SAMSUNG NFC driver into the
+      kernel.
+
+
+config SEC_NFC_SENN3AB_FN
+    bool "SENN3AB_FN"
+    depends on SEC_NFC_SENN3AB
+    default n
+    help
+      SAMSUNG NFC Driver for Felica Networks.
+      This driver provides support for SAMSUNG NFC products.
+      You should select your NFC product and interface.
+
+      Say Y here to compile support for SAMSUNG NFC driver for into the
+      kernel.
+
+config NFC_DEBUG
+	bool "NFC debug enable"
+	default n
+	help
+      SAMSUNG NFC Driver debug support for Felica Networks.
+      This driver provides support for debugging SAMSUNG NFC driver.
+      You should select your NFC product and interface.
+
+	  Say Y here to enable debugging support for the SAMSUNG NFC drivers.
+config SEC_NFC_LDO_JPN_CONTROL
+	bool "SEC NFC LDO JPN CONTROL"
+	depends on SEC_NFC_SENN3AB
+	default n
+	help
+	  SAMSUNG SEC NFC LDO CONTROL feature.
+	  This feature provides support for SAMSUNG NFC products.
+	  You should select this feature if your NFC product uses ldo control of i2c.
+
+	  Say Y here to compile support for SEC NFC LDO CONTROL feature into the
+	  kernel.
+
+config NFC_EDC_TUNING
+        bool "NFC_EDC_TUNING"
+        default n
+        help
+          SAMSUNG SEC NFC EDC TUNNING feature.
+          This feature provides support for SAMSUNG NFC products.
+	  You should select this feature if you want to change EDC value for view cover.
+
+	  Say Y here to improve view cover recognition rate

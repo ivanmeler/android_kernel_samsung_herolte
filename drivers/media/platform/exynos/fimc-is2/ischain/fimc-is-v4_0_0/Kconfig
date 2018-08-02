@@ -1,0 +1,6 @@
+config FIMC_IS_V4_0_0
+	bool "Use fimc-is v4.0.0"
+	depends on EXYNOS_FIMC_IS
+	default n
+	help
+	  fimc-is version 4.0.0

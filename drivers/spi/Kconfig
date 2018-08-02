@@ -444,8 +444,8 @@ config SPI_S3C24XX_FIQ
 
 config SPI_S3C64XX
 	tristate "Samsung S3C64XX series type SPI"
-	depends on PLAT_SAMSUNG
-	select S3C64XX_PL080 if ARCH_S3C64XX
+	depends on ARCH_EXYNOS && OF
+	default y
 	help
 	  SPI driver for Samsung S3C64XX and newer SoCs.
 
@@ -587,6 +587,11 @@ config SPI_NUC900
 	select SPI_BITBANG
 	help
 	  SPI driver for Nuvoton NUC900 series ARM SoCs
+
+config SENSORS_FP_SPI_NUMBER
+	depends on SENSORS_FINGERPRINT
+	int "Fingerprint spi gpio number"
+	default 0
 
 #
 # Add new SPI master controllers in alphabetical order above this line

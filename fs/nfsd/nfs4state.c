@@ -3241,6 +3241,7 @@ static void init_open_stateid(struct nfs4_ol_stateid *stp, struct nfs4_file *fp,
 	stp->st_access_bmap = 0;
 	stp->st_deny_bmap = 0;
 	stp->st_openstp = NULL;
+	init_rwsem(&stp->st_rwsem);
 	spin_lock(&oo->oo_owner.so_client->cl_lock);
 	list_add(&stp->st_perstateowner, &oo->oo_owner.so_stateids);
 	spin_lock(&fp->fi_lock);
@@ -3601,7 +3602,8 @@ static struct nfs4_delegation *find_deleg_stateid(struct nfs4_client *cl, statei
 {
 	struct nfs4_stid *ret;
 
-	ret = find_stateid_by_type(cl, s, NFS4_DELEG_STID);
+	ret = find_stateid_by_type(cl, s,
+				NFS4_DELEG_STID|NFS4_REVOKED_DELEG_STID);
 	if (!ret)
 		return NULL;
 	return delegstateid(ret);
@@ -3624,6 +3626,12 @@ nfs4_check_deleg(struct nfs4_client *cl, struct nfsd4_open *open,
 	deleg = find_deleg_stateid(cl, &open->op_delegate_stateid);
 	if (deleg == NULL)
 		goto out;
+	if (deleg->dl_stid.sc_type == NFS4_REVOKED_DELEG_STID) {
+		nfs4_put_stid(&deleg->dl_stid);
+		if (cl->cl_minorversion)
+			status = nfserr_deleg_revoked;
+		goto out;
+	}
 	flags = share_access_to_flags(open->op_share_access);
 	status = nfs4_check_delegmode(deleg, flags);
 	if (status) {
@@ -3756,7 +3764,7 @@ static __be32
 nfs4_upgrade_open(struct svc_rqst *rqstp, struct nfs4_file *fp, struct svc_fh *cur_fh, struct nfs4_ol_stateid *stp, struct nfsd4_open *open)
 {
 	__be32 status;
-	unsigned char old_deny_bmap;
+	unsigned char old_deny_bmap = stp->st_deny_bmap;
 
 	if (!test_access(open->op_share_access, stp))
 		return nfs4_get_vfs_file(rqstp, fp, cur_fh, stp, open);
@@ -3765,7 +3773,6 @@ nfs4_upgrade_open(struct svc_rqst *rqstp, struct nfs4_file *fp, struct svc_fh *c
 	spin_lock(&fp->fi_lock);
 	status = nfs4_file_check_deny(fp, open->op_share_deny);
 	if (status == nfs_ok) {
-		old_deny_bmap = stp->st_deny_bmap;
 		set_deny(open->op_share_deny, stp);
 		fp->fi_share_deny |=
 				(open->op_share_deny & NFS4_SHARE_DENY_BOTH);
@@ -4057,21 +4064,27 @@ nfsd4_process_open2(struct svc_rqst *rqstp, struct svc_fh *current_fh, struct nf
 	 */
 	if (stp) {
 		/* Stateid was found, this is an OPEN upgrade */
+		down_read(&stp->st_rwsem);
 		status = nfs4_upgrade_open(rqstp, fp, current_fh, stp, open);
-		if (status)
+		if (status) {
+			up_read(&stp->st_rwsem);
 			goto out;
+		}
 	} else {
 		stp = open->op_stp;
 		open->op_stp = NULL;
 		init_open_stateid(stp, fp, open);
+		down_read(&stp->st_rwsem);
 		status = nfs4_get_vfs_file(rqstp, fp, current_fh, stp, open);
 		if (status) {
+			up_read(&stp->st_rwsem);
 			release_open_stateid(stp);
 			goto out;
 		}
 	}
 	update_stateid(&stp->st_stid.sc_stateid);
 	memcpy(&open->op_stateid, &stp->st_stid.sc_stateid, sizeof(stateid_t));
+	up_read(&stp->st_rwsem);
 
 	if (nfsd4_has_session(&resp->cstate)) {
 		if (open->op_deleg_want & NFS4_SHARE_WANT_NO_DELEG) {
@@ -4285,9 +4298,9 @@ laundromat_main(struct work_struct *laundry)
 	queue_delayed_work(laundry_wq, &nn->laundromat_work, t*HZ);
 }
 
-static inline __be32 nfs4_check_fh(struct svc_fh *fhp, struct nfs4_ol_stateid *stp)
+static inline __be32 nfs4_check_fh(struct svc_fh *fhp, struct nfs4_stid *stp)
 {
-	if (!nfsd_fh_match(&fhp->fh_handle, &stp->st_stid.sc_file->fi_fhandle))
+	if (!nfsd_fh_match(&fhp->fh_handle, &stp->sc_file->fi_fhandle))
 		return nfserr_bad_stateid;
 	return nfs_ok;
 }
@@ -4385,10 +4398,17 @@ static __be32 check_stateid_generation(stateid_t *in, stateid_t *ref, bool has_s
 	return nfserr_old_stateid;
 }
 
+static __be32 nfsd4_check_openowner_confirmed(struct nfs4_ol_stateid *ols)
+{
+	if (ols->st_stateowner->so_is_open_owner &&
+	    !(openowner(ols->st_stateowner)->oo_flags & NFS4_OO_CONFIRMED))
+		return nfserr_bad_stateid;
+	return nfs_ok;
+}
+
 static __be32 nfsd4_validate_stateid(struct nfs4_client *cl, stateid_t *stateid)
 {
 	struct nfs4_stid *s;
-	struct nfs4_ol_stateid *ols;
 	__be32 status = nfserr_bad_stateid;
 
 	if (ZERO_STATEID(stateid) || ONE_STATEID(stateid))
@@ -4418,13 +4438,7 @@ static __be32 nfsd4_validate_stateid(struct nfs4_client *cl, stateid_t *stateid)
 		break;
 	case NFS4_OPEN_STID:
 	case NFS4_LOCK_STID:
-		ols = openlockstateid(s);
-		if (ols->st_stateowner->so_is_open_owner
-	    			&& !(openowner(ols->st_stateowner)->oo_flags
-						& NFS4_OO_CONFIRMED))
-			status = nfserr_bad_stateid;
-		else
-			status = nfs_ok;
+		status = nfsd4_check_openowner_confirmed(openlockstateid(s));
 		break;
 	default:
 		printk("unknown stateid type %x\n", s->sc_type);
@@ -4444,6 +4458,16 @@ nfsd4_lookup_stateid(struct nfsd4_compound_state *cstate,
 		     struct nfs4_stid **s, struct nfsd_net *nn)
 {
 	__be32 status;
+	bool return_revoked = false;
+
+	/*
+	 *  only return revoked delegations if explicitly asked.
+	 *  otherwise we report revoked or bad_stateid status.
+	 */
+	if (typemask & NFS4_REVOKED_DELEG_STID)
+		return_revoked = true;
+	else if (typemask & NFS4_DELEG_STID)
+		typemask |= NFS4_REVOKED_DELEG_STID;
 
 	if (ZERO_STATEID(stateid) || ONE_STATEID(stateid))
 		return nfserr_bad_stateid;
@@ -4458,23 +4482,58 @@ nfsd4_lookup_stateid(struct nfsd4_compound_state *cstate,
 	*s = find_stateid_by_type(cstate->clp, stateid, typemask);
 	if (!*s)
 		return nfserr_bad_stateid;
+	if (((*s)->sc_type == NFS4_REVOKED_DELEG_STID) && !return_revoked) {
+		nfs4_put_stid(*s);
+		if (cstate->minorversion)
+			return nfserr_deleg_revoked;
+		return nfserr_bad_stateid;
+	}
 	return nfs_ok;
 }
 
+static struct file *
+nfs4_find_file(struct nfs4_stid *s, int flags)
+{
+	switch (s->sc_type) {
+	case NFS4_DELEG_STID:
+		if (WARN_ON_ONCE(!s->sc_file->fi_deleg_file))
+			return NULL;
+		return get_file(s->sc_file->fi_deleg_file);
+	case NFS4_OPEN_STID:
+	case NFS4_LOCK_STID:
+		if (flags & RD_STATE)
+			return find_readable_file(s->sc_file);
+		else
+			return find_writeable_file(s->sc_file);
+		break;
+	}
+
+	return NULL;
+}
+
+static __be32
+nfs4_check_olstateid(struct svc_fh *fhp, struct nfs4_ol_stateid *ols, int flags)
+{
+	__be32 status;
+
+	status = nfsd4_check_openowner_confirmed(ols);
+	if (status)
+		return status;
+	return nfs4_check_openmode(ols, flags);
+}
+
 /*
-* Checks for stateid operations
-*/
+ * Checks for stateid operations
+ */
 __be32
 nfs4_preprocess_stateid_op(struct net *net, struct nfsd4_compound_state *cstate,
 			   stateid_t *stateid, int flags, struct file **filpp)
 {
-	struct nfs4_stid *s;
-	struct nfs4_ol_stateid *stp = NULL;
-	struct nfs4_delegation *dp = NULL;
-	struct svc_fh *current_fh = &cstate->current_fh;
-	struct inode *ino = current_fh->fh_dentry->d_inode;
+	struct svc_fh *fhp = &cstate->current_fh;
+	struct inode *ino = fhp->fh_dentry->d_inode;
+
 	struct nfsd_net *nn = net_generic(net, nfsd_net_id);
-	struct file *file = NULL;
+	struct nfs4_stid *s;
 	__be32 status;
 
 	if (filpp)
@@ -4484,60 +4543,39 @@ nfs4_preprocess_stateid_op(struct net *net, struct nfsd4_compound_state *cstate,
 		return nfserr_grace;
 
 	if (ZERO_STATEID(stateid) || ONE_STATEID(stateid))
-		return check_special_stateids(net, current_fh, stateid, flags);
+		return check_special_stateids(net, fhp, stateid, flags);
 
 	status = nfsd4_lookup_stateid(cstate, stateid,
 				NFS4_DELEG_STID|NFS4_OPEN_STID|NFS4_LOCK_STID,
 				&s, nn);
 	if (status)
 		return status;
-	status = check_stateid_generation(stateid, &s->sc_stateid, nfsd4_has_session(cstate));
+	status = check_stateid_generation(stateid, &s->sc_stateid,
+			nfsd4_has_session(cstate));
 	if (status)
 		goto out;
+
 	switch (s->sc_type) {
 	case NFS4_DELEG_STID:
-		dp = delegstateid(s);
-		status = nfs4_check_delegmode(dp, flags);
-		if (status)
-			goto out;
-		if (filpp) {
-			file = dp->dl_stid.sc_file->fi_deleg_file;
-			if (!file) {
-				WARN_ON_ONCE(1);
-				status = nfserr_serverfault;
-				goto out;
-			}
-			get_file(file);
-		}
+		status = nfs4_check_delegmode(delegstateid(s), flags);
 		break;
 	case NFS4_OPEN_STID:
 	case NFS4_LOCK_STID:
-		stp = openlockstateid(s);
-		status = nfs4_check_fh(current_fh, stp);
-		if (status)
-			goto out;
-		if (stp->st_stateowner->so_is_open_owner
-		    && !(openowner(stp->st_stateowner)->oo_flags & NFS4_OO_CONFIRMED))
-			goto out;
-		status = nfs4_check_openmode(stp, flags);
-		if (status)
-			goto out;
-		if (filpp) {
-			struct nfs4_file *fp = stp->st_stid.sc_file;
-
-			if (flags & RD_STATE)
-				file = find_readable_file(fp);
-			else
-				file = find_writeable_file(fp);
-		}
+		status = nfs4_check_olstateid(fhp, openlockstateid(s), flags);
 		break;
 	default:
 		status = nfserr_bad_stateid;
-		goto out;
+		break;
 	}
-	status = nfs_ok;
-	if (file)
-		*filpp = file;
+	if (status)
+		goto out;
+	status = nfs4_check_fh(fhp, s);
+
+	if (!status && filpp) {
+		*filpp = nfs4_find_file(s, flags);
+		if (!*filpp)
+			status = nfserr_serverfault;
+	}
 out:
 	nfs4_put_stid(s);
 	return status;
@@ -4638,10 +4676,13 @@ static __be32 nfs4_seqid_op_checks(struct nfsd4_compound_state *cstate, stateid_
 		 * revoked delegations are kept only for free_stateid.
 		 */
 		return nfserr_bad_stateid;
+	down_write(&stp->st_rwsem);
 	status = check_stateid_generation(stateid, &stp->st_stid.sc_stateid, nfsd4_has_session(cstate));
-	if (status)
-		return status;
-	return nfs4_check_fh(current_fh, stp);
+	if (status == nfs_ok)
+		status = nfs4_check_fh(current_fh, &stp->st_stid);
+	if (status != nfs_ok)
+		up_write(&stp->st_rwsem);
+	return status;
 }
 
 /* 
@@ -4688,6 +4729,7 @@ static __be32 nfs4_preprocess_confirmed_seqid_op(struct nfsd4_compound_state *cs
 		return status;
 	oo = openowner(stp->st_stateowner);
 	if (!(oo->oo_flags & NFS4_OO_CONFIRMED)) {
+		up_write(&stp->st_rwsem);
 		nfs4_put_stid(&stp->st_stid);
 		return nfserr_bad_stateid;
 	}
@@ -4718,11 +4760,14 @@ nfsd4_open_confirm(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 		goto out;
 	oo = openowner(stp->st_stateowner);
 	status = nfserr_bad_stateid;
-	if (oo->oo_flags & NFS4_OO_CONFIRMED)
+	if (oo->oo_flags & NFS4_OO_CONFIRMED) {
+		up_write(&stp->st_rwsem);
 		goto put_stateid;
+	}
 	oo->oo_flags |= NFS4_OO_CONFIRMED;
 	update_stateid(&stp->st_stid.sc_stateid);
 	memcpy(&oc->oc_resp_stateid, &stp->st_stid.sc_stateid, sizeof(stateid_t));
+	up_write(&stp->st_rwsem);
 	dprintk("NFSD: %s: success, seqid=%d stateid=" STATEID_FMT "\n",
 		__func__, oc->oc_seqid, STATEID_VAL(&stp->st_stid.sc_stateid));
 
@@ -4801,6 +4846,7 @@ nfsd4_open_downgrade(struct svc_rqst *rqstp,
 	memcpy(&od->od_stateid, &stp->st_stid.sc_stateid, sizeof(stateid_t));
 	status = nfs_ok;
 put_stateid:
+	up_write(&stp->st_rwsem);
 	nfs4_put_stid(&stp->st_stid);
 out:
 	nfsd4_bump_seqid(cstate, status);
@@ -4851,6 +4897,7 @@ nfsd4_close(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 		goto out; 
 	update_stateid(&stp->st_stid.sc_stateid);
 	memcpy(&close->cl_stateid, &stp->st_stid.sc_stateid, sizeof(stateid_t));
+	up_write(&stp->st_rwsem);
 
 	nfsd4_close_open_stateid(stp);
 
@@ -5079,6 +5126,7 @@ init_lock_stateid(struct nfs4_ol_stateid *stp, struct nfs4_lockowner *lo,
 	stp->st_access_bmap = 0;
 	stp->st_deny_bmap = open_stp->st_deny_bmap;
 	stp->st_openstp = open_stp;
+	init_rwsem(&stp->st_rwsem);
 	list_add(&stp->st_locks, &open_stp->st_locks);
 	list_add(&stp->st_perstateowner, &lo->lo_owner.so_stateids);
 	spin_lock(&fp->fi_lock);
@@ -5247,6 +5295,7 @@ nfsd4_lock(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 					&open_stp, nn);
 		if (status)
 			goto out;
+		up_write(&open_stp->st_rwsem);
 		open_sop = openowner(open_stp->st_stateowner);
 		status = nfserr_bad_stateid;
 		if (!same_clid(&open_sop->oo_owner.so_client->cl_clientid,
@@ -5254,6 +5303,8 @@ nfsd4_lock(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 			goto out;
 		status = lookup_or_create_lock_state(cstate, open_stp, lock,
 							&lock_stp, &new);
+		if (status == nfs_ok)
+			down_write(&lock_stp->st_rwsem);
 	} else {
 		status = nfs4_preprocess_seqid_op(cstate,
 				       lock->lk_old_lock_seqid,
@@ -5358,6 +5409,8 @@ out:
 		    cstate->replay_owner != &lock_sop->lo_owner &&
 		    seqid_mutating_err(ntohl(status)))
 			lock_sop->lo_owner.so_seqid++;
+
+		up_write(&lock_stp->st_rwsem);
 
 		/*
 		 * If this is a new, never-before-used stateid, and we are
@@ -5529,6 +5582,7 @@ nfsd4_locku(struct svc_rqst *rqstp, struct nfsd4_compound_state *cstate,
 fput:
 	fput(filp);
 put_stateid:
+	up_write(&stp->st_rwsem);
 	nfs4_put_stid(&stp->st_stid);
 out:
 	nfsd4_bump_seqid(cstate, status);

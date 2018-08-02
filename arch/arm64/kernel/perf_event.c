@@ -316,15 +316,23 @@ out:
 }
 
 static int
-validate_event(struct pmu_hw_events *hw_events,
-	       struct perf_event *event)
+validate_event(struct pmu *pmu, struct pmu_hw_events *hw_events,
+				struct perf_event *event)
 {
-	struct arm_pmu *armpmu = to_arm_pmu(event->pmu);
+	struct arm_pmu *armpmu;
 	struct hw_perf_event fake_event = event->hw;
 	struct pmu *leader_pmu = event->group_leader->pmu;
 
 	if (is_software_event(event))
 		return 1;
+
+	/*
+	 * Reject groups spanning multiple HW PMUs (e.g. CPU + CCI). The
+	 * core perf code won't check that the pmu->ctx == leader->ctx
+	 * until after pmu->event_init(event).
+	 */
+	if (event->pmu != pmu)
+		return 0;
 
 	if (event->pmu != leader_pmu || event->state < PERF_EVENT_STATE_OFF)
 		return 1;
@@ -332,6 +340,7 @@ validate_event(struct pmu_hw_events *hw_events,
 	if (event->state == PERF_EVENT_STATE_OFF && !event->attr.enable_on_exec)
 		return 1;
 
+	armpmu = to_arm_pmu(event->pmu);
 	return armpmu->get_event_idx(hw_events, &fake_event) >= 0;
 }
 
@@ -349,15 +358,15 @@ validate_group(struct perf_event *event)
 	memset(fake_used_mask, 0, sizeof(fake_used_mask));
 	fake_pmu.used_mask = fake_used_mask;
 
-	if (!validate_event(&fake_pmu, leader))
+	if (!validate_event(event->pmu, &fake_pmu, leader))
 		return -EINVAL;
 
 	list_for_each_entry(sibling, &leader->sibling_list, group_entry) {
-		if (!validate_event(&fake_pmu, sibling))
+		if (!validate_event(event->pmu, &fake_pmu, sibling))
 			return -EINVAL;
 	}
 
-	if (!validate_event(&fake_pmu, event))
+	if (!validate_event(event->pmu, &fake_pmu, event))
 		return -EINVAL;
 
 	return 0;
@@ -1323,9 +1332,9 @@ static void __init cpu_pmu_init(struct arm_pmu *armpmu)
 
 static int __init init_hw_perf_events(void)
 {
-	u64 dfr = read_cpuid(ID_AA64DFR0_EL1);
+	u64 dfr = read_system_reg(SYS_ID_AA64DFR0_EL1);
 
-	switch ((dfr >> 8) & 0xf) {
+	switch (cpuid_feature_extract_field(dfr, ID_AA64DFR0_PMUVER_SHIFT)) {
 	case 0x1:	/* PMUv3 */
 		cpu_pmu = armv8_pmuv3_pmu_init();
 		break;

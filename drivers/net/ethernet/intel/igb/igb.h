@@ -29,7 +29,7 @@
 #include "e1000_mac.h"
 #include "e1000_82575.h"
 
-#include <linux/clocksource.h>
+#include <linux/timecounter.h>
 #include <linux/net_tstamp.h>
 #include <linux/ptp_clock_kernel.h>
 #include <linux/bitops.h>
@@ -531,6 +531,7 @@ void igb_ptp_rx_pktstamp(struct igb_q_vector *q_vector, unsigned char *va,
 			 struct sk_buff *skb);
 int igb_ptp_set_ts_config(struct net_device *netdev, struct ifreq *ifr);
 int igb_ptp_get_ts_config(struct net_device *netdev, struct ifreq *ifr);
+void igb_set_flag_queue_pairs(struct igb_adapter *, const u32);
 #ifdef CONFIG_IGB_HWMON
 void igb_sysfs_exit(struct igb_adapter *adapter);
 int igb_sysfs_init(struct igb_adapter *adapter);

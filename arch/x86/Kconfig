@@ -24,6 +24,12 @@ config X86
 	select ARCH_MIGHT_HAVE_ACPI_PDC if ACPI
 	select ARCH_HAS_DEBUG_STRICT_USER_COPY_CHECKS
 	select ARCH_HAS_FAST_MULTIPLIER
+	select ARCH_HAS_GCOV_PROFILE_ALL
+	select ARCH_HAS_KCOV			if X86_64
+	select ARCH_HAS_PMEM_API		if X86_64
+	select ARCH_HAS_MMIO_FLUSH
+	select ARCH_HAS_SG_CHAIN
+	select ARCH_HAS_UBSAN_SANITIZE_ALL
 	select ARCH_MIGHT_HAVE_PC_PARPORT
 	select ARCH_MIGHT_HAVE_PC_SERIO
 	select HAVE_AOUT if X86_32
@@ -41,6 +47,8 @@ config X86
 	select ARCH_DISCARD_MEMBLOCK
 	select ARCH_WANT_OPTIONAL_GPIOLIB
 	select ARCH_WANT_FRAME_POINTERS
+	select HAVE_ARCH_HARDENED_USERCOPY
+	select HAVE_ARCH_WITHIN_STACK_FRAMES
 	select HAVE_DMA_ATTRS
 	select HAVE_DMA_CONTIGUOUS
 	select HAVE_KRETPROBES
@@ -103,6 +111,8 @@ config X86
 	select DCACHE_WORD_ACCESS
 	select GENERIC_SMP_IDLE_THREAD
 	select ARCH_WANT_IPC_PARSE_VERSION if X86_32
+	select HAVE_ARCH_MMAP_RND_BITS		if MMU
+	select HAVE_ARCH_MMAP_RND_COMPAT_BITS	if MMU && COMPAT
 	select HAVE_ARCH_SECCOMP_FILTER
 	select BUILDTIME_EXTABLE_SORT
 	select GENERIC_CMOS_UPDATE
@@ -168,12 +178,26 @@ config HAVE_LATENCYTOP_SUPPORT
 config MMU
 	def_bool y
 
+config ARCH_MMAP_RND_BITS_MIN
+	default 28 if 64BIT
+	default 8
+
+config ARCH_MMAP_RND_BITS_MAX
+	default 32 if 64BIT
+	default 16
+
+config ARCH_MMAP_RND_COMPAT_BITS_MIN
+	default 8
+
+config ARCH_MMAP_RND_COMPAT_BITS_MAX
+	default 16
+
 config SBUS
 	bool
 
 config NEED_DMA_MAP_STATE
 	def_bool y
-	depends on X86_64 || INTEL_IOMMU || DMA_API_DEBUG
+	depends on X86_64 || INTEL_IOMMU || DMA_API_DEBUG || SWIOTLB
 
 config NEED_SG_DMA_LENGTH
 	def_bool y
@@ -273,6 +297,9 @@ config ARCH_SUPPORTS_UPROBES
 	def_bool y
 
 config FIX_EARLYCON_MEM
+	def_bool y
+
+config DEBUG_RODATA
 	def_bool y
 
 source "init/Kconfig"
@@ -2471,10 +2498,6 @@ config COMPAT_FOR_U64_ALIGNMENT
 config SYSVIPC_COMPAT
 	def_bool y
 	depends on SYSVIPC
-
-config KEYS_COMPAT
-	def_bool y
-	depends on KEYS
 endif
 
 endmenu

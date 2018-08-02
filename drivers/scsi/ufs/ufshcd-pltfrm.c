@@ -38,16 +38,17 @@
 #include <linux/of.h>
 
 #include "ufshcd.h"
+#include "ufshcd-pltfrm.h"
 
 static const struct of_device_id ufs_of_match[];
-static struct ufs_hba_variant_ops *get_variant_ops(struct device *dev)
+static struct ufs_hba_variant *get_variant(struct device *dev)
 {
 	if (dev->of_node) {
 		const struct of_device_id *match;
 
 		match = of_match_node(ufs_of_match, dev->of_node);
 		if (match)
-			return (struct ufs_hba_variant_ops *)match->data;
+			return (struct ufs_hba_variant *)match->data;
 	}
 
 	return NULL;
@@ -237,6 +238,54 @@ out:
 	return err;
 }
 
+static int ufshcd_parse_pm_lvl_policy(struct ufs_hba *hba)
+{
+	struct device *dev = hba->dev;
+	struct device_node *np = dev->of_node;
+	u32 lvl_def[] = {UFS_PM_LVL_2, UFS_PM_LVL_5};
+	u32 lvl[2], i;
+
+	for (i = 0; i < ARRAY_SIZE(lvl); i++) {
+		if (of_property_read_u32_index(np, "pm_lvl_states", i, lvl +i)) {
+			dev_info(hba->dev,
+				"UFS power management: set default level%d index %d\n",
+				lvl_def[i], i);
+			lvl[i] = lvl_def[i];
+		}
+
+		if (lvl[i] < UFS_PM_LVL_0 || lvl[i] >= UFS_PM_LVL_MAX) {
+			dev_warn(hba->dev,
+				"UFS power management: out of range level%d index %d\n",
+				lvl[i], i);
+			lvl[i] =  lvl_def[i];
+		}
+	}
+
+	hba->rpm_lvl = lvl[0];
+	hba->spm_lvl = lvl[1];
+
+	return 0;
+}
+
+static int ufshcd_parse_caps_info(struct ufs_hba *hba)
+{
+	struct device *dev = hba->dev;
+	struct device_node *np = dev->of_node;
+
+	if (of_find_property(np, "ufs-cap-clk-gating", NULL))
+		hba->caps |= UFSHCD_CAP_CLK_GATING;
+	if (of_find_property(np, "ufs-cap-hibern8-with-clk-gating", NULL))
+		hba->caps |= UFSHCD_CAP_HIBERN8_WITH_CLK_GATING;
+	if (of_find_property(np, "ufs-cap-clk-scaling", NULL))
+		hba->caps |= UFSHCD_CAP_CLK_SCALING;
+	if (of_find_property(np, "ufs-cap-auto-bkops-suspend", NULL))
+		hba->caps |= UFSHCD_CAP_AUTO_BKOPS_SUSPEND;
+	if (of_find_property(np, "ufs-cap-fake-clk-gating", NULL))
+		hba->caps |= UFSHCD_CAP_FAKE_CLK_GATING;
+
+	return 0;
+}
+
 #ifdef CONFIG_PM
 /**
  * ufshcd_pltfrm_suspend - suspend power management function
@@ -291,18 +340,20 @@ static void ufshcd_pltfrm_shutdown(struct platform_device *pdev)
 }
 
 /**
- * ufshcd_pltfrm_probe - probe routine of the driver
+ * ufshcd_pltfrm_init - initialize common routine of the driver
  * @pdev: pointer to Platform device handle
  *
  * Returns 0 on success, non-zero value on failure
  */
-static int ufshcd_pltfrm_probe(struct platform_device *pdev)
+int ufshcd_pltfrm_init(struct platform_device *pdev,
+			const struct ufs_hba_variant *var)
 {
 	struct ufs_hba *hba;
 	void __iomem *mmio_base;
 	struct resource *mem_res;
 	int irq, err;
 	struct device *dev = &pdev->dev;
+	const struct ufs_hba_variant *_var;
 
 	mem_res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	mmio_base = devm_ioremap_resource(dev, mem_res);
@@ -323,8 +374,11 @@ static int ufshcd_pltfrm_probe(struct platform_device *pdev)
 		dev_err(&pdev->dev, "Allocation failed\n");
 		goto out;
 	}
-
-	hba->vops = get_variant_ops(&pdev->dev);
+	_var = (var != NULL) ? var : get_variant(&pdev->dev);
+	if (_var) {
+		hba->vops = _var->ops;
+		hba->quirks= _var->quirks;
+	}
 
 	err = ufshcd_parse_clock_info(hba);
 	if (err) {
@@ -338,6 +392,9 @@ static int ufshcd_pltfrm_probe(struct platform_device *pdev)
 				__func__, err);
 		goto out;
 	}
+
+	ufshcd_parse_pm_lvl_policy(hba);
+	ufshcd_parse_caps_info(hba);
 
 	pm_runtime_set_active(&pdev->dev);
 	pm_runtime_enable(&pdev->dev);
@@ -358,6 +415,30 @@ out_disable_rpm:
 out:
 	return err;
 }
+EXPORT_SYMBOL_GPL(ufshcd_pltfrm_init);
+
+/**
+ * ufshcd_pltfrm_exit - exit common routine for platform driver
+ * @pdev: pointer to platform device handle
+ */
+void ufshcd_pltfrm_exit(struct platform_device *pdev)
+{
+	struct ufs_hba *hba =  platform_get_drvdata(pdev);
+
+	ufshcd_remove(hba);
+}
+EXPORT_SYMBOL_GPL(ufshcd_pltfrm_exit);
+
+/**
+ * ufshcd_pltfrm_probe - probe routine of the platform driver
+ * @pdev: pointer to Platform device handle
+ *
+ * Returns 0 on success, non-zero value on failure
+ */
+static int ufshcd_pltfrm_probe(struct platform_device *pdev)
+{
+	return ufshcd_pltfrm_init(pdev, NULL);
+}
 
 /**
  * ufshcd_pltfrm_remove - remove platform driver routine
@@ -370,6 +451,8 @@ static int ufshcd_pltfrm_remove(struct platform_device *pdev)
 	struct ufs_hba *hba =  platform_get_drvdata(pdev);
 
 	pm_runtime_get_sync(&(pdev)->dev);
+
+	disable_irq(hba->irq);
 	ufshcd_remove(hba);
 	return 0;
 }

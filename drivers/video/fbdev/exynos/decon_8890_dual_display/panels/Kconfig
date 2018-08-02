@@ -1,0 +1,26 @@
+config EXYNOS_DECON_LCD
+	depends on EXYNOS_DECON_8890_DUAL_DISPLAY
+	bool "Select LCD panel driver"
+
+config EXYNOS_DECON_MDNIE_LITE
+	depends on EXYNOS_DECON_LCD
+	tristate "Support MDNIE LITE"
+	default n
+
+config EXYNOS_DECON_LCD_SYSFS
+	depends on EXYNOS_DECON_LCD
+	tristate "Support LCD SYSFS"
+	default y
+
+config PANEL_AID_DIMMING
+	depends on EXYNOS_DECON_LCD
+	tristate "Support AID Dimming"
+	default n
+
+config PANEL_S6E3HF2_WQXGA
+	depends on EXYNOS_DECON_LCD && EXYNOS_MIPI_DSI
+	tristate "S6E3HF2 AMOLED SUPPORT WQXGA RESOLUTION"
+
+config PANEL_S6E36W0X10
+	depends on EXYNOS_DECON_LCD && EXYNOS_MIPI_DSI
+	tristate "S6E36W0X10 ALOMED SUPPORT 128 * 432 RESOLUTION"

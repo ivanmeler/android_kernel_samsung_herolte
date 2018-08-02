@@ -1,0 +1,16 @@
+
+config MOTOR_DRV_MAX77854
+	tristate "Maxim MAX77854 motor"
+	default n
+	depends on (MFD_MAX77854 && ANDROID_TIMED_OUTPUT)
+	help
+	  If you say yes here you will get support for the
+	  motor of Maxim MAX77854 PMIC.
+
+config MOTOR_DRV_SENSOR
+	tristate "Maxim MAX77854 motor"
+	default n
+	depends on MFD_MAX77854
+	help
+	  Say Y to enable MOTOR DRV SENSOR.
+	  

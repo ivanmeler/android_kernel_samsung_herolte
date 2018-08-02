@@ -148,6 +148,11 @@ static const struct min_max_quirk min_max_pnpid_table[] = {
 		1024, 5112, 2024, 4832
 	},
 	{
+		(const char * const []){"LEN2000", NULL},
+		{ANY_BOARD_ID, ANY_BOARD_ID},
+		1024, 5113, 2021, 4832
+	},
+	{
 		(const char * const []){"LEN2001", NULL},
 		{ANY_BOARD_ID, ANY_BOARD_ID},
 		1024, 5022, 2508, 4832
@@ -185,7 +190,7 @@ static const char * const topbuttonpad_pnp_ids[] = {
 	"LEN0047",
 	"LEN0048",
 	"LEN0049",
-	"LEN2000",
+	"LEN2000", /* S540 */
 	"LEN2001", /* Edge E431 */
 	"LEN2002", /* Edge E531 */
 	"LEN2003",
@@ -835,8 +840,9 @@ static void synaptics_report_ext_buttons(struct psmouse *psmouse,
 	if (!SYN_CAP_MULTI_BUTTON_NO(priv->ext_cap))
 		return;
 
-	/* Bug in FW 8.1, buttons are reported only when ExtBit is 1 */
-	if (SYN_ID_FULL(priv->identity) == 0x801 &&
+	/* Bug in FW 8.1 & 8.2, buttons are reported only when ExtBit is 1 */
+	if ((SYN_ID_FULL(priv->identity) == 0x801 ||
+	     SYN_ID_FULL(priv->identity) == 0x802) &&
 	    !((psmouse->packet[0] ^ psmouse->packet[3]) & 0x02))
 		return;
 

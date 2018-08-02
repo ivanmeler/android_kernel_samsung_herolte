@@ -116,6 +116,7 @@ struct hrtimer {
 	void				*start_site;
 	char				start_comm[16];
 #endif
+	bool				bounded_to_boot_cluster;
 };
 
 /**

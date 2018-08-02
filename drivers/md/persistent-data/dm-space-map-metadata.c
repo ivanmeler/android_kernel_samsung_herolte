@@ -204,6 +204,27 @@ static void in(struct sm_metadata *smm)
 	smm->recursion_count++;
 }
 
+static int apply_bops(struct sm_metadata *smm)
+{
+	int r = 0;
+
+	while (!brb_empty(&smm->uncommitted)) {
+		struct block_op bop;
+
+		r = brb_pop(&smm->uncommitted, &bop);
+		if (r) {
+			DMERR("bug in bop ring buffer");
+			break;
+		}
+
+		r = commit_bop(smm, &bop);
+		if (r)
+			break;
+	}
+
+	return r;
+}
+
 static int out(struct sm_metadata *smm)
 {
 	int r = 0;
@@ -216,21 +237,8 @@ static int out(struct sm_metadata *smm)
 		return -ENOMEM;
 	}
 
-	if (smm->recursion_count == 1) {
-		while (!brb_empty(&smm->uncommitted)) {
-			struct block_op bop;
-
-			r = brb_pop(&smm->uncommitted, &bop);
-			if (r) {
-				DMERR("bug in bop ring buffer");
-				break;
-			}
-
-			r = commit_bop(smm, &bop);
-			if (r)
-				break;
-		}
-	}
+	if (smm->recursion_count == 1)
+		apply_bops(smm);
 
 	smm->recursion_count--;
 
@@ -702,6 +710,12 @@ static int sm_metadata_extend(struct dm_space_map *sm, dm_block_t extra_blocks)
 		}
 		old_len = smm->begin;
 
+		r = apply_bops(smm);
+		if (r) {
+			DMERR("%s: apply_bops failed", __func__);
+			goto out;
+		}
+
 		r = sm_ll_commit(&smm->ll);
 		if (r)
 			goto out;
@@ -750,16 +764,14 @@ int dm_sm_metadata_create(struct dm_space_map *sm,
 	memcpy(&smm->sm, &bootstrap_ops, sizeof(smm->sm));
 
 	r = sm_ll_new_metadata(&smm->ll, tm);
-	if (r)
-		return r;
-
-	if (nr_blocks > DM_SM_METADATA_MAX_BLOCKS)
-		nr_blocks = DM_SM_METADATA_MAX_BLOCKS;
-	r = sm_ll_extend(&smm->ll, nr_blocks);
-	if (r)
-		return r;
-
+	if (!r) {
+		if (nr_blocks > DM_SM_METADATA_MAX_BLOCKS)
+			nr_blocks = DM_SM_METADATA_MAX_BLOCKS;
+		r = sm_ll_extend(&smm->ll, nr_blocks);
+	}
 	memcpy(&smm->sm, &ops, sizeof(smm->sm));
+	if (r)
+		return r;
 
 	/*
 	 * Now we need to update the newly created data structures with the
@@ -770,6 +782,12 @@ int dm_sm_metadata_create(struct dm_space_map *sm,
 
 	if (r)
 		return r;
+
+	r = apply_bops(smm);
+	if (r) {
+		DMERR("%s: apply_bops failed", __func__);
+		return r;
+	}
 
 	return sm_metadata_commit(sm);
 }

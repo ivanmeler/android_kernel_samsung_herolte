@@ -148,10 +148,10 @@ static inline bool xilinx_pcie_link_is_up(struct xilinx_pcie_port *port)
  */
 static void xilinx_pcie_clear_err_interrupts(struct xilinx_pcie_port *port)
 {
-	u32 val = pcie_read(port, XILINX_PCIE_REG_RPEFR);
+	unsigned long val = pcie_read(port, XILINX_PCIE_REG_RPEFR);
 
 	if (val & XILINX_PCIE_RPEFR_ERR_VALID) {
-		dev_dbg(port->dev, "Requester ID %d\n",
+		dev_dbg(port->dev, "Requester ID %lu\n",
 			val & XILINX_PCIE_RPEFR_REQ_ID);
 		pcie_write(port, XILINX_PCIE_RPEFR_ALL_MASK,
 			   XILINX_PCIE_REG_RPEFR);
@@ -859,7 +859,8 @@ static int xilinx_pcie_parse_dt(struct xilinx_pcie_port *port)
 
 	port->irq = irq_of_parse_and_map(node, 0);
 	err = devm_request_irq(dev, port->irq, xilinx_pcie_intr_handler,
-			       IRQF_SHARED, "xilinx-pcie", port);
+			       IRQF_SHARED | IRQF_NO_THREAD,
+			       "xilinx-pcie", port);
 	if (err) {
 		dev_err(dev, "unable to request irq %d\n", port->irq);
 		return err;

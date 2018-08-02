@@ -516,6 +516,13 @@ config CMA_DEBUG
 	  processing calls such as dma_alloc_from_contiguous().
 	  This option does not affect warning and error messages.
 
+config CMA_PINPAGE_MIGRATION
+	bool "CMA pinned page migration (EXPERIMENTAL)"
+	depends on CMA
+	default n
+	help
+	  Turns on cma page migration for pinned page.
+
 config CMA_AREAS
 	int "Maximum count of the CMA areas"
 	depends on CMA
@@ -559,6 +566,25 @@ config ZSWAP
 	  they have not be fully explored on the large set of potential
 	  configurations and workloads that exist.
 
+config ESWAP
+	bool "Exynos SWAP for frontswap backend"
+	depends on !ZSWAP
+	depends on FRONTSWAP
+	select ZPOOL
+	default n
+	help
+	  This enables H/W compress for swap page.
+
+config ZSWAP_ENABLE_WRITEBACK
+	bool "Enable zswap writeback"
+	depends on ZSWAP
+	default n
+
+config ZSWAP_COMPACTION
+	bool "Enable runtime zswap compaction"
+	depends on ZSWAP && ZPOOL && ZSMALLOC
+	default n
+
 config ZPOOL
 	tristate "Common API for compressed memory storage"
 	default n
@@ -601,6 +627,55 @@ config PGTABLE_MAPPING
 	  You can check speed with zsmalloc benchmark:
 	  https://github.com/spartacus06/zsmapbench
 
+config ZSMALLOC_STAT
+	bool "Export zsmalloc statistics"
+	depends on ZSMALLOC
+	select DEBUG_FS
+	help
+	  This option enables code in the zsmalloc to collect various
+	  statistics about whats happening in zsmalloc and exports that
+	  information to userspace via debugfs.
+	  If unsure, say N.
+
+config ZSMALLOC_OBJ_SEQ
+	bool "Record the sequence number of each object in itself"
+	depends on ZSMALLOC
+	default n
+	help
+	  This option records the sequence number of each zs object in the object.
+	  The recorded number will be used for reclaim_zspage.
+	  If unsure, say N.
+
+config DIRECT_RECLAIM_FILE_PAGES_ONLY
+	bool "Reclaim file pages only on direct reclaim path"
+	depends on ZSWAP
+	default n
+
+config INCREASE_MAXIMUM_SWAPPINESS
+	bool "Allow swappiness to be set up to 200"
+	depends on ZSWAP
+	default n
+
+config FIX_INACTIVE_RATIO
+	bool "Fix active:inactive anon ratio to 1:1"
+	depends on ZSWAP
+	default n
+
+config TIGHT_PGDAT_BALANCE
+	bool "Set more tight balanced condition to kswapd"
+	depends on ZSWAP
+	default n
+
+config SWAP_ENABLE_READAHEAD
+	bool "Enable readahead on page swap in"
+	depends on SWAP
+	default y
+	help
+	  When a page fault occurs, adjacent pages of SWAP_CLUSTER_MAX are
+	  also paged in expecting those pages will be used in near future.
+	  This behaviour is good at disk-based system, but not on in-memory
+	  compression (e.g. zram).
+
 config GENERIC_EARLY_IOREMAP
 	bool
 
@@ -618,3 +693,18 @@ config MAX_STACK_SIZE_MB
 	  changed to a smaller value in which case that is used.
 
 	  A sane initial value is 80 MB.
+
+config MMAP_READAROUND_LIMIT
+	int "Limit mmap readaround upperbound"
+	default 0
+	help
+	  Inappropriate mmap readaround size can hurt device performance
+	  during the sluggish situation. Add the hard upper-limit for
+	  mmap readaround.
+
+config LARGE_DIRTY_BUFFER
+	bool "Use large dirty_threshold value"
+	default n
+	help
+	  If unsure, say N to use kernel default value
+

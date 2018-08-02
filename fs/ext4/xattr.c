@@ -233,6 +233,24 @@ ext4_xattr_check_block(struct inode *inode, struct buffer_head *bh)
 	return error;
 }
 
+static int
+__xattr_check_inode(struct inode *inode, struct ext4_xattr_ibody_header *header,
+			 void *end)
+{
+	struct ext4_xattr_entry *entry = IFIRST(header);
+	int error = -EIO;
+
+	if (((void *) header >= end) ||
+	    (header->h_magic != le32_to_cpu(EXT4_XATTR_MAGIC)))
+		goto errout;
+	error = ext4_xattr_check_names(entry, end, entry);
+errout:
+	return error;
+}
+
+#define xattr_check_inode(inode, header, end) \
+	__xattr_check_inode((inode), (header), (end))
+
 static inline int
 ext4_xattr_check_entry(struct ext4_xattr_entry *entry, size_t size)
 {
@@ -296,6 +314,7 @@ ext4_xattr_block_get(struct inode *inode, int name_index, const char *name,
 		atomic_read(&(bh->b_count)), le32_to_cpu(BHDR(bh)->h_refcount));
 	if (ext4_xattr_check_block(inode, bh)) {
 bad_block:
+		print_bh(inode->i_sb, bh, 0, EXT4_BLOCK_SIZE(inode->i_sb));
 		EXT4_ERROR_INODE(inode, "bad block %llu",
 				 EXT4_I(inode)->i_file_acl);
 		error = -EIO;
@@ -344,9 +363,13 @@ ext4_xattr_ibody_get(struct inode *inode, int name_index, const char *name,
 	header = IHDR(inode, raw_inode);
 	entry = IFIRST(header);
 	end = (void *)raw_inode + EXT4_SB(inode->i_sb)->s_inode_size;
-	error = ext4_xattr_check_names(entry, end, entry);
-	if (error)
+	error = xattr_check_inode(inode, header, end);
+	if (error) {
+		print_iloc_info(inode->i_sb, iloc);
+		__ext4_error_inode(inode, __func__, __LINE__, 0,
+				   "corrupted in-inode xattr");
 		goto cleanup;
+	}
 	error = ext4_xattr_find_entry(&entry, name_index, name,
 				      end - (void *)entry, 0);
 	if (error)
@@ -444,6 +467,7 @@ ext4_xattr_block_list(struct dentry *dentry, char *buffer, size_t buffer_size)
 	ea_bdebug(bh, "b_count=%d, refcount=%d",
 		atomic_read(&(bh->b_count)), le32_to_cpu(BHDR(bh)->h_refcount));
 	if (ext4_xattr_check_block(inode, bh)) {
+		print_bh(inode->i_sb, bh, 0, EXT4_BLOCK_SIZE(inode->i_sb));
 		EXT4_ERROR_INODE(inode, "bad block %llu",
 				 EXT4_I(inode)->i_file_acl);
 		error = -EIO;
@@ -476,9 +500,13 @@ ext4_xattr_ibody_list(struct dentry *dentry, char *buffer, size_t buffer_size)
 	raw_inode = ext4_raw_inode(&iloc);
 	header = IHDR(inode, raw_inode);
 	end = (void *)raw_inode + EXT4_SB(inode->i_sb)->s_inode_size;
-	error = ext4_xattr_check_names(IFIRST(header), end, IFIRST(header));
-	if (error)
+	error = xattr_check_inode(inode, header, end);
+	if (error) {
+		print_iloc_info(inode->i_sb, iloc);
+		__ext4_error_inode(inode, __func__, __LINE__, 0,
+				   "corrupted in-inode xattr");
 		goto cleanup;
+	}
 	error = ext4_xattr_list_entries(dentry, IFIRST(header),
 					buffer, buffer_size);
 
@@ -751,6 +779,7 @@ ext4_xattr_block_find(struct inode *inode, struct ext4_xattr_info *i,
 			atomic_read(&(bs->bh->b_count)),
 			le32_to_cpu(BHDR(bs->bh)->h_refcount));
 		if (ext4_xattr_check_block(inode, bs->bh)) {
+			print_bh(sb, bs->bh, 0, EXT4_BLOCK_SIZE(sb));
 			EXT4_ERROR_INODE(inode, "bad block %llu",
 					 EXT4_I(inode)->i_file_acl);
 			error = -EIO;
@@ -993,10 +1022,13 @@ int ext4_xattr_ibody_find(struct inode *inode, struct ext4_xattr_info *i,
 	is->s.here = is->s.first;
 	is->s.end = (void *)raw_inode + EXT4_SB(inode->i_sb)->s_inode_size;
 	if (ext4_test_inode_state(inode, EXT4_STATE_XATTR)) {
-		error = ext4_xattr_check_names(IFIRST(header), is->s.end,
-					       IFIRST(header));
-		if (error)
+		error = xattr_check_inode(inode, header, is->s.end);
+		if (error) {
+			print_iloc_info(inode->i_sb, is->iloc);
+			__ext4_error_inode(inode, __func__, __LINE__, 0,
+					   "corrupted in-inode xattr");
 			return error;
+		}
 		/* Find the named attribute. */
 		error = ext4_xattr_find_entry(&is->s.here, i->name_index,
 					      i->name, is->s.end -
@@ -1271,11 +1303,13 @@ int ext4_expand_extra_isize_ea(struct inode *inode, int new_extra_isize,
 	int s_min_extra_isize = le16_to_cpu(EXT4_SB(inode->i_sb)->s_es->s_min_extra_isize);
 
 	down_write(&EXT4_I(inode)->xattr_sem);
+	/*
+	 * Set EXT4_STATE_NO_EXPAND to avoid recursion when marking inode dirty
+	 */
+	ext4_set_inode_state(inode, EXT4_STATE_NO_EXPAND);
 retry:
-	if (EXT4_I(inode)->i_extra_isize >= new_extra_isize) {
-		up_write(&EXT4_I(inode)->xattr_sem);
-		return 0;
-	}
+	if (EXT4_I(inode)->i_extra_isize >= new_extra_isize)
+		goto out;
 
 	header = IHDR(inode, raw_inode);
 	entry = IFIRST(header);
@@ -1291,6 +1325,17 @@ retry:
 	last = entry;
 	total_ino = sizeof(struct ext4_xattr_ibody_header);
 
+	error = xattr_check_inode(inode, header, end);
+	if (error) {
+		printk(KERN_ERR "printing inode..\n");
+		print_block_data(inode->i_sb, 0, (unsigned char *)raw_inode,
+					0, EXT4_INODE_SIZE(inode->i_sb));
+
+		__ext4_error_inode(inode, __func__, __LINE__, 0,
+				   "corrupted in-inode xattr");
+		goto cleanup;
+	}
+
 	free = ext4_xattr_free_space(last, &min_offs, base, &total_ino);
 	if (free >= new_extra_isize) {
 		entry = IFIRST(header);
@@ -1300,8 +1345,7 @@ retry:
 				(void *)header, total_ino,
 				inode->i_sb->s_blocksize);
 		EXT4_I(inode)->i_extra_isize = new_extra_isize;
-		error = 0;
-		goto cleanup;
+		goto out;
 	}
 
 	/*
@@ -1314,6 +1358,7 @@ retry:
 		if (!bh)
 			goto cleanup;
 		if (ext4_xattr_check_block(inode, bh)) {
+			print_bh(inode->i_sb, bh, 0, EXT4_BLOCK_SIZE(inode->i_sb));
 			EXT4_ERROR_INODE(inode, "bad block %llu",
 					 EXT4_I(inode)->i_file_acl);
 			error = -EIO;
@@ -1461,6 +1506,8 @@ retry:
 		kfree(bs);
 	}
 	brelse(bh);
+out:
+	ext4_clear_inode_state(inode, EXT4_STATE_NO_EXPAND);
 	up_write(&EXT4_I(inode)->xattr_sem);
 	return 0;
 
@@ -1472,6 +1519,10 @@ cleanup:
 	kfree(is);
 	kfree(bs);
 	brelse(bh);
+	/*
+	 * We deliberately leave EXT4_STATE_NO_EXPAND set here since inode
+	 * size expansion failed.
+	 */
 	up_write(&EXT4_I(inode)->xattr_sem);
 	return error;
 }
@@ -1500,6 +1551,7 @@ ext4_xattr_delete_inode(handle_t *handle, struct inode *inode)
 	}
 	if (BHDR(bh)->h_magic != cpu_to_le32(EXT4_XATTR_MAGIC) ||
 	    BHDR(bh)->h_blocks != cpu_to_le32(1)) {
+		print_bh(inode->i_sb, bh, 0, EXT4_BLOCK_SIZE(inode->i_sb));
 		EXT4_ERROR_INODE(inode, "bad block %llu",
 				 EXT4_I(inode)->i_file_acl);
 		goto cleanup;

@@ -14,6 +14,7 @@
 #include <linux/compat.h>
 #include <linux/mount.h>
 #include <linux/file.h>
+#include <linux/random.h>
 #include <asm/uaccess.h>
 #include "ext4_jbd2.h"
 #include "ext4.h"
@@ -196,6 +197,16 @@ journal_err_out:
 	unlock_two_nondirectories(inode, inode_bl);
 	iput(inode_bl);
 	return err;
+}
+
+static int uuid_is_zero(__u8 u[16])
+{
+	int	i;
+
+	for (i = 0; i < 16; i++)
+		if (u[i])
+			return 0;
+	return 1;
 }
 
 long ext4_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
@@ -587,11 +598,13 @@ resizefs_out:
 		return err;
 	}
 
+	case FIDTRIM:
 	case FITRIM:
 	{
 		struct request_queue *q = bdev_get_queue(sb->s_bdev);
 		struct fstrim_range range;
 		int ret = 0;
+		int flags  = cmd == FIDTRIM ? BLKDEV_DISCARD_SECURE : 0;
 
 		if (!capable(CAP_SYS_ADMIN))
 			return -EPERM;
@@ -599,13 +612,15 @@ resizefs_out:
 		if (!blk_queue_discard(q))
 			return -EOPNOTSUPP;
 
+		if ((flags & BLKDEV_DISCARD_SECURE) && !blk_queue_secdiscard(q))
+			return -EOPNOTSUPP;
 		if (copy_from_user(&range, (struct fstrim_range __user *)arg,
 		    sizeof(range)))
 			return -EFAULT;
 
 		range.minlen = max((unsigned int)range.minlen,
 				   q->limits.discard_granularity);
-		ret = ext4_trim_fs(sb, &range);
+		ret = ext4_trim_fs(sb, &range, flags);
 		if (ret < 0)
 			return ret;
 
@@ -617,6 +632,93 @@ resizefs_out:
 	}
 	case EXT4_IOC_PRECACHE_EXTENTS:
 		return ext4_ext_precache(inode);
+	case EXT4_IOC_SET_ENCRYPTION_POLICY: {
+#ifdef CONFIG_EXT4_FS_ENCRYPTION
+		struct ext4_encryption_policy policy;
+		int err = 0;
+
+		if (copy_from_user(&policy,
+				   (struct ext4_encryption_policy __user *)arg,
+				   sizeof(policy))) {
+			err = -EFAULT;
+			goto encryption_policy_out;
+		}
+
+		err = mnt_want_write_file(filp);
+		if (err)
+			goto encryption_policy_out;
+
+		mutex_lock(&inode->i_mutex);
+
+		err = ext4_process_policy(&policy, inode);
+
+		mutex_unlock(&inode->i_mutex);
+
+		mnt_drop_write_file(filp);
+encryption_policy_out:
+		return err;
+#else
+		return -EOPNOTSUPP;
+#endif
+	}
+	case EXT4_IOC_GET_ENCRYPTION_PWSALT: {
+		int err, err2;
+		struct ext4_sb_info *sbi = EXT4_SB(sb);
+		handle_t *handle;
+
+		if (!ext4_sb_has_crypto(sb))
+			return -EOPNOTSUPP;
+		if (uuid_is_zero(sbi->s_es->s_encrypt_pw_salt)) {
+			err = mnt_want_write_file(filp);
+			if (err)
+				return err;
+			handle = ext4_journal_start_sb(sb, EXT4_HT_MISC, 1);
+			if (IS_ERR(handle)) {
+				err = PTR_ERR(handle);
+				goto pwsalt_err_exit;
+			}
+			err = ext4_journal_get_write_access(handle, sbi->s_sbh);
+			if (err)
+				goto pwsalt_err_journal;
+			generate_random_uuid(sbi->s_es->s_encrypt_pw_salt);
+			err = ext4_handle_dirty_metadata(handle, NULL,
+							 sbi->s_sbh);
+		pwsalt_err_journal:
+			err2 = ext4_journal_stop(handle);
+			if (err2 && !err)
+				err = err2;
+		pwsalt_err_exit:
+			mnt_drop_write_file(filp);
+			if (err)
+				return err;
+		}
+		if (copy_to_user((void __user *) arg,
+				 sbi->s_es->s_encrypt_pw_salt, 16))
+			return -EFAULT;
+		return 0;
+	}
+	case EXT4_IOC_GET_ENCRYPTION_POLICY: {
+#ifdef CONFIG_EXT4_FS_ENCRYPTION
+		struct ext4_encryption_policy policy;
+		int err = 0;
+
+		if (!ext4_encrypted_inode(inode))
+			return -ENOENT;
+		err = ext4_get_policy(inode, &policy);
+		if (err)
+			return err;
+		if (copy_to_user((void __user *)arg, &policy, sizeof(policy)))
+			return -EFAULT;
+		return 0;
+#else
+		return -EOPNOTSUPP;
+#endif
+	}
+
+	case FS_IOC_INVAL_MAPPING:
+	{
+		return invalidate_mapping_pages(inode->i_mapping, 0, -1);
+	}
 
 	default:
 		return -ENOTTY;
@@ -682,6 +784,9 @@ long ext4_compat_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	case FITRIM:
 	case EXT4_IOC_RESIZE_FS:
 	case EXT4_IOC_PRECACHE_EXTENTS:
+	case EXT4_IOC_SET_ENCRYPTION_POLICY:
+	case EXT4_IOC_GET_ENCRYPTION_PWSALT:
+	case EXT4_IOC_GET_ENCRYPTION_POLICY:
 		break;
 	default:
 		return -ENOIOCTLCMD;

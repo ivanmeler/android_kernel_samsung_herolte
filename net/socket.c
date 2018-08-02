@@ -524,9 +524,23 @@ static ssize_t sockfs_listxattr(struct dentry *dentry, char *buffer,
 	return used;
 }
 
+static int sockfs_setattr(struct dentry *dentry, struct iattr *iattr)
+{
+	int err = simple_setattr(dentry, iattr);
+
+	if (!err && (iattr->ia_valid & ATTR_UID)) {
+		struct socket *sock = SOCKET_I(dentry->d_inode);
+
+		sock->sk->sk_uid = iattr->ia_uid;
+	}
+
+	return err;
+}
+
 static const struct inode_operations sockfs_inode_ops = {
 	.getxattr = sockfs_getxattr,
 	.listxattr = sockfs_listxattr,
+	.setattr = sockfs_setattr,
 };
 
 /**
@@ -541,12 +555,24 @@ static struct socket *sock_alloc(void)
 {
 	struct inode *inode;
 	struct socket *sock;
+    /* START_OF_KNOX_VPN */
+    struct timespec open_timespec;
+    /* END_OF_KNOX_VPN */
 
 	inode = new_inode_pseudo(sock_mnt->mnt_sb);
 	if (!inode)
 		return NULL;
 
 	sock = SOCKET_I(inode);
+
+	/* START_OF_KNOX_VPN */
+    if(sock) {
+        sock->knox_sent = 0;
+        sock->knox_recv = 0;
+        open_timespec = current_kernel_time();
+        sock->open_time = open_timespec.tv_sec;
+    }
+    /* END_OF_KNOX_VPN */
 
 	kmemcheck_annotate_bitfield(sock, type);
 	inode->i_ino = get_next_ino();
@@ -606,6 +632,12 @@ void sock_release(struct socket *sock)
 		iput(SOCK_INODE(sock));
 		return;
 	}
+	/* START_OF_KNOX_VPN */
+    sock->knox_sent = 0;
+    sock->knox_recv = 0;
+    sock->open_time = 0;
+    /* END_OF_KNOX_VPN */
+
 	sock->file = NULL;
 }
 EXPORT_SYMBOL(sock_release);
@@ -1790,6 +1822,8 @@ SYSCALL_DEFINE6(sendto, int, fd, void __user *, buff, size_t, len,
 
 	if (len > INT_MAX)
 		len = INT_MAX;
+	if (unlikely(!access_ok(VERIFY_READ, buff, len)))
+		return -EFAULT;
 	sock = sockfd_lookup_light(fd, &err, &fput_needed);
 	if (!sock)
 		goto out;
@@ -1849,6 +1883,8 @@ SYSCALL_DEFINE6(recvfrom, int, fd, void __user *, ubuf, size_t, size,
 
 	if (size > INT_MAX)
 		size = INT_MAX;
+	if (unlikely(!access_ok(VERIFY_WRITE, ubuf, size)))
+		return -EFAULT;
 	sock = sockfd_lookup_light(fd, &err, &fput_needed);
 	if (!sock)
 		goto out;
@@ -2017,14 +2053,12 @@ static int ___sys_sendmsg(struct socket *sock, struct msghdr __user *msg,
 	int err, ctl_len, total_len;
 
 	err = -EFAULT;
-	if (MSG_CMSG_COMPAT & flags) {
-		if (get_compat_msghdr(msg_sys, msg_compat))
-			return -EFAULT;
-	} else {
+	if (MSG_CMSG_COMPAT & flags)
+		err = get_compat_msghdr(msg_sys, msg_compat);
+	else
 		err = copy_msghdr_from_user(msg_sys, msg);
-		if (err)
-			return err;
-	}
+	if (err)
+		return err;
 
 	if (msg_sys->msg_iovlen > UIO_FASTIOV) {
 		err = -EMSGSIZE;
@@ -2229,14 +2263,12 @@ static int ___sys_recvmsg(struct socket *sock, struct msghdr __user *msg,
 	struct sockaddr __user *uaddr;
 	int __user *uaddr_len;
 
-	if (MSG_CMSG_COMPAT & flags) {
-		if (get_compat_msghdr(msg_sys, msg_compat))
-			return -EFAULT;
-	} else {
+	if (MSG_CMSG_COMPAT & flags)
+		err = get_compat_msghdr(msg_sys, msg_compat);
+	else
 		err = copy_msghdr_from_user(msg_sys, msg);
-		if (err)
-			return err;
-	}
+	if (err)
+		return err;
 
 	if (msg_sys->msg_iovlen > UIO_FASTIOV) {
 		err = -EMSGSIZE;
@@ -2359,8 +2391,10 @@ int __sys_recvmmsg(int fd, struct mmsghdr __user *mmsg, unsigned int vlen,
 		return err;
 
 	err = sock_error(sock->sk);
-	if (err)
+	if (err) {
+		datagrams = err;
 		goto out_put;
+	}
 
 	entry = mmsg;
 	compat_entry = (struct compat_mmsghdr __user *)mmsg;
@@ -2414,31 +2448,31 @@ int __sys_recvmmsg(int fd, struct mmsghdr __user *mmsg, unsigned int vlen,
 			break;
 	}
 
+	if (err == 0)
+		goto out_put;
+
+	if (datagrams == 0) {
+		datagrams = err;
+		goto out_put;
+	}
+
+	/*
+	 * We may return less entries than requested (vlen) if the
+	 * sock is non block and there aren't enough datagrams...
+	 */
+	if (err != -EAGAIN) {
+		/*
+		 * ... or  if recvmsg returns an error after we
+		 * received some datagrams, where we record the
+		 * error to return on the next call or if the
+		 * app asks about it using getsockopt(SO_ERROR).
+		 */
+		sock->sk->sk_err = -err;
+	}
 out_put:
 	fput_light(sock->file, fput_needed);
 
-	if (err == 0)
-		return datagrams;
-
-	if (datagrams != 0) {
-		/*
-		 * We may return less entries than requested (vlen) if the
-		 * sock is non block and there aren't enough datagrams...
-		 */
-		if (err != -EAGAIN) {
-			/*
-			 * ... or  if recvmsg returns an error after we
-			 * received some datagrams, where we record the
-			 * error to return on the next call or if the
-			 * app asks about it using getsockopt(SO_ERROR).
-			 */
-			sock->sk->sk_err = -err;
-		}
-
-		return datagrams;
-	}
-
-	return err;
+	return datagrams;
 }
 
 SYSCALL_DEFINE5(recvmmsg, int, fd, struct mmsghdr __user *, mmsg,

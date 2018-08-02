@@ -178,6 +178,7 @@ config CFG80211_WEXT
 	bool "cfg80211 wireless extensions compatibility"
 	depends on CFG80211
 	select WEXT_CORE
+	default y
 	help
 	  Enable this option if you need old userspace for wireless
 	  extensions with cfg80211-based drivers.
@@ -209,3 +210,12 @@ config LIB80211_DEBUG
 	  from lib80211.
 
 	  If unsure, say N.
+
+config CFG80211_REG_NOT_UPDATED
+	bool "Do not update Regulatory configuration"
+	depends on CFG80211
+	default n
+	help
+	  Regulation should not updated even if device found other country
+	  Access Point Beacon once since device should find around other
+	  Access Points.

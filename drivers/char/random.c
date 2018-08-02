@@ -260,6 +260,7 @@
 #include <linux/irq.h>
 #include <linux/syscalls.h>
 #include <linux/completion.h>
+#include <linux/freezer.h>
 
 #include <asm/processor.h>
 #include <asm/uaccess.h>
@@ -1714,13 +1715,15 @@ int random_int_secret_init(void)
 	return 0;
 }
 
+static DEFINE_PER_CPU(__u32 [MD5_DIGEST_WORDS], get_random_int_hash)
+		__aligned(sizeof(unsigned long));
+
 /*
  * Get a random word for internal kernel use only. Similar to urandom but
  * with the goal of minimal entropy pool depletion. As a result, the random
  * value is not cryptographically secure but for several uses the cost of
  * depleting entropy is too high
  */
-static DEFINE_PER_CPU(__u32 [MD5_DIGEST_WORDS], get_random_int_hash);
 unsigned int get_random_int(void)
 {
 	__u32 *hash;
@@ -1739,6 +1742,28 @@ unsigned int get_random_int(void)
 	return ret;
 }
 EXPORT_SYMBOL(get_random_int);
+
+/*
+ * Same as get_random_int(), but returns unsigned long.
+ */
+unsigned long get_random_long(void)
+{
+	__u32 *hash;
+	unsigned long ret;
+
+	if (arch_get_random_long(&ret))
+		return ret;
+
+	hash = get_cpu_var(get_random_int_hash);
+
+	hash[0] += current->pid + jiffies + random_get_entropy();
+	md5_transform(hash, random_int_secret);
+	ret = *(unsigned long *)hash;
+	put_cpu_var(get_random_int_hash);
+
+	return ret;
+}
+EXPORT_SYMBOL(get_random_long);
 
 /*
  * randomize_range() returns a start address such that
@@ -1772,7 +1797,7 @@ void add_hwgenerator_randomness(const char *buffer, size_t count,
 	 * We'll be woken up again once below random_write_wakeup_thresh,
 	 * or when the calling thread is about to terminate.
 	 */
-	wait_event_interruptible(random_write_wait, kthread_should_stop() ||
+	wait_event_freezable(random_write_wait, kthread_should_stop() ||
 			ENTROPY_BITS(&input_pool) <= random_write_wakeup_bits);
 	mix_pool_bytes(poolp, buffer, count);
 	credit_entropy_bits(poolp, entropy);

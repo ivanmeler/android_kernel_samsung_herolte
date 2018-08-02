@@ -1153,10 +1153,10 @@ int memory_failure(unsigned long pfn, int trapno, int flags)
 	 * The check (unnecessarily) ignores LRU pages being isolated and
 	 * walked by the page reclaim code, however that's not a big loss.
 	 */
-	if (!PageHuge(p) && !PageTransTail(p)) {
-		if (!PageLRU(p))
-			shake_page(p, 0);
-		if (!PageLRU(p)) {
+	if (!PageHuge(p)) {
+		if (!PageLRU(hpage))
+			shake_page(hpage, 0);
+		if (!PageLRU(hpage)) {
 			/*
 			 * shake_page could have turned it free.
 			 */
@@ -1189,7 +1189,10 @@ int memory_failure(unsigned long pfn, int trapno, int flags)
 	 * page_remove_rmap() in try_to_unmap_one(). So to determine page status
 	 * correctly, we save a copy of the page flags at this time.
 	 */
-	page_flags = p->flags;
+	if (PageHuge(p))
+		page_flags = hpage->flags;
+	else
+		page_flags = p->flags;
 
 	/*
 	 * unpoison always clear PG_hwpoison inside page lock
@@ -1523,7 +1526,9 @@ static int get_any_page(struct page *page, unsigned long pfn, int flags)
 		 * Did it turn free?
 		 */
 		ret = __get_any_page(page, pfn, 0);
-		if (!PageLRU(page)) {
+		if (ret == 1 && !PageLRU(page)) {
+			/* Drop page reference which is from __get_any_page() */
+			put_page(page);
 			pr_info("soft_offline: %#lx: unknown non LRU page type %lx\n",
 				pfn, page->flags);
 			return -EIO;
@@ -1552,19 +1557,24 @@ static int soft_offline_huge_page(struct page *page, int flags)
 	}
 	unlock_page(hpage);
 
-	/* Keep page count to indicate a given hugepage is isolated. */
-	list_move(&hpage->lru, &pagelist);
+	ret = isolate_huge_page(hpage, &pagelist);
+	/*
+	 * get_any_page() and isolate_huge_page() takes a refcount each,
+	 * so need to drop one here.
+	 */
+	put_page(hpage);
+	if (!ret) {
+		pr_info("soft offline: %#lx hugepage failed to isolate\n", pfn);
+		return -EBUSY;
+	}
+
 	ret = migrate_pages(&pagelist, new_page, NULL, MPOL_MF_MOVE_ALL,
 				MIGRATE_SYNC, MR_MEMORY_FAILURE);
 	if (ret) {
 		pr_info("soft offline: %#lx: migration failed %d, type %lx\n",
 			pfn, ret, page->flags);
-		/*
-		 * We know that soft_offline_huge_page() tries to migrate
-		 * only one hugepage pointed to by hpage, so we need not
-		 * run through the pagelist here.
-		 */
-		putback_active_hugepage(hpage);
+		if (!list_empty(&pagelist))
+			putback_movable_pages(&pagelist);
 		if (ret > 0)
 			ret = -EIO;
 	} else {
@@ -1733,12 +1743,12 @@ int soft_offline_page(struct page *page, int flags)
 	} else if (ret == 0) { /* for free pages */
 		if (PageHuge(page)) {
 			set_page_hwpoison_huge_page(hpage);
-			dequeue_hwpoisoned_huge_page(hpage);
-			atomic_long_add(1 << compound_order(hpage),
+			if (!dequeue_hwpoisoned_huge_page(hpage))
+				atomic_long_add(1 << compound_order(hpage),
 					&num_poisoned_pages);
 		} else {
-			SetPageHWPoison(page);
-			atomic_long_inc(&num_poisoned_pages);
+			if (!TestSetPageHWPoison(page))
+				atomic_long_inc(&num_poisoned_pages);
 		}
 	}
 	unset_migratetype_isolate(page, MIGRATE_MOVABLE);

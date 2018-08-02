@@ -1,0 +1,18 @@
+config VIDEO_EXYNOS_MFC
+	bool "Exynos MFC Driver"
+	default n
+	depends on VIDEO_EXYNOS
+	select VIDEOBUF2_CORE
+	select EXYNOS_MFC_V10
+	---help---
+	  MFC driver for V4L2.
+
+choice
+depends on VIDEO_EXYNOS_MFC
+prompt "MFC version"
+default EXYNOS_MFC_V10
+config EXYNOS_MFC_V10
+prompt "MFC version 10"
+	bool
+	depends on ARCH_EXYNOS8
+endchoice

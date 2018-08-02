@@ -1,0 +1,23 @@
+config GPS_BCMxxxxx
+	bool "BROADCOM_GPS_CHIPSET_COMMON"
+	default n
+
+config GPS_BCM4752
+	bool "BROADCOM_GPS_CHIPSET_4752"
+	default n
+
+config GPS_BCM47521
+	bool "BROADCOM_GPS_CHIPSET_47521"
+	default n
+
+config GPS_BCM4753
+	bool "BROADCOM_GPS_CHIPSET_4753"
+	default n
+
+config GPS_BCM47531
+	bool "BROADCOM_GPS_CHIPSET_47531"
+	default n
+
+config GPS_BCM4773
+	bool "BROADCOM_GPS_CHIPSET_4773"
+	default n

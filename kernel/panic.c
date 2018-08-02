@@ -23,6 +23,10 @@
 #include <linux/sysrq.h>
 #include <linux/init.h>
 #include <linux/nmi.h>
+#include <linux/exynos-ss.h>
+#include <asm/core_regs.h>
+#include "sched/sched.h"
+#include <linux/console.h>
 
 #define PANIC_TIMER_STEP 100
 #define PANIC_BLINK_SPD 18
@@ -75,6 +79,8 @@ void panic(const char *fmt, ...)
 	long i, i_next = 0;
 	int state = 0;
 
+	 exynos_trace_stop();
+
 	/*
 	 * Disable local interrupts. This will prevent panic_smp_self_stop
 	 * from deadlocking the first cpu that invokes the panic, since
@@ -93,15 +99,34 @@ void panic(const char *fmt, ...)
 	 * stop themself or will wait until they are stopped by the 1st CPU
 	 * with smp_send_stop().
 	 */
-	if (!spin_trylock(&panic_lock))
+	if (!spin_trylock(&panic_lock)) {
+		exynos_ss_hook_hardlockup_exit();
 		panic_smp_self_stop();
+	}
 
 	console_verbose();
 	bust_spinlocks(1);
 	va_start(args, fmt);
 	vsnprintf(buf, sizeof(buf), fmt, args);
 	va_end(args);
-	pr_emerg("Kernel panic - not syncing: %s\n", buf);
+
+#ifdef CONFIG_SEC_DEBUG_AUTO_SUMMARY
+	if(buf[strlen(buf)-1] == '\n')
+		buf[strlen(buf)-1] = '\0';
+#endif
+
+	pr_auto(ASL5, "Kernel panic - not syncing: %s\n", buf);
+
+#ifdef CONFIG_RELOCATABLE_KERNEL 
+	{	
+		extern u64 *__boot_kernel_offset; 
+		u64 *kernel_addr = (u64 *) &__boot_kernel_offset;
+		pr_emerg("Kernel loaded at: 0x%llx, offset from compile-time address %llx\n", kernel_addr[1]+kernel_addr[0], kernel_addr[1]- kernel_addr[2] );
+	}
+#endif 
+
+	exynos_ss_prepare_panic();
+	exynos_ss_dump_panic(buf, (size_t)strnlen(buf, sizeof(buf)));
 #ifdef CONFIG_DEBUG_BUGVERBOSE
 	/*
 	 * Avoid nested stack-dumping if a panic occurs during oops processing
@@ -110,6 +135,7 @@ void panic(const char *fmt, ...)
 		dump_stack();
 #endif
 
+	sysrq_sched_debug_show();
 	/*
 	 * If we have crashed and we have a crash kernel loaded let it handle
 	 * everything else.
@@ -134,6 +160,10 @@ void panic(const char *fmt, ...)
 
 	kmsg_dump(KMSG_DUMP_PANIC);
 
+	exynos_cs_show_pcval();
+
+	exynos_ss_post_panic();
+
 	/*
 	 * If you doubt kdump always works fine in any situation,
 	 * "crash_kexec_post_notifiers" offers you a chance to run
@@ -144,6 +174,17 @@ void panic(const char *fmt, ...)
 	crash_kexec(NULL);
 
 	bust_spinlocks(0);
+
+	/*
+	 * We may have ended up stopping the CPU holding the lock (in
+	 * smp_send_stop()) while still having some valuable data in the console
+	 * buffer.  Try to acquire the lock then release it regardless of the
+	 * result.  The release will also print the buffers out.  Locks debug
+	 * should be disabled to avoid reporting bad unlock balance when
+	 * panic() is not being callled from OOPS.
+	 */
+	debug_locks_off();
+	console_flush_on_panic();
 
 	if (!panic_blink)
 		panic_blink = no_blink;

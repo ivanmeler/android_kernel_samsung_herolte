@@ -1,7 +1,7 @@
 #
 # Makefile for misc devices that really don't fit anywhere else.
 #
-
+obj-$(CONFIG_RKP_CFP_ROPP)	+= cfp_test.o
 obj-$(CONFIG_IBM_ASM)		+= ibmasm/
 obj-$(CONFIG_AD525X_DPOT)	+= ad525x_dpot.o
 obj-$(CONFIG_AD525X_DPOT_I2C)	+= ad525x_dpot-i2c.o
@@ -34,6 +34,7 @@ obj-$(CONFIG_ISL29020)		+= isl29020.o
 obj-$(CONFIG_SENSORS_TSL2550)	+= tsl2550.o
 obj-$(CONFIG_DS1682)		+= ds1682.o
 obj-$(CONFIG_TI_DAC7512)	+= ti_dac7512.o
+obj-$(CONFIG_UID_STAT)		+= uid_stat.o
 obj-$(CONFIG_C2PORT)		+= c2port/
 obj-$(CONFIG_HMC6352)		+= hmc6352.o
 obj-y				+= eeprom/
@@ -56,3 +57,16 @@ obj-$(CONFIG_GENWQE)		+= genwqe/
 obj-$(CONFIG_ECHO)		+= echo/
 obj-$(CONFIG_VEXPRESS_SYSCFG)	+= vexpress-syscfg.o
 obj-$(CONFIG_CXL_BASE)		+= cxl/
+obj-$(CONFIG_MCU_IPC)		+= mcu_ipc/
+obj-$(CONFIG_SEC_SIPC_MODEM_IF)	+= modem_v1/
+obj-$(CONFIG_UID_SYS_STATS) += uid_sys_stats.o
+obj-$(CONFIG_MEMORY_STATE_TIME) += memory_state_time.o
+
+# Secure OS Mobicore Interface
+obj-$(CONFIG_TRUSTONIC_TEE)	+= tzic64.o
+
+# for DMVerity
+obj-$(CONFIG_DM_VERITY)		+= dmverity_query.o
+
+# Tima
+obj-$(CONFIG_TIMA_LOG)		+= tima_debug_log.o

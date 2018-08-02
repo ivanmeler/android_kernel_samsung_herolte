@@ -22,9 +22,15 @@
 #include <linux/mmc/card.h>
 #include <linux/mmc/host.h>
 #include <linux/mmc/sdio_func.h>
+#include <linux/of.h>
 
+#include "core.h"
 #include "sdio_cis.h"
 #include "sdio_bus.h"
+
+#ifdef CONFIG_MMC_EMBEDDED_SDIO
+#include <linux/mmc/host.h>
+#endif
 
 /* show configuration fields */
 #define sdio_config_attr(field, format_string)				\
@@ -262,10 +268,17 @@ static void sdio_release_func(struct device *dev)
 {
 	struct sdio_func *func = dev_to_sdio_func(dev);
 
-	sdio_free_func_cis(func);
+#ifdef CONFIG_MMC_EMBEDDED_SDIO
+	/*
+	 * If this device is embedded then we never allocated
+	 * cis tables for this func
+	 */
+	if (!func->card->host->embedded_sdio_data.funcs)
+#endif
+		sdio_free_func_cis(func);
 
 	kfree(func->info);
-
+	kfree(func->tmpbuf);
 	kfree(func);
 }
 
@@ -279,6 +292,16 @@ struct sdio_func *sdio_alloc_func(struct mmc_card *card)
 	func = kzalloc(sizeof(struct sdio_func), GFP_KERNEL);
 	if (!func)
 		return ERR_PTR(-ENOMEM);
+
+	/*
+	 * allocate buffer separately to make sure it's properly aligned for
+	 * DMA usage (incl. 64 bit DMA)
+	 */
+	func->tmpbuf = kmalloc(4, GFP_KERNEL);
+	if (!func->tmpbuf) {
+		kfree(func);
+		return ERR_PTR(-ENOMEM);
+	}
 
 	func->card = card;
 
@@ -303,6 +326,13 @@ static void sdio_acpi_set_handle(struct sdio_func *func)
 static inline void sdio_acpi_set_handle(struct sdio_func *func) {}
 #endif
 
+static void sdio_set_of_node(struct sdio_func *func)
+{
+	struct mmc_host *host = func->card->host;
+
+	func->dev.of_node = mmc_of_find_child_device(host, func->num);
+}
+
 /*
  * Register a new SDIO function with the driver model.
  */
@@ -312,6 +342,7 @@ int sdio_add_func(struct sdio_func *func)
 
 	dev_set_name(&func->dev, "%s:%d", mmc_card_id(func->card), func->num);
 
+	sdio_set_of_node(func);
 	sdio_acpi_set_handle(func);
 	ret = device_add(&func->dev);
 	if (ret == 0) {
@@ -335,6 +366,7 @@ void sdio_remove_func(struct sdio_func *func)
 
 	dev_pm_domain_detach(&func->dev, false);
 	device_del(&func->dev);
+	of_node_put(func->dev.of_node);
 	put_device(&func->dev);
 }
 

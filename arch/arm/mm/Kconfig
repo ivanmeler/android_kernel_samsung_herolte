@@ -624,6 +624,10 @@ config ARM_LPAE
 
 	  If unsure, say N.
 
+config ARM_PV_FIXUP
+	def_bool y
+	depends on ARM_LPAE && ARM_PATCH_PHYS_VIRT && ARCH_KEYSTONE
+
 config ARCH_PHYS_ADDR_T_64BIT
 	def_bool ARM_LPAE
 
@@ -825,6 +829,20 @@ config KUSER_HELPERS
 	  Say N here only if you are absolutely certain that you do not
 	  need these helpers; otherwise, the safe option is to say Y.
 
+config VDSO
+	bool "Enable VDSO for acceleration of some system calls"
+	depends on AEABI && MMU && CPU_V7
+	default y if ARM_ARCH_TIMER
+	select GENERIC_TIME_VSYSCALL
+	help
+	  Place in the process address space an ELF shared object
+	  providing fast implementations of gettimeofday and
+	  clock_gettime.  Systems that implement the ARM architected
+	  timer will receive maximum benefit.
+
+	  You must have glibc 2.22 or later for programs to seamlessly
+	  take advantage of this.
+
 config DMA_CACHE_RWFO
 	bool "Enable read/write for ownership DMA cache maintenance"
 	depends on CPU_V6K && SMP
@@ -1009,3 +1027,24 @@ config ARCH_SUPPORTS_BIG_ENDIAN
 	help
 	  This option specifies the architecture can support big endian
 	  operation.
+
+config ARM_KERNMEM_PERMS
+	bool "Restrict kernel memory permissions"
+	help
+	  If this is set, kernel memory other than kernel text (and rodata)
+	  will be made non-executable. The tradeoff is that each region is
+	  padded to section-size (1MiB) boundaries (because their permissions
+	  are different and splitting the 1M pages into 4K ones causes TLB
+	  performance problems), wasting memory.
+
+config DEBUG_RODATA
+	bool "Make kernel text and rodata read-only"
+	depends on ARM_KERNMEM_PERMS
+	default y
+	help
+	  If this is set, kernel text and rodata will be made read-only. This
+	  is to help catch accidental or malicious attempts to change the
+	  kernel's executable code. Additionally splits rodata from kernel
+	  text so it can be made explicitly non-executable. This creates
+	  another section-size padded region, so it can waste more memory
+	  space while gaining the read-only protections.

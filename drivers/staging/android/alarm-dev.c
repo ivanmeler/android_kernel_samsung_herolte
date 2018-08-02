@@ -60,17 +60,13 @@ struct devalarm {
 
 static struct devalarm alarms[ANDROID_ALARM_TYPE_COUNT];
 
-/**
- * is_wakeup() - Checks to see if this alarm can wake the device
- * @type:	 The type of alarm being checked
- *
- * Return: 1 if this is a wakeup alarm, otherwise 0
- */
+
 static int is_wakeup(enum android_alarm_type type)
 {
-	return type == ANDROID_ALARM_RTC_WAKEUP ||
-		type == ANDROID_ALARM_ELAPSED_REALTIME_WAKEUP;
+	return (type == ANDROID_ALARM_RTC_WAKEUP ||
+		type == ANDROID_ALARM_ELAPSED_REALTIME_WAKEUP);
 }
+
 
 static void devalarm_start(struct devalarm *alrm, ktime_t exp)
 {
@@ -79,6 +75,7 @@ static void devalarm_start(struct devalarm *alrm, ktime_t exp)
 	else
 		hrtimer_start(&alrm->u.hrt, exp, HRTIMER_MODE_ABS);
 }
+
 
 static int devalarm_try_to_cancel(struct devalarm *alrm)
 {
@@ -110,6 +107,7 @@ static void alarm_clear(enum android_alarm_type alarm_type)
 	}
 	alarm_enabled &= ~alarm_type_mask;
 	spin_unlock_irqrestore(&alarm_slock, flags);
+
 }
 
 static void alarm_set(enum android_alarm_type alarm_type,
@@ -256,6 +254,10 @@ static long alarm_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 	struct timespec ts;
 	int rv;
 
+#if defined(CONFIG_RTC_ALARM_BOOT)
+		char bootalarm_data[14];
+#endif
+
 	switch (ANDROID_ALARM_BASE_CMD(cmd)) {
 	case ANDROID_ALARM_SET_AND_WAIT(0):
 	case ANDROID_ALARM_SET(0):
@@ -263,6 +265,19 @@ static long alarm_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 		if (copy_from_user(&ts, (void __user *)arg, sizeof(ts)))
 			return -EFAULT;
 		break;
+#if defined(CONFIG_RTC_ALARM_BOOT)
+	case ANDROID_ALARM_SET_ALARM_BOOT:
+		if (copy_from_user(bootalarm_data, (void __user *)arg, 14)) {
+			return -EFAULT;
+		}
+		rv = alarm_set_alarm_boot(bootalarm_data);
+
+		alarm_opened = 1;
+
+		return rv;
+
+		break;
+#endif
 	}
 
 	rv = alarm_do_ioctl(file, cmd, &ts);
@@ -278,7 +293,6 @@ static long alarm_ioctl(struct file *file, unsigned int cmd, unsigned long arg)
 
 	return 0;
 }
-
 #ifdef CONFIG_COMPAT
 static long alarm_compat_ioctl(struct file *file, unsigned int cmd,
 							unsigned long arg)
@@ -371,6 +385,7 @@ static void devalarm_triggered(struct devalarm *alarm)
 	spin_unlock_irqrestore(&alarm_slock, flags);
 }
 
+
 static enum hrtimer_restart devalarm_hrthandler(struct hrtimer *hrt)
 {
 	struct devalarm *devalrm = container_of(hrt, struct devalarm, u.hrt);
@@ -443,4 +458,4 @@ static void  __exit alarm_dev_exit(void)
 
 module_init(alarm_dev_init);
 module_exit(alarm_dev_exit);
-MODULE_LICENSE("GPL");
+

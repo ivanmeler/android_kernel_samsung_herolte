@@ -1317,9 +1317,12 @@ static void l2tp_tunnel_del_work(struct work_struct *work)
 	struct sock *sk = NULL;
 
 	tunnel = container_of(work, struct l2tp_tunnel, del_work);
+
+	l2tp_tunnel_closeall(tunnel);
+
 	sk = l2tp_tunnel_sock_lookup(tunnel);
 	if (!sk)
-		return;
+		goto out;
 
 	sock = sk->sk_socket;
 
@@ -1340,6 +1343,8 @@ static void l2tp_tunnel_del_work(struct work_struct *work)
 	}
 
 	l2tp_tunnel_sock_put(sk);
+out:
+	l2tp_tunnel_dec_refcount(tunnel);
 }
 
 /* Create a socket for the tunnel, if one isn't set up by
@@ -1637,10 +1642,12 @@ EXPORT_SYMBOL_GPL(l2tp_tunnel_create);
 
 /* This function is used by the netlink TUNNEL_DELETE command.
  */
-int l2tp_tunnel_delete(struct l2tp_tunnel *tunnel)
+void l2tp_tunnel_delete(struct l2tp_tunnel *tunnel)
 {
-	l2tp_tunnel_closeall(tunnel);
-	return (false == queue_work(l2tp_wq, &tunnel->del_work));
+	if (!test_and_set_bit(0, &tunnel->dead)) {
+		l2tp_tunnel_inc_refcount(tunnel);
+		queue_work(l2tp_wq, &tunnel->del_work);
+	}
 }
 EXPORT_SYMBOL_GPL(l2tp_tunnel_delete);
 

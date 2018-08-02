@@ -63,8 +63,8 @@ EXPORT_SYMBOL_GPL(nfs_pgheader_init);
 void nfs_set_pgio_error(struct nfs_pgio_header *hdr, int error, loff_t pos)
 {
 	spin_lock(&hdr->lock);
-	if (pos < hdr->io_start + hdr->good_bytes) {
-		set_bit(NFS_IOHDR_ERROR, &hdr->flags);
+	if (!test_and_set_bit(NFS_IOHDR_ERROR, &hdr->flags)
+	    || pos < hdr->io_start + hdr->good_bytes) {
 		clear_bit(NFS_IOHDR_EOF, &hdr->flags);
 		hdr->good_bytes = pos - hdr->io_start;
 		hdr->error = error;
@@ -115,7 +115,7 @@ __nfs_iocounter_wait(struct nfs_io_counter *c)
 		set_bit(NFS_IO_INPROGRESS, &c->flags);
 		if (atomic_read(&c->io_count) == 0)
 			break;
-		ret = nfs_wait_bit_killable(&q.key);
+		ret = nfs_wait_bit_killable(&q.key, TASK_KILLABLE);
 	} while (atomic_read(&c->io_count) != 0 && !ret);
 	finish_wait(wq, &q.wait);
 	return ret;
@@ -486,7 +486,7 @@ size_t nfs_generic_pg_test(struct nfs_pageio_descriptor *desc,
 	 * for it without upsetting the slab allocator.
 	 */
 	if (((desc->pg_count + req->wb_bytes) >> PAGE_SHIFT) *
-			sizeof(struct page) > PAGE_SIZE)
+			sizeof(struct page *) > PAGE_SIZE)
 		return 0;
 
 	return min(desc->pg_bsize - desc->pg_count, (size_t)req->wb_bytes);

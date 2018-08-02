@@ -66,6 +66,7 @@ int mlx4_en_create_tx_ring(struct mlx4_en_priv *priv,
 	ring->size = size;
 	ring->size_mask = size - 1;
 	ring->stride = stride;
+	ring->full_size = ring->size - HEADROOM - MAX_DESC_TXBBS;
 
 	tmp = size * sizeof(struct mlx4_en_tx_info);
 	ring->tx_info = kmalloc_node(tmp, GFP_KERNEL | __GFP_NOWARN, node);
@@ -138,9 +139,9 @@ int mlx4_en_create_tx_ring(struct mlx4_en_priv *priv,
 	ring->queue_index = queue_index;
 
 	if (queue_index < priv->num_tx_rings_p_up)
-		cpumask_set_cpu_local_first(queue_index,
-					    priv->mdev->dev->numa_node,
-					    &ring->affinity_mask);
+		cpumask_set_cpu(cpumask_local_spread(queue_index,
+						     priv->mdev->dev->numa_node),
+				&ring->affinity_mask);
 
 	*pring = ring;
 	return 0;
@@ -221,6 +222,11 @@ void mlx4_en_deactivate_tx_ring(struct mlx4_en_priv *priv,
 
 	mlx4_qp_modify(mdev->dev, NULL, ring->qp_state,
 		       MLX4_QP_STATE_RST, NULL, 0, 0, &ring->qp);
+}
+
+static inline bool mlx4_en_is_tx_ring_full(struct mlx4_en_tx_ring *ring)
+{
+	return ring->prod - ring->cons > ring->full_size;
 }
 
 static void mlx4_en_stamp_wqe(struct mlx4_en_priv *priv,
@@ -385,7 +391,6 @@ static bool mlx4_en_process_tx_cq(struct net_device *dev,
 	u32 packets = 0;
 	u32 bytes = 0;
 	int factor = priv->cqe_factor;
-	u64 timestamp = 0;
 	int done = 0;
 	int budget = priv->tx_work_limit;
 	u32 last_nr_txbb;
@@ -425,9 +430,12 @@ static bool mlx4_en_process_tx_cq(struct net_device *dev,
 		new_index = be16_to_cpu(cqe->wqe_index) & size_mask;
 
 		do {
+			u64 timestamp = 0;
+
 			txbbs_skipped += last_nr_txbb;
 			ring_index = (ring_index + last_nr_txbb) & size_mask;
-			if (ring->tx_info[ring_index].ts_requested)
+
+			if (unlikely(ring->tx_info[ring_index].ts_requested))
 				timestamp = mlx4_en_get_cqe_ts(cqe);
 
 			/* free next descriptor */
@@ -465,11 +473,10 @@ static bool mlx4_en_process_tx_cq(struct net_device *dev,
 
 	netdev_tx_completed_queue(ring->tx_queue, packets, bytes);
 
-	/*
-	 * Wakeup Tx queue if this stopped, and at least 1 packet
-	 * was completed
+	/* Wakeup Tx queue if this stopped, and ring is not full.
 	 */
-	if (netif_tx_queue_stopped(ring->tx_queue) && txbbs_skipped > 0) {
+	if (netif_tx_queue_stopped(ring->tx_queue) &&
+	    !mlx4_en_is_tx_ring_full(ring)) {
 		netif_tx_wake_queue(ring->tx_queue);
 		ring->wake_queue++;
 	}
@@ -913,8 +920,7 @@ netdev_tx_t mlx4_en_xmit(struct sk_buff *skb, struct net_device *dev)
 	skb_tx_timestamp(skb);
 
 	/* Check available TXBBs And 2K spare for prefetch */
-	stop_queue = (int)(ring->prod - ring_cons) >
-		      ring->size - HEADROOM - MAX_DESC_TXBBS;
+	stop_queue = mlx4_en_is_tx_ring_full(ring);
 	if (unlikely(stop_queue)) {
 		netif_tx_stop_queue(ring->tx_queue);
 		ring->queue_stopped++;
@@ -983,8 +989,7 @@ netdev_tx_t mlx4_en_xmit(struct sk_buff *skb, struct net_device *dev)
 		smp_rmb();
 
 		ring_cons = ACCESS_ONCE(ring->cons);
-		if (unlikely(((int)(ring->prod - ring_cons)) <=
-			     ring->size - HEADROOM - MAX_DESC_TXBBS)) {
+		if (unlikely(!mlx4_en_is_tx_ring_full(ring))) {
 			netif_tx_wake_queue(ring->tx_queue);
 			ring->wake_queue++;
 		}

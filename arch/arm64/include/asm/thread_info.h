@@ -22,6 +22,9 @@
 #ifdef __KERNEL__
 
 #include <linux/compiler.h>
+#ifdef CONFIG_RKP_CFP_ROPP
+#include <linux/rkp_cfp.h>
+#endif
 
 #ifndef CONFIG_ARM64_64K_PAGES
 #define THREAD_SIZE_ORDER	2
@@ -48,10 +51,22 @@ struct thread_info {
 	mm_segment_t		addr_limit;	/* address limit */
 	struct task_struct	*task;		/* main task structure */
 	struct exec_domain	*exec_domain;	/* execution domain */
-	struct restart_block	restart_block;
+#ifdef CONFIG_ARM64_SW_TTBR0_PAN
+	u64			ttbr0;		/* saved TTBR0_EL1 */
+#endif
 	int			preempt_count;	/* 0 => preemptable, <0 => bug */
 	int			cpu;		/* cpu */
+#ifdef CONFIG_RKP_CFP_ROPP
+	unsigned long rrk;
+#endif
 };
+
+#ifdef CONFIG_RKP_CFP_ROPP
+# define INIT_THREAD_INFO_RKP_CFP(tsk)						\
+	.rrk = 0,
+#else
+# define INIT_THREAD_INFO_RKP_CFP(tsk)
+#endif
 
 #define INIT_THREAD_INFO(tsk)						\
 {									\
@@ -60,9 +75,7 @@ struct thread_info {
 	.flags		= 0,						\
 	.preempt_count	= INIT_PREEMPT_COUNT,				\
 	.addr_limit	= KERNEL_DS,					\
-	.restart_block	= {						\
-		.fn	= do_no_restart_syscall,			\
-	},								\
+	INIT_THREAD_INFO_RKP_CFP(tsk) \
 }
 
 #define init_thread_info	(init_thread_union.thread_info)
@@ -78,10 +91,16 @@ register unsigned long current_stack_pointer asm ("sp");
  */
 static inline struct thread_info *current_thread_info(void) __attribute_const__;
 
+/*
+ * struct thread_info can be accessed directly via sp_el0.
+ */
 static inline struct thread_info *current_thread_info(void)
 {
-	return (struct thread_info *)
-		(current_stack_pointer & ~(THREAD_SIZE - 1));
+	unsigned long sp_el0;
+
+	asm ("mrs %0, sp_el0" : "=r" (sp_el0));
+
+	return (struct thread_info *)sp_el0;
 }
 
 #define thread_saved_pc(tsk)	\
@@ -118,7 +137,7 @@ static inline struct thread_info *current_thread_info(void)
 #define TIF_RESTORE_SIGMASK	20
 #define TIF_SINGLESTEP		21
 #define TIF_32BIT		22	/* 32bit process */
-#define TIF_SWITCH_MM		23	/* deferred switch_mm */
+#define TIF_MEMALLOC		29	/* allocating pages now */
 
 #define _TIF_SIGPENDING		(1 << TIF_SIGPENDING)
 #define _TIF_NEED_RESCHED	(1 << TIF_NEED_RESCHED)

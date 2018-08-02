@@ -314,6 +314,12 @@ config ISL29003
 	  This driver can also be built as a module.  If so, the module
 	  will be called isl29003.
 
+config KNOX_KAP
+       bool "Enable KNOX KAP mode"
+       default n
+       help
+              Knox Active Protection mode
+
 config ISL29020
 	tristate "Intersil ISL29020 ambient light sensor"
 	depends on I2C
@@ -402,6 +408,10 @@ config TI_DAC7512
 	  This driver can also be built as a module. If so, the module
 	  will be called ti_dac7512.
 
+config UID_STAT
+	bool "UID based statistics tracking exported to /proc/uid_stat"
+	default n
+
 config VMWARE_BALLOON
 	tristate "VMware Balloon Driver"
 	depends on X86 && HYPERVISOR_GUEST
@@ -429,7 +439,7 @@ config ARM_CHARLCD
 	  still useful.
 
 config BMP085
-	bool
+	tristate
 	depends on SYSFS
 
 config BMP085_I2C
@@ -515,6 +525,33 @@ config VEXPRESS_SYSCFG
 	  bus. System Configuration interface is one of the possible means
 	  of generating transactions on this bus.
 
+config UID_SYS_STATS
+	bool "Per-UID statistics"
+	depends on PROFILING
+	help
+	  Per UID based cpu time statistics exported to /proc/uid_cputime
+	  Per UID based io statistics exported to /proc/uid_io
+
+config UID_SYS_STATS_DEBUG
+	bool "Per-TASK statistics"
+	depends on UID_SYS_STATS
+	default n
+	help
+	  Per TASK based io statistics exported to /proc/uid_io
+
+config MEMORY_STATE_TIME
+	tristate "Memory freq/bandwidth time statistics"
+	depends on PROFILING
+	help
+	  Memory time statistics exported to /sys/kernel/memory_state_time
+
+config TIMA_LOG
+	tristate "Support for dumping TIMA log"
+	depends on TIMA
+	default y
+	help
+		This option enables support for dumping TIMA log.
+
 source "drivers/misc/c2port/Kconfig"
 source "drivers/misc/eeprom/Kconfig"
 source "drivers/misc/cb710/Kconfig"
@@ -528,4 +565,6 @@ source "drivers/misc/mic/Kconfig"
 source "drivers/misc/genwqe/Kconfig"
 source "drivers/misc/echo/Kconfig"
 source "drivers/misc/cxl/Kconfig"
+source "drivers/misc/mcu_ipc/Kconfig"
+source "drivers/misc/modem_v1/Kconfig"
 endmenu

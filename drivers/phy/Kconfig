@@ -32,6 +32,15 @@ config PHY_EXYNOS_MIPI_VIDEO
 	  Support for MIPI CSI-2 and MIPI DSI DPHY found on Samsung S5P
 	  and EXYNOS SoCs.
 
+config PHY_EXYNOS_MIPI
+	tristate "Samsung EXYNOS SoC MIPI CSI/DSI PHY driver"
+	depends on HAS_IOMEM
+	depends on  ARCH_EXYNOS && OF || COMPILE_TEST
+	select GENERIC_PHY
+	help
+	  Support for MIPI CSI and MIPI DSI DPHY found on Samsung
+	  and EXYNOS SoCs.
+
 config PHY_MVEBU_SATA
 	def_bool y
 	depends on ARCH_DOVE || MACH_DOVE || MACH_KIRKWOOD
@@ -203,6 +212,27 @@ config PHY_EXYNOS5_USBDRD
 	  Enable USB DRD PHY support for Exynos 5 SoC series.
 	  This driver provides PHY interface for USB 3.0 DRD controller
 	  present on Exynos5 SoC series.
+
+config PHY_EXYNOS_USBDRD
+	tristate "Exynos SoC series USB DRD PHY driver"
+	depends on ARCH_EXYNOS && OF
+	depends on HAS_IOMEM
+	depends on USB_DWC3_EXYNOS
+	select GENERIC_PHY
+	select MFD_SYSCON
+	default y
+	help
+	  Enable USB DRD PHY support for Exynos SoC series.
+	  This driver provides PHY interface for USB 3.0 DRD controller
+	  present on Exynos SoC series.
+
+config PHY_SAMSUNG_USB_CAL
+	bool "Samsung USB PHY CAL"
+	depends on PHY_EXYNOS_USBDRD
+	default y
+	help
+	  Enable this to support CAL (Chip Abstraction Layer)
+	  for Samsung USB PHY controller.
 
 config PHY_QCOM_APQ8064_SATA
 	tristate "Qualcomm APQ8064 SATA SerDes/PHY driver"

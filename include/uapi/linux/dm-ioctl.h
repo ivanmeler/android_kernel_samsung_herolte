@@ -143,6 +143,7 @@ struct dm_ioctl {
 	char uuid[DM_UUID_LEN];	/* unique identifier for
 				 * the block device */
 	char data[7];		/* padding or data */
+
 };
 
 /*

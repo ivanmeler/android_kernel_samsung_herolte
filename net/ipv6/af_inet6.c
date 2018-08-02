@@ -64,6 +64,20 @@
 #include <asm/uaccess.h>
 #include <linux/mroute6.h>
 
+#ifdef CONFIG_ANDROID_PARANOID_NETWORK
+#include <linux/android_aid.h>
+
+static inline int current_has_network(void)
+{
+	return in_egroup_p(AID_INET) || capable(CAP_NET_RAW);
+}
+#else
+static inline int current_has_network(void)
+{
+	return 1;
+}
+#endif
+
 MODULE_AUTHOR("Cast of dozens");
 MODULE_DESCRIPTION("IPv6 protocol stack for Linux");
 MODULE_LICENSE("GPL");
@@ -97,8 +111,10 @@ static __inline__ struct ipv6_pinfo *inet6_sk_generic(struct sock *sk)
 	return (struct ipv6_pinfo *)(((u8 *)sk) + offset);
 }
 
-static int inet6_create(struct net *net, struct socket *sock, int protocol,
-			int kern)
+#ifndef CONFIG_MPTCP
+static
+#endif
+int inet6_create(struct net *net, struct socket *sock, int protocol, int kern)
 {
 	struct inet_sock *inet;
 	struct ipv6_pinfo *np;
@@ -108,6 +124,15 @@ static int inet6_create(struct net *net, struct socket *sock, int protocol,
 	unsigned char answer_flags;
 	int try_loading_module = 0;
 	int err;
+
+	if (protocol < 0 || protocol >= IPPROTO_MAX)
+		return -EINVAL;
+
+	if (!current_has_network())
+		return -EACCES;
+
+	if (protocol < 0 || protocol >= IPPROTO_MAX)
+		return -EINVAL;
 
 	/* Look for the requested type/protocol pair. */
 lookup_protocol:
@@ -155,8 +180,7 @@ lookup_protocol:
 	}
 
 	err = -EPERM;
-	if (sock->type == SOCK_RAW && !kern &&
-	    !ns_capable(net->user_ns, CAP_NET_RAW))
+	if (sock->type == SOCK_RAW && !kern && !capable(CAP_NET_RAW))
 		goto out_rcu_unlock;
 
 	sock->ops = answer->ops;
@@ -425,9 +449,11 @@ void inet6_destroy_sock(struct sock *sk)
 
 	/* Free tx options */
 
-	opt = xchg(&np->opt, NULL);
-	if (opt != NULL)
-		sock_kfree_s(sk, opt, opt->tot_len);
+	opt = xchg((__force struct ipv6_txoptions **)&np->opt, NULL);
+	if (opt) {
+		atomic_sub(opt->tot_len, &sk->sk_omem_alloc);
+		txopt_put(opt);
+	}
 }
 EXPORT_SYMBOL_GPL(inet6_destroy_sock);
 
@@ -654,9 +680,13 @@ int inet6_sk_rebuild_header(struct sock *sk)
 		fl6.flowi6_mark = sk->sk_mark;
 		fl6.fl6_dport = inet->inet_dport;
 		fl6.fl6_sport = inet->inet_sport;
+		fl6.flowi6_uid = sk->sk_uid;
 		security_sk_classify_flow(sk, flowi6_to_flowi(&fl6));
 
-		final_p = fl6_update_dst(&fl6, np->opt, &final);
+		rcu_read_lock();
+		final_p = fl6_update_dst(&fl6, rcu_dereference(np->opt),
+					 &final);
+		rcu_read_unlock();
 
 		dst = ip6_dst_lookup_flow(sk, &fl6, final_p);
 		if (IS_ERR(dst)) {
@@ -879,12 +909,12 @@ static int __init inet6_init(void)
 	err = register_pernet_subsys(&inet6_net_ops);
 	if (err)
 		goto register_pernet_fail;
-	err = icmpv6_init();
-	if (err)
-		goto icmp_fail;
 	err = ip6_mr_init();
 	if (err)
 		goto ipmr_fail;
+	err = icmpv6_init();
+	if (err)
+		goto icmp_fail;
 	err = ndisc_init();
 	if (err)
 		goto ndisc_fail;
@@ -1002,10 +1032,10 @@ igmp_fail:
 	ndisc_cleanup();
 ndisc_fail:
 	ip6_mr_cleanup();
-ipmr_fail:
-	icmpv6_cleanup();
 icmp_fail:
 	unregister_pernet_subsys(&inet6_net_ops);
+ipmr_fail:
+	icmpv6_cleanup();
 register_pernet_fail:
 	sock_unregister(PF_INET6);
 	rtnl_unregister_all(PF_INET6);

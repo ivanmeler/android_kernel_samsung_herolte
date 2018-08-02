@@ -8705,11 +8705,14 @@ static void tg3_free_consistent(struct tg3 *tp)
 	tg3_mem_rx_release(tp);
 	tg3_mem_tx_release(tp);
 
+	/* Protect tg3_get_stats64() from reading freed tp->hw_stats. */
+	tg3_full_lock(tp, 0);
 	if (tp->hw_stats) {
 		dma_free_coherent(&tp->pdev->dev, sizeof(struct tg3_hw_stats),
 				  tp->hw_stats, tp->stats_mapping);
 		tp->hw_stats = NULL;
 	}
+	tg3_full_unlock(tp);
 }
 
 /*
@@ -10752,7 +10755,7 @@ static ssize_t tg3_show_temp(struct device *dev,
 	tg3_ape_scratchpad_read(tp, &temperature, attr->index,
 				sizeof(temperature));
 	spin_unlock_bh(&tp->lock);
-	return sprintf(buf, "%u\n", temperature);
+	return sprintf(buf, "%u\n", temperature * 1000);
 }
 
 
@@ -12021,7 +12024,7 @@ static int tg3_set_eeprom(struct net_device *dev, struct ethtool_eeprom *eeprom,
 	int ret;
 	u32 offset, len, b_offset, odd_len;
 	u8 *buf;
-	__be32 start, end;
+	__be32 start = 0, end;
 
 	if (tg3_flag(tp, NO_NVRAM) ||
 	    eeprom->magic != TG3_EEPROM_MAGIC)
@@ -14199,7 +14202,9 @@ static int tg3_change_mtu(struct net_device *dev, int new_mtu)
 	/* Reset PHY, otherwise the read DMA engine will be in a mode that
 	 * breaks all requests to 256 bytes.
 	 */
-	if (tg3_asic_rev(tp) == ASIC_REV_57766)
+	if (tg3_asic_rev(tp) == ASIC_REV_57766 ||
+	    tg3_asic_rev(tp) == ASIC_REV_5717 ||
+	    tg3_asic_rev(tp) == ASIC_REV_5719)
 		reset_phy = true;
 
 	err = tg3_restart_hw(tp, reset_phy);

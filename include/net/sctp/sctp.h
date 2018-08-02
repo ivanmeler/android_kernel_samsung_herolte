@@ -441,6 +441,8 @@ _sctp_walk_params((pos), (chunk), ntohs((chunk)->chunk_hdr.length), member)
 
 #define _sctp_walk_params(pos, chunk, end, member)\
 for (pos.v = chunk->member;\
+     (pos.v + offsetof(struct sctp_paramhdr, length) + sizeof(pos.p->length) <=\
+      (void *)chunk + end) &&\
      pos.v <= (void *)chunk + end - ntohs(pos.p->length) &&\
      ntohs(pos.p->length) >= sizeof(sctp_paramhdr_t);\
      pos.v += WORD_ROUND(ntohs(pos.p->length)))
@@ -451,6 +453,8 @@ _sctp_walk_errors((err), (chunk_hdr), ntohs((chunk_hdr)->length))
 #define _sctp_walk_errors(err, chunk_hdr, end)\
 for (err = (sctp_errhdr_t *)((void *)chunk_hdr + \
 	    sizeof(sctp_chunkhdr_t));\
+     ((void *)err + offsetof(sctp_errhdr_t, length) + sizeof(err->length) <=\
+      (void *)chunk_hdr + end) &&\
      (void *)err <= (void *)chunk_hdr + end - ntohs(err->length) &&\
      ntohs(err->length) >= sizeof(sctp_errhdr_t); \
      err = (sctp_errhdr_t *)((void *)err + WORD_ROUND(ntohs(err->length))))
@@ -571,11 +575,14 @@ static inline void sctp_v6_map_v4(union sctp_addr *addr)
 /* Map v4 address to v4-mapped v6 address */
 static inline void sctp_v4_map_v6(union sctp_addr *addr)
 {
+	__be16 port;
+
+	port = addr->v4.sin_port;
+	addr->v6.sin6_addr.s6_addr32[3] = addr->v4.sin_addr.s_addr;
+	addr->v6.sin6_port = port;
 	addr->v6.sin6_family = AF_INET6;
 	addr->v6.sin6_flowinfo = 0;
 	addr->v6.sin6_scope_id = 0;
-	addr->v6.sin6_port = addr->v4.sin_port;
-	addr->v6.sin6_addr.s6_addr32[3] = addr->v4.sin_addr.s_addr;
 	addr->v6.sin6_addr.s6_addr32[0] = 0;
 	addr->v6.sin6_addr.s6_addr32[1] = 0;
 	addr->v6.sin6_addr.s6_addr32[2] = htonl(0x0000ffff);

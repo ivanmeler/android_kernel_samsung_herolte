@@ -274,10 +274,10 @@ do_page_fault(unsigned long addr, unsigned int fsr, struct pt_regs *regs)
 		local_irq_enable();
 
 	/*
-	 * If we're in an interrupt or have no user
+	 * If we're in an interrupt, or have no irqs, or have no user
 	 * context, we must not take the fault..
 	 */
-	if (in_atomic() || !mm)
+	if (in_atomic() || irqs_disabled() || !mm)
 		goto no_context;
 
 	if (user_mode(regs))
@@ -315,8 +315,11 @@ retry:
 	 * signal first. We do not need to release the mmap_sem because
 	 * it would already be released in __lock_page_or_retry in
 	 * mm/filemap.c. */
-	if ((fault & VM_FAULT_RETRY) && fatal_signal_pending(current))
+	if ((fault & VM_FAULT_RETRY) && fatal_signal_pending(current)) {
+		if (!user_mode(regs))
+			goto no_context;
 		return 0;
+	}
 
 	/*
 	 * Major/minor page fault accounting is only done on the

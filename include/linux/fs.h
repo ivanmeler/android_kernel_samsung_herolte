@@ -49,6 +49,8 @@ struct swap_info_struct;
 struct seq_file;
 struct workqueue_struct;
 struct iov_iter;
+struct fscrypt_info;
+struct fscrypt_operations;
 
 extern void __init inode_init(void);
 extern void __init inode_init_early(void);
@@ -133,6 +135,12 @@ typedef void (dio_iodone_t)(struct kiocb *iocb, loff_t offset,
 /* Has write method(s) */
 #define FMODE_CAN_WRITE         ((__force fmode_t)0x40000)
 
+/* File hasn't page cache and can't be mmaped, for stackable filesystem */
+#define FMODE_NONMAPPABLE        ((__force fmode_t)0x400000)
+   
+/* File page don't need to be cached, for stackable filesystem's lower file */
+#define FMODE_NONCACHEABLE     ((__force fmode_t)0x800000)
+
 /* File was opened by fanotify and shouldn't generate fanotify events */
 #define FMODE_NONOTIFY		((__force fmode_t)0x1000000)
 
@@ -192,6 +200,8 @@ typedef void (dio_iodone_t)(struct kiocb *iocb, loff_t offset,
 #define READ			0
 #define WRITE			RW_MASK
 #define READA			RWA_MASK
+#define KERNEL_READ             (READ|REQ_KERNEL)
+#define KERNEL_WRITE            (WRITE|REQ_KERNEL)
 
 #define READ_SYNC		(READ | REQ_SYNC)
 #define WRITE_SYNC		(WRITE | REQ_SYNC | REQ_NOIDLE)
@@ -412,6 +422,22 @@ struct address_space {
 	spinlock_t		private_lock;	/* for use by the address_space */
 	struct list_head	private_list;	/* ditto */
 	void			*private_data;	/* ditto */
+#if defined(CONFIG_MMC_DW_FMP_ECRYPT_FS) || defined(CONFIG_UFS_FMP_ECRYPT_FS)
+	unsigned char		*iv;		/* iv */
+	unsigned char		*key;		/* key */
+	unsigned long		key_length;	/* key length */
+	char			*alg;		/* algorithm */
+	pgoff_t			sensitive_data_index;	/* data starts here */
+	struct crypto_hash	*hash_tfm;	/* hash transform */
+#ifdef CONFIG_CRYPTO_FIPS
+	bool			cc_enable;	/* cc flag */
+#endif
+	bool			use_fmp;	/* use fmp flag  */
+	bool			plain_text;	/* plain_text flag */
+#endif
+#ifdef CONFIG_SDP
+	int userid;
+#endif
 } __attribute__((aligned(sizeof(long))));
 	/*
 	 * On most architectures that alignment is already the case; but
@@ -455,6 +481,8 @@ struct block_device {
 	int			bd_fsfreeze_count;
 	/* Mutex for freeze */
 	struct mutex		bd_fsfreeze_mutex;
+
+	void			(*bd_fscallback_func) (struct block_device *);
 };
 
 /*
@@ -621,6 +649,10 @@ struct inode {
 #ifdef CONFIG_FSNOTIFY
 	__u32			i_fsnotify_mask; /* all events this inode cares about */
 	struct hlist_head	i_fsnotify_marks;
+#endif
+
+#if IS_ENABLED(CONFIG_FS_ENCRYPTION)
+	struct fscrypt_info	*i_crypt_info;
 #endif
 
 	void			*i_private; /* fs or device private pointer */
@@ -906,12 +938,11 @@ int locks_in_grace(struct net *);
  * FIXME: should we create a separate "struct lock_request" to help distinguish
  * these two uses?
  *
- * The i_flock list is ordered by:
+ * The varous i_flctx lists are ordered by:
  *
- * 1) lock type -- FL_LEASEs first, then FL_FLOCK, and finally FL_POSIX
- * 2) lock owner
- * 3) lock range start
- * 4) lock range end
+ * 1) lock owner
+ * 2) lock range start
+ * 3) lock range end
  *
  * Obviously, the last two criteria only matter for POSIX locks.
  */
@@ -1218,6 +1249,9 @@ struct super_block {
 	const struct xattr_handler **s_xattr;
 
 	struct list_head	s_inodes;	/* all inodes */
+
+	const struct fscrypt_operations	*s_cop;
+
 	struct hlist_bl_head	s_anon;		/* anonymous dentries for (nfs) exporting */
 	struct list_head	s_mounts;	/* list of mounts; _not_ for fs use */
 	struct block_device	*s_bdev;
@@ -1412,13 +1446,21 @@ extern bool inode_owner_or_capable(const struct inode *inode);
  * VFS helper functions..
  */
 extern int vfs_create(struct inode *, struct dentry *, umode_t, bool);
+extern int vfs_create2(struct vfsmount *, struct inode *, struct dentry *, umode_t, bool);
 extern int vfs_mkdir(struct inode *, struct dentry *, umode_t);
+extern int vfs_mkdir2(struct vfsmount *, struct inode *, struct dentry *, umode_t);
 extern int vfs_mknod(struct inode *, struct dentry *, umode_t, dev_t);
+extern int vfs_mknod2(struct vfsmount *, struct inode *, struct dentry *, umode_t, dev_t);
 extern int vfs_symlink(struct inode *, struct dentry *, const char *);
+extern int vfs_symlink2(struct vfsmount *, struct inode *, struct dentry *, const char *);
 extern int vfs_link(struct dentry *, struct inode *, struct dentry *, struct inode **);
+extern int vfs_link2(struct vfsmount *, struct dentry *, struct inode *, struct dentry *, struct inode **);
 extern int vfs_rmdir(struct inode *, struct dentry *);
+extern int vfs_rmdir2(struct vfsmount *, struct inode *, struct dentry *);
 extern int vfs_unlink(struct inode *, struct dentry *, struct inode **);
+extern int vfs_unlink2(struct vfsmount *, struct inode *, struct dentry *, struct inode **);
 extern int vfs_rename(struct inode *, struct dentry *, struct inode *, struct dentry *, struct inode **, unsigned int);
+extern int vfs_rename2(struct vfsmount *, struct inode *, struct dentry *, struct inode *, struct dentry *, struct inode **, unsigned int);
 extern int vfs_whiteout(struct inode *, struct dentry *);
 
 /*
@@ -1514,12 +1556,14 @@ struct file_operations {
 	long (*fallocate)(struct file *file, int mode, loff_t offset,
 			  loff_t len);
 	int (*show_fdinfo)(struct seq_file *m, struct file *f);
+	struct file* (*get_lower_file)(struct file *f);
 };
 
 struct inode_operations {
 	struct dentry * (*lookup) (struct inode *,struct dentry *, unsigned int);
 	void * (*follow_link) (struct dentry *, struct nameidata *);
 	int (*permission) (struct inode *, int);
+	int (*permission2) (struct vfsmount *, struct inode *, int);
 	struct posix_acl * (*get_acl)(struct inode *, int);
 
 	int (*readlink) (struct dentry *, char __user *,int);
@@ -1537,6 +1581,7 @@ struct inode_operations {
 	int (*rename2) (struct inode *, struct dentry *,
 			struct inode *, struct dentry *, unsigned int);
 	int (*setattr) (struct dentry *, struct iattr *);
+	int (*setattr2) (struct vfsmount *, struct dentry *, struct iattr *);
 	int (*getattr) (struct vfsmount *mnt, struct dentry *, struct kstat *);
 	int (*setxattr) (struct dentry *, const char *,const void *,size_t,int);
 	ssize_t (*getxattr) (struct dentry *, const char *, void *, size_t);
@@ -1550,9 +1595,6 @@ struct inode_operations {
 			   umode_t create_mode, int *opened);
 	int (*tmpfile) (struct inode *, struct dentry *, umode_t);
 	int (*set_acl)(struct inode *, struct posix_acl *, int);
-
-	/* WARNING: probably going away soon, do not use! */
-	int (*dentry_open)(struct dentry *, struct file *, const struct cred *);
 } ____cacheline_aligned;
 
 ssize_t rw_copy_check_uvector(int type, const struct iovec __user * uvector,
@@ -1581,9 +1623,13 @@ struct super_operations {
 	int (*unfreeze_fs) (struct super_block *);
 	int (*statfs) (struct dentry *, struct kstatfs *);
 	int (*remount_fs) (struct super_block *, int *, char *);
+	int (*remount_fs2) (struct vfsmount *, struct super_block *, int *, char *);
+	void *(*clone_mnt_data) (void *);
+	void (*copy_mnt_data) (void *, void *);
 	void (*umount_begin) (struct super_block *);
 
 	int (*show_options)(struct seq_file *, struct dentry *);
+	int (*show_options2)(struct vfsmount *, struct seq_file *, struct dentry *);
 	int (*show_devname)(struct seq_file *, struct dentry *);
 	int (*show_path)(struct seq_file *, struct dentry *);
 	int (*show_stats)(struct seq_file *, struct dentry *);
@@ -1594,6 +1640,7 @@ struct super_operations {
 	int (*bdev_try_to_free_page)(struct super_block*, struct page*, gfp_t);
 	long (*nr_cached_objects)(struct super_block *, int);
 	long (*free_cached_objects)(struct super_block *, long, int);
+	long (*unlink_callback)(struct super_block *, char *);
 };
 
 /*
@@ -1720,8 +1767,12 @@ struct super_operations {
 #define __I_DIO_WAKEUP		9
 #define I_DIO_WAKEUP		(1 << I_DIO_WAKEUP)
 #define I_LINKABLE		(1 << 10)
+#define I_DIRTY_TIME		(1 << 11)
+#define __I_DIRTY_TIME_EXPIRED	12
+#define I_DIRTY_TIME_EXPIRED	(1 << __I_DIRTY_TIME_EXPIRED)
 
 #define I_DIRTY (I_DIRTY_SYNC | I_DIRTY_DATASYNC | I_DIRTY_PAGES)
+#define I_DIRTY_ALL (I_DIRTY | I_DIRTY_TIME)
 
 extern void __mark_inode_dirty(struct inode *, int);
 static inline void mark_inode_dirty(struct inode *inode)
@@ -1791,9 +1842,13 @@ struct file_system_type {
 #define FS_HAS_SUBTYPE		4
 #define FS_USERNS_MOUNT		8	/* Can be mounted by userns root */
 #define FS_USERNS_DEV_MOUNT	16 /* A userns mount does not imply MNT_NODEV */
+#define FS_USERNS_VISIBLE	32	/* FS must already be visible */
 #define FS_RENAME_DOES_D_MOVE	32768	/* FS will handle d_move() during rename() internally. */
 	struct dentry *(*mount) (struct file_system_type *, int,
 		       const char *, void *);
+	struct dentry *(*mount2) (struct vfsmount *, struct file_system_type *, int,
+			       const char *, void *);
+	void *(*alloc_mnt_data) (void);
 	void (*kill_sb) (struct super_block *);
 	struct module *owner;
 	struct file_system_type * next;
@@ -1878,12 +1933,12 @@ extern int vfs_ustat(dev_t, struct kstatfs *);
 extern int freeze_super(struct super_block *super);
 extern int thaw_super(struct super_block *super);
 extern bool our_mnt(struct vfsmount *mnt);
-extern bool fs_fully_visible(struct file_system_type *);
 
 extern int current_umask(void);
 
 extern void ihold(struct inode * inode);
 extern void iput(struct inode *);
+extern int generic_update_time(struct inode *, struct timespec *, int);
 
 static inline struct inode *file_inode(const struct file *f)
 {
@@ -1947,8 +2002,9 @@ static inline int break_lease(struct inode *inode, unsigned int mode)
 {
 	/*
 	 * Since this check is lockless, we must ensure that any refcounts
-	 * taken are done before checking inode->i_flock. Otherwise, we could
-	 * end up racing with tasks trying to set a new lease on this file.
+	 * taken are done before checking i_flctx->flc_lease. Otherwise, we
+	 * could end up racing with tasks trying to set a new lease on this
+	 * file.
 	 */
 	smp_mb();
 	if (inode->i_flock)
@@ -1960,8 +2016,9 @@ static inline int break_deleg(struct inode *inode, unsigned int mode)
 {
 	/*
 	 * Since this check is lockless, we must ensure that any refcounts
-	 * taken are done before checking inode->i_flock. Otherwise, we could
-	 * end up racing with tasks trying to set a new lease on this file.
+	 * taken are done before checking i_flctx->flc_lease. Otherwise, we
+	 * could end up racing with tasks trying to set a new lease on this
+	 * file.
 	 */
 	smp_mb();
 	if (inode->i_flock)
@@ -2060,6 +2117,8 @@ struct filename {
 extern long vfs_truncate(struct path *, loff_t);
 extern int do_truncate(struct dentry *, loff_t start, unsigned int time_attrs,
 		       struct file *filp);
+extern int do_truncate2(struct vfsmount *, struct dentry *, loff_t start,
+			unsigned int time_attrs, struct file *filp);
 extern int do_fallocate(struct file *file, int mode, loff_t offset,
 			loff_t len);
 extern long do_sys_open(int dfd, const char __user *filename, int flags,
@@ -2067,8 +2126,7 @@ extern long do_sys_open(int dfd, const char __user *filename, int flags,
 extern struct file *file_open_name(struct filename *, int, umode_t);
 extern struct file *filp_open(const char *, int, umode_t);
 extern struct file *file_open_root(struct dentry *, struct vfsmount *,
-				   const char *, int);
-extern int vfs_open(const struct path *, struct file *, const struct cred *);
+				   const char *, int, umode_t);
 extern struct file * dentry_open(const struct path *, int, const struct cred *);
 extern int filp_close(struct file *, fl_owner_t id);
 
@@ -2277,12 +2335,17 @@ static inline int generic_write_sync(struct file *file, loff_t pos, loff_t count
 }
 extern void emergency_sync(void);
 extern void emergency_remount(void);
+extern int intr_sync(int *);
+
 #ifdef CONFIG_BLOCK
 extern sector_t bmap(struct inode *, sector_t);
 #endif
 extern int notify_change(struct dentry *, struct iattr *, struct inode **);
+extern int notify_change2(struct vfsmount *, struct dentry *, struct iattr *, struct inode **);
 extern int inode_permission(struct inode *, int);
+extern int inode_permission2(struct vfsmount *, struct inode *, int);
 extern int __inode_permission(struct inode *, int);
+extern int __inode_permission2(struct vfsmount *, struct inode *, int);
 extern int generic_permission(struct inode *, int);
 extern int __check_sticky(struct inode *dir, struct inode *inode);
 

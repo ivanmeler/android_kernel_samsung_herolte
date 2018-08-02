@@ -2364,7 +2364,8 @@ retry_find_task:
 		tcred = __task_cred(tsk);
 		if (!uid_eq(cred->euid, GLOBAL_ROOT_UID) &&
 		    !uid_eq(cred->euid, tcred->uid) &&
-		    !uid_eq(cred->euid, tcred->suid)) {
+		    !uid_eq(cred->euid, tcred->suid) &&
+		    !ns_capable(tcred->user_ns, CAP_SYS_NICE)) {
 			rcu_read_unlock();
 			ret = -EACCES;
 			goto out_unlock_cgroup;
@@ -4489,7 +4490,7 @@ static int create_css(struct cgroup *cgrp, struct cgroup_subsys *ss,
 
 	err = cgroup_idr_alloc(&ss->css_idr, NULL, 2, 0, GFP_NOWAIT);
 	if (err < 0)
-		goto err_free_percpu_ref;
+		goto err_free_css;
 	css->id = err;
 
 	if (visible) {
@@ -4521,9 +4522,6 @@ err_list_del:
 	list_del_rcu(&css->sibling);
 	cgroup_clear_dir(css->cgroup, 1 << css->ss->id);
 err_free_id:
-	cgroup_idr_remove(&ss->css_idr, css->id);
-err_free_percpu_ref:
-	percpu_ref_exit(&css->refcnt);
 err_free_css:
 	call_rcu(&css->rcu_head, css_free_rcu_fn);
 	return err;
@@ -5461,7 +5459,7 @@ static int cgroup_css_links_read(struct seq_file *seq, void *v)
 		struct task_struct *task;
 		int count = 0;
 
-		seq_printf(seq, "css_set %p\n", cset);
+		seq_printf(seq, "css_set %pK\n", cset);
 
 		list_for_each_entry(task, &cset->tasks, cg_list) {
 			if (count++ > MAX_TASKS_SHOWN_PER_CSS)

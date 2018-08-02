@@ -43,6 +43,7 @@ config SND_SOC_ALL_CODECS
 	select SND_SOC_ALC5623 if I2C
 	select SND_SOC_ALC5632 if I2C
 	select SND_SOC_CQ0093VC if MFD_DAVINCI_VOICECODEC
+	select SND_SOC_CS35L33 if I2C
 	select SND_SOC_CS35L32 if I2C
 	select SND_SOC_CS42L51_I2C if I2C
 	select SND_SOC_CS42L52 if I2C && INPUT
@@ -52,6 +53,7 @@ config SND_SOC_ALL_CODECS
 	select SND_SOC_CS4270 if I2C
 	select SND_SOC_CS4271 if SND_SOC_I2C_AND_SPI
 	select SND_SOC_CS42XX8_I2C if I2C
+	select SND_SOC_LARGO if MFD_LARGO
 	select SND_SOC_CX20442 if TTY
 	select SND_SOC_DA7210 if I2C
 	select SND_SOC_DA7213 if I2C
@@ -68,6 +70,12 @@ config SND_SOC_ALL_CODECS
 	select SND_SOC_MAX98088 if I2C
 	select SND_SOC_MAX98090 if I2C
 	select SND_SOC_MAX98095 if I2C
+	select SND_SOC_MAX98504 if I2C
+	select SND_SOC_MAX98504A if I2C
+	select SND_SOC_MAX98505 if I2C
+	select SND_SOC_MAX98505A if I2C
+	select SND_SOC_MAX98506 if I2C
+	select SND_SOC_MAX98512 if I2C
 	select SND_SOC_MAX9850 if I2C
 	select SND_SOC_MAX9768 if I2C
 	select SND_SOC_MAX9877 if I2C
@@ -120,7 +128,10 @@ config SND_SOC_ALL_CODECS
 	select SND_SOC_WM2200 if I2C
 	select SND_SOC_WM5100 if I2C
 	select SND_SOC_WM5102 if MFD_WM5102
-	select SND_SOC_WM5110 if MFD_WM5110
+	select SND_SOC_FLORIDA if MFD_FLORIDA
+	select SND_SOC_CLEARWATER if MFD_CLEARWATER
+	select SND_SOC_MARLEY if MFD_MARLEY
+	select SND_SOC_MOON if MFD_MOON
 	select SND_SOC_WM8350 if MFD_WM8350
 	select SND_SOC_WM8400 if MFD_WM8400
 	select SND_SOC_WM8510 if SND_SOC_I2C_AND_SPI
@@ -159,6 +170,7 @@ config SND_SOC_ALL_CODECS
 	select SND_SOC_WM8995 if SND_SOC_I2C_AND_SPI
 	select SND_SOC_WM8996 if I2C
 	select SND_SOC_WM8997 if MFD_WM8997
+	select SND_SOC_VEGAS if MFD_VEGAS
 	select SND_SOC_WM9081 if I2C
 	select SND_SOC_WM9090 if I2C
 	select SND_SOC_WM9705 if SND_SOC_AC97_BUS
@@ -181,11 +193,21 @@ config SND_SOC_88PM860X
 config SND_SOC_ARIZONA
 	tristate
 	default y if SND_SOC_WM5102=y
-	default y if SND_SOC_WM5110=y
+	default y if SND_SOC_FLORIDA=y
+	default y if SND_SOC_CLEARWATER=y
+	default y if SND_SOC_MARLEY=y
+	default y if SND_SOC_MOON=y
 	default y if SND_SOC_WM8997=y
+	default y if SND_SOC_VEGAS=y
+	default y if SND_SOC_LARGO=y
 	default m if SND_SOC_WM5102=m
-	default m if SND_SOC_WM5110=m
+	default m if SND_SOC_FLORIDA=m
+	default m if SND_SOC_CLEARWATER=m
+	default m if SND_SOC_MARLEY=m
+	default m if SND_SOC_MOON=m
 	default m if SND_SOC_WM8997=m
+	default m if SND_SOC_VEGAS=m
+	default m if SND_SOC_LARGO=m
 
 config SND_SOC_WM_HUBS
 	tristate
@@ -195,11 +217,19 @@ config SND_SOC_WM_HUBS
 config SND_SOC_WM_ADSP
 	tristate
 	default y if SND_SOC_WM5102=y
-	default y if SND_SOC_WM5110=y
+	default y if SND_SOC_FLORIDA=y
+	default y if SND_SOC_CLEARWATER=y
+	default y if SND_SOC_MOON=y
 	default y if SND_SOC_WM2200=y
+	default y if SND_SOC_LARGO=y
+	default y if SND_SOC_MARLEY=y
 	default m if SND_SOC_WM5102=m
-	default m if SND_SOC_WM5110=m
+	default m if SND_SOC_FLORIDA=m
+	default m if SND_SOC_CLEARWATER=m
+	default m if SND_SOC_MOON=m
 	default m if SND_SOC_WM2200=m
+	default m if SND_SOC_LARGO=m
+	default m if SND_SOC_MARLEY=m
 
 config SND_SOC_AB8500_CODEC
 	tristate
@@ -328,6 +358,14 @@ config SND_SOC_ALC5632
 config SND_SOC_CQ0093VC
 	tristate
 
+config SND_SOC_CIRRUS_AMP_CAL
+	tristate
+
+config SND_SOC_CS35L33
+	tristate "Cirrus Logic CS35L33 AMP"
+	depends on I2C
+	select SND_SOC_CIRRUS_AMP_CAL
+
 config SND_SOC_CS35L32
 	tristate "Cirrus Logic CS35L32 CODEC"
 	depends on I2C
@@ -381,6 +419,9 @@ config SND_SOC_CS42XX8_I2C
 	depends on I2C
 	select SND_SOC_CS42XX8
 	select REGMAP_I2C
+
+config SND_SOC_LARGO
+	tristate
 
 config SND_SOC_CX20442
 	tristate
@@ -439,6 +480,56 @@ config SND_SOC_MAX98090
 
 config SND_SOC_MAX98095
        tristate
+
+config SND_SOC_MAXIM_DSM
+	tristate "Support MAXIM DSM Calibration"
+	default y if SND_SOC_MAX98505A=y
+	default m if SND_SOC_MAX98505A=m
+	default y if SND_SOC_MAX98505=y
+	default m if SND_SOC_MAX98505=m
+	default y if SND_SOC_MAX98506=y
+	default m if SND_SOC_MAX98506=m
+	default y if SND_SOC_MAX98512=y
+	default m if SND_SOC_MAX98512=m
+	help
+	MAXIM DSM Log Driver
+
+config SND_SOC_MAXIM_DSM_CAL
+	tristate "Support MAXIM DSM Calibration"
+	default y if SND_SOC_MAX98505A=y
+	default m if SND_SOC_MAX98505A=m
+	default y if SND_SOC_MAX98505=y
+	default m if SND_SOC_MAX98505=m
+	default y if SND_SOC_MAX98506=y
+	default m if SND_SOC_MAX98506=m
+	default y if SND_SOC_MAX98512=y
+	default m if SND_SOC_MAX98512=m
+	help
+	MAXIM Calibration Driver
+
+config SND_SOC_MAX98505
+	tristate "Support MAX98505"
+	depends on I2C
+	help
+	MAX98505 driver
+
+config SND_SOC_MAX98505A
+	tristate "Support MAX98505A"
+	depends on I2C
+	help
+	MAX98505A driver
+
+config SND_SOC_MAX98506
+	tristate "Support MAX98506"
+	depends on I2C
+	help
+	MAX98506 driver
+
+config SND_SOC_MAX98512
+	tristate "Support MAX98512"
+	depends on I2C
+	help
+	MAX98512 driver
 
 config SND_SOC_MAX9850
 	tristate
@@ -641,7 +732,16 @@ config SND_SOC_WM5100
 config SND_SOC_WM5102
 	tristate
 
-config SND_SOC_WM5110
+config SND_SOC_FLORIDA
+	tristate
+
+config SND_SOC_CLEARWATER
+	tristate
+
+config SND_SOC_MARLEY
+	tristate
+
+config SND_SOC_MOON
 	tristate
 
 config SND_SOC_WM8350
@@ -774,6 +874,9 @@ config SND_SOC_WM8996
 config SND_SOC_WM8997
 	tristate
 
+config SND_SOC_VEGAS
+	tristate
+
 config SND_SOC_WM9081
 	tristate
 
@@ -787,6 +890,9 @@ config SND_SOC_WM9712
 	tristate
 
 config SND_SOC_WM9713
+	tristate
+
+config SND_SOC_DUMMY_CODEC
 	tristate
 
 # Amp
@@ -809,4 +915,7 @@ config SND_SOC_TPA6130A2
 	tristate "Texas Instruments TPA6130A2 headphone amplifier"
 	depends on I2C
 
+# DBMDx
+source "sound/soc/codecs/dbmdx/Kconfig"
+	
 endmenu

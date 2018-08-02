@@ -1,7 +1,21 @@
 #ifndef __ASM_SUSPEND_H
 #define __ASM_SUSPEND_H
 
+#ifdef CONFIG_RKP_CFP
+/*  (lr is in struct member pc, not counted in NR_CTX_REGS)
+ *
+ *  stp	x29, lr, [sp, #-96]!
+ *  stp	x19, x20, [sp,#16]
+ *  stp	x21, x22, [sp,#32]
+ *  stp	x23, x24, [sp,#48]
+ *  stp	x25, x26, [sp,#64]
+ *  stp	x27, x28, [sp,#80]
+ *  stp	RRK, RRS, [sp,#96]
+ */
+#define NR_CTX_REGS 13
+#else
 #define NR_CTX_REGS 11
+#endif
 
 /*
  * struct cpu_suspend_ctx must be 16-byte aligned since it is allocated on

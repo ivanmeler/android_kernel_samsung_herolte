@@ -182,6 +182,7 @@ static int blk_ioctl_discard(struct block_device *bdev, uint64_t start,
 		return -EINVAL;
 	if (secure)
 		flags |= BLKDEV_DISCARD_SECURE;
+	printk("%s %d:%d %llu %llu", secure?"SECDIS":"DIS", MAJOR(bdev->bd_dev), MINOR(bdev->bd_dev), start, len);
 	return blkdev_issue_discard(bdev, start, len, GFP_KERNEL, flags);
 }
 

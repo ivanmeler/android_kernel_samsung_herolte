@@ -1,0 +1,221 @@
+#
+# Trace(debugging) driver configuration
+#
+
+menuconfig TRACE
+	bool "TRACE driver support"
+	default y
+	help
+	  The "TRACE driver" is a kind of driver for debugging
+
+if TRACE
+
+config EXYNOS_DRAMTEST
+	bool "Exynos DRAMTEST driver"
+	help
+	  This driver is to test DRAM. It write all 2MB with data 1.
+
+config EXYNOS_BUSMONITOR
+	bool "Exynos BUS Monitor support(logging / timeout)"
+	default y
+	depends on ARCH_EXYNOS
+
+menuconfig EXYNOS_SNAPSHOT
+	bool "Exynos SnapShot(ESS) support for debugging"
+	default y
+	depends on ARCH_EXYNOS
+
+config EXYNOS_SNAPSHOT_CALLSTACK
+	int "shown callstack level"
+	depends on EXYNOS_SNAPSHOT
+	range 1 4
+	default 4
+
+config EXYNOS_SNAPSHOT_IRQ_EXIT
+	bool "Enable debugging of interrupt exit event by kevent"
+	depends on EXYNOS_SNAPSHOT && !EXYNOS_SNAPSHOT_MINIMIZED_MODE
+	default y
+
+config EXYNOS_SNAPSHOT_IRQ_EXIT_THRESHOLD
+	int "threshold of detection(microsecond)"
+	depends on EXYNOS_SNAPSHOT_IRQ_EXIT && !EXYNOS_SNAPSHOT_MINIMIZED_MODE
+	range 0 1000000
+	default 0
+
+config EXYNOS_SNAPSHOT_IRQ_DISABLED
+	bool "Enable debugging of interrupt disable event by kevent(EXPERIMENTAL)"
+	depends on EXYNOS_SNAPSHOT && !EXYNOS_SNAPSHOT_MINIMIZED_MODE
+	default n
+
+config EXYNOS_SNAPSHOT_SPINLOCK
+	bool "Enable debugging of spinlock event by kevent(EXPERIMENTAL)"
+	depends on EXYNOS_SNAPSHOT && DEBUG_SPINLOCK && !EXYNOS_SNAPSHOT_MINIMIZED_MODE
+	default y
+
+config EXYNOS_SNAPSHOT_CLK
+	bool "Enable debugging of clock event by kevent(EXPERIMENTAL)"
+	depends on EXYNOS_SNAPSHOT && !EXYNOS_SNAPSHOT_MINIMIZED_MODE
+	default y
+
+config EXYNOS_SNAPSHOT_FREQ
+	bool "Enable debugging of frequence event by kevent(EXPERIMENTAL)"
+	depends on EXYNOS_SNAPSHOT && PM_DEVFREQ && !EXYNOS_SNAPSHOT_MINIMIZED_MODE
+	default y
+
+config EXYNOS_SNAPSHOT_HRTIMER
+	bool "Enable debugging of hrtimer by kevent"
+	depends on EXYNOS_SNAPSHOT && !EXYNOS_SNAPSHOT_MINIMIZED_MODE
+	default n
+
+config EXYNOS_SNAPSHOT_REG
+	bool "Enable debugging of accessing register by kevent"
+	depends on EXYNOS_SNAPSHOT && !EXYNOS_SNAPSHOT_MINIMIZED_MODE
+	default n
+
+config EXYNOS_SNAPSHOT_REGULATOR
+	bool "Enable debugging of regulator and pmic driver"
+	depends on EXYNOS_SNAPSHOT && !EXYNOS_SNAPSHOT_MINIMIZED_MODE
+	default y
+
+config EXYNOS_SNAPSHOT_THERMAL
+	bool "Enable debugging of thermal driver"
+	depends on EXYNOS_SNAPSHOT && !EXYNOS_SNAPSHOT_MINIMIZED_MODE && EXYNOS_THERMAL
+	default y
+
+config EXYNOS_SNAPSHOT_MBOX
+	bool "Enable debugging of mailbox for transferring with APM"
+	depends on EXYNOS_SNAPSHOT && EXYNOS_MBOX && !EXYNOS_SNAPSHOT_MINIMIZED_MODE
+	default y
+
+config EXYNOS_SNAPSHOT_HOOK_LOGGER
+	bool "Enable hooking android platform log for ramdump"
+	depends on EXYNOS_SNAPSHOT
+	default y
+
+config EXYNOS_SNAPSHOT_PSTORE
+	bool "Enable supporting ramoops driver for pstore filesystem"
+	depends on EXYNOS_SNAPSHOT
+	depends on ANDROID_MAJOR_VERSION != "m"
+	depends on ANDROID_MAJOR_VERSION != "l"
+	depends on ANDROID_MAJOR_VERSION != "k"
+	select PSTORE
+	select PSTORE_RAM
+	select PSTORE_PMSG
+	default n
+
+config EXYNOS_SNAPSHOT_PANIC_REBOOT
+	bool "Enable forced reboot after panic for ramdump"
+	depends on EXYNOS_SNAPSHOT
+	default y
+
+config EXYNOS_SNAPSHOT_WATCHDOG_RESET
+	bool "Support watchdog reset when hardlockup detect"
+	depends on EXYNOS_SNAPSHOT && EXYNOS_SNAPSHOT_PANIC_REBOOT
+	default y
+
+config EXYNOS_SNAPSHOT_CRASH_KEY
+	bool "Support Crash Key to artificial panic for debugging"
+	depends on EXYNOS_SNAPSHOT && KEYBOARD_GPIO
+	default n
+
+config EXYNOS_SNAPSHOT_SFRDUMP
+	bool "Support dump of sfr region for debugging"
+	depends on EXYNOS_SNAPSHOT && !EXYNOS_SNAPSHOT_MINIMIZED_MODE
+	default n
+
+config EXYNOS_SNAPSHOT_SFRDUMP_ADV
+	bool "SFRDUMP with checking power of IP"
+	depends on EXYNOS_SNAPSHOT_SFRDUMP
+	default y
+
+config EXYNOS_SNAPSHOT_MINIMIZED_MODE
+	bool "Support minimized feature configuration"
+	depends on EXYNOS_SNAPSHOT
+	default n
+
+config EXYNOS_SNAPSHOT_LOGGING_SMC_CALL
+	bool "Support logging SMC call"
+	depends on EXYNOS_SNAPSHOT
+	default n
+
+menuconfig EXYNOS_CORESIGHT
+	bool "Enable Coresight of exynos"
+	depends on ARCH_EXYNOS
+	default n
+
+config EXYNOS_CORESIGHT_PC_INFO
+	bool "Show Porgram Counter information"
+	depends on EXYNOS_CORESIGHT
+	default y
+	help
+	  Show Program Counter information When kernel panic.
+
+config PC_ITERATION
+	int "Number of Program Coutner information"
+	depends on EXYNOS_CORESIGHT_PC_INFO
+	range 1 10
+	default 10
+	help
+	  Print out Program Counter as iteration value.
+
+config EXYNOS_CORESIGHT_MAINTAIN_DBG_REG
+	bool "Save/Restore Debug Registers"
+	depends on EXYNOS_CORESIGHT
+	default n
+	help
+	  When core power is down, debug registers are not mainained data
+	  and OS-lock is set. To maintain data, debug registers's data must
+	  save in /restore from memory. If OS-lock is set, debugging to use
+	  trace32 is impossible. So OS-lock must clear when core power is up.
+	  This config must enable only using iTSP program.
+
+menuconfig EXYNOS_CORESIGHT_ETM
+	bool "Enable ETM driver of exynos"
+	depends on ARCH_EXYNOS
+	default n
+	help
+	  ETM driver is a driver for debugging. Also this driver enable ETR of
+	  coresight feature.
+
+config EXYNOS_CORESIGHT_ETB
+	bool "This system has ETB feature"
+	depends on EXYNOS_CORESIGHT_ETM && SOC_EXYNOS7580
+	default n
+	help
+	  ETB driver is the sink part of coresight components. Some coresights has
+	  ETR.
+
+config EXYNOS_CORESIGHT_ETF
+	bool "This system has ETF feature"
+	depends on EXYNOS_CORESIGHT_ETM
+	default n
+	help
+	  ETF driver is the sink part of coresight components. Some coresights has
+	  ETR.
+
+config EXYNOS_CORESIGHT_ETR
+	bool "This system has ETR feature"
+	depends on EXYNOS_CORESIGHT_ETF && EXYNOS_SNAPSHOT
+	default n
+	help
+	  ETR driver is a driver for debugging. Also this driver is thr sink part of
+	  coresight feature. Coresight consists of source, link, sink part.
+	  This routes to DRAM or USB.
+
+
+config EXYNOS_CORESIGHT_ETM_SYSFS
+	bool "This system has ETM Sysfs feature"
+	depends on EXYNOS_CORESIGHT_ETM
+	default n
+	help
+	  Show ETM, FUNNEL, ETB, ETF and ETR status through sysfs.
+
+config EXYNOS_CORESIGHT_STM
+	bool "Enable STM driver of exynos"
+	depends on ARCH_EXYNOS
+	default n
+	help
+	  STM driver is a driver for H/W event and S/W event debugging.
+
+endif
+#

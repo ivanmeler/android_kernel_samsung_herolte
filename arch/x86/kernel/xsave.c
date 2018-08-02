@@ -12,6 +12,7 @@
 #include <asm/i387.h>
 #include <asm/fpu-internal.h>
 #include <asm/sigframe.h>
+#include <asm/tlbflush.h>
 #include <asm/xcr.h>
 
 /*
@@ -393,7 +394,9 @@ int __restore_xstate_sig(void __user *buf, void __user *buf_fx, int size)
 		drop_fpu(tsk);
 
 		if (__copy_from_user(&fpu->state->xsave, buf_fx, state_size) ||
-		    __copy_from_user(&env, buf, sizeof(env))) {
+		    __copy_from_user(&env, buf, sizeof(env)) ||
+		    (state_size > offsetof(struct xsave_struct, xsave_hdr) &&
+		     fpu->state->xsave.xsave_hdr.xcomp_bv)) {
 			fpu_finit(fpu);
 			err = -1;
 		} else {
@@ -454,7 +457,7 @@ static void prepare_fx_sw_frame(void)
  */
 static inline void xstate_enable(void)
 {
-	set_in_cr4(X86_CR4_OSXSAVE);
+	cr4_set_bits(X86_CR4_OSXSAVE);
 	xsetbv(XCR_XFEATURE_ENABLED_MASK, pcntxt_mask);
 }
 

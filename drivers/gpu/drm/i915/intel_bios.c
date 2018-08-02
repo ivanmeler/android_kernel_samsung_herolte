@@ -41,7 +41,7 @@ find_section(struct bdb_header *bdb, int section_id)
 {
 	u8 *base = (u8 *)bdb;
 	int index = 0;
-	u16 total, current_size;
+	u32 total, current_size;
 	u8 current_id;
 
 	/* skip to first section */
@@ -55,6 +55,10 @@ find_section(struct bdb_header *bdb, int section_id)
 
 		current_size = *((u16 *)(base + index));
 		index += 2;
+
+		/* The MIPI Sequence Block v3+ has a separate size field. */
+		if (current_id == BDB_MIPI_SEQUENCE && *(base + index) >= 3)
+			current_size = *((const u32 *)(base + index + 1));
 
 		if (index + current_size > total)
 			return NULL;
@@ -794,6 +798,12 @@ parse_mipi(struct drm_i915_private *dev_priv, struct bdb_header *bdb)
 		return;
 	}
 
+	/* Fail gracefully for forward incompatible sequence block. */
+	if (sequence->version >= 3) {
+		DRM_ERROR("Unable to parse MIPI Sequence Block v3+\n");
+		return;
+	}
+
 	DRM_DEBUG_DRIVER("Found MIPI sequence block\n");
 
 	block_size = get_blocksize(sequence);
@@ -929,6 +939,13 @@ static void parse_ddi_port(struct drm_i915_private *dev_priv, enum port port,
 	is_crt = child->common.device_type & DEVICE_TYPE_ANALOG_OUTPUT;
 	is_hdmi = is_dvi && (child->common.device_type & DEVICE_TYPE_NOT_HDMI_OUTPUT) == 0;
 	is_edp = is_dp && (child->common.device_type & DEVICE_TYPE_INTERNAL_CONNECTOR);
+
+	if (port == PORT_A && is_dvi) {
+		DRM_DEBUG_KMS("VBT claims port A supports DVI%s, ignoring\n",
+			      is_hdmi ? "/HDMI" : "");
+		is_dvi = false;
+		is_hdmi = false;
+	}
 
 	info->supports_dvi = is_dvi;
 	info->supports_hdmi = is_hdmi;

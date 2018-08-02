@@ -1,0 +1,9 @@
+#
+# G2 Touchscreen driver configuration
+#
+
+config TOUCHSCREEN_G2TOUCH
+	tristate "G2TOUCH touchscreens"
+	help
+	  Say Y here if you want support for G2Touch touchscreen 
+		controllers.

@@ -372,12 +372,6 @@ static u64 __get_spte_lockless(u64 *sptep)
 {
 	return ACCESS_ONCE(*sptep);
 }
-
-static bool __check_direct_spte_mmio_pf(u64 spte)
-{
-	/* It is valid if the spte is zapped. */
-	return spte == 0ull;
-}
 #else
 union split_spte {
 	struct {
@@ -492,23 +486,6 @@ retry:
 		goto retry;
 
 	return spte.spte;
-}
-
-static bool __check_direct_spte_mmio_pf(u64 spte)
-{
-	union split_spte sspte = (union split_spte)spte;
-	u32 high_mmio_mask = shadow_mmio_mask >> 32;
-
-	/* It is valid if the spte is zapped. */
-	if (spte == 0ull)
-		return true;
-
-	/* It is valid if the spte is being zapped. */
-	if (sspte.spte_low == 0ull &&
-	    (sspte.spte_high & high_mmio_mask) == high_mmio_mask)
-		return true;
-
-	return false;
 }
 #endif
 
@@ -3230,21 +3207,6 @@ static bool quickly_check_mmio_pf(struct kvm_vcpu *vcpu, u64 addr, bool direct)
 	return vcpu_match_mmio_gva(vcpu, addr);
 }
 
-
-/*
- * On direct hosts, the last spte is only allows two states
- * for mmio page fault:
- *   - It is the mmio spte
- *   - It is zapped or it is being zapped.
- *
- * This function completely checks the spte when the last spte
- * is not the mmio spte.
- */
-static bool check_direct_spte_mmio_pf(u64 spte)
-{
-	return __check_direct_spte_mmio_pf(spte);
-}
-
 static u64 walk_shadow_page_get_mmio_spte(struct kvm_vcpu *vcpu, u64 addr)
 {
 	struct kvm_shadow_walk_iterator iterator;
@@ -3285,13 +3247,6 @@ int handle_mmio_page_fault_common(struct kvm_vcpu *vcpu, u64 addr, bool direct)
 		vcpu_cache_mmio_info(vcpu, addr, gfn, access);
 		return RET_MMIO_PF_EMULATE;
 	}
-
-	/*
-	 * It's ok if the gva is remapped by other cpus on shadow guest,
-	 * it's a BUG if the gfn is not a mmio page.
-	 */
-	if (direct && !check_direct_spte_mmio_pf(spte))
-		return RET_MMIO_PF_BUG;
 
 	/*
 	 * If the page table is zapped by other cpus, let CPU fault again on
@@ -3625,8 +3580,8 @@ static void reset_rsvds_bits_mask_ept(struct kvm_vcpu *vcpu,
 	}
 }
 
-void update_permission_bitmask(struct kvm_vcpu *vcpu,
-		struct kvm_mmu *mmu, bool ept)
+static void update_permission_bitmask(struct kvm_vcpu *vcpu,
+				      struct kvm_mmu *mmu, bool ept)
 {
 	unsigned bit, byte, pfec;
 	u8 map;
@@ -3807,6 +3762,7 @@ static void init_kvm_tdp_mmu(struct kvm_vcpu *vcpu)
 void kvm_init_shadow_mmu(struct kvm_vcpu *vcpu, struct kvm_mmu *context)
 {
 	bool smep = kvm_read_cr4_bits(vcpu, X86_CR4_SMEP);
+	bool smap = kvm_read_cr4_bits(vcpu, X86_CR4_SMAP);
 	ASSERT(vcpu);
 	ASSERT(!VALID_PAGE(vcpu->arch.mmu.root_hpa));
 
@@ -3824,6 +3780,8 @@ void kvm_init_shadow_mmu(struct kvm_vcpu *vcpu, struct kvm_mmu *context)
 	vcpu->arch.mmu.base_role.cr0_wp  = is_write_protection(vcpu);
 	vcpu->arch.mmu.base_role.smep_andnot_wp
 		= smep && !is_write_protection(vcpu);
+	context->base_role.smap_andnot_wp
+		= smap && !is_write_protection(vcpu);
 }
 EXPORT_SYMBOL_GPL(kvm_init_shadow_mmu);
 
@@ -4095,12 +4053,18 @@ void kvm_mmu_pte_write(struct kvm_vcpu *vcpu, gpa_t gpa,
 		       const u8 *new, int bytes)
 {
 	gfn_t gfn = gpa >> PAGE_SHIFT;
-	union kvm_mmu_page_role mask = { .word = 0 };
 	struct kvm_mmu_page *sp;
 	LIST_HEAD(invalid_list);
 	u64 entry, gentry, *spte;
 	int npte;
 	bool remote_flush, local_flush, zap_page;
+	union kvm_mmu_page_role mask = { };
+
+	mask.cr0_wp = 1;
+	mask.cr4_pae = 1;
+	mask.nxe = 1;
+	mask.smep_andnot_wp = 1;
+	mask.smap_andnot_wp = 1;
 
 	/*
 	 * If we don't have indirect shadow pages, it means no page is
@@ -4126,7 +4090,6 @@ void kvm_mmu_pte_write(struct kvm_vcpu *vcpu, gpa_t gpa,
 	++vcpu->kvm->stat.mmu_pte_write;
 	kvm_mmu_audit(vcpu, AUDIT_PRE_PTE_WRITE);
 
-	mask.cr0_wp = mask.cr4_pae = mask.nxe = 1;
 	for_each_gfn_indirect_valid_sp(vcpu->kvm, sp, gfn) {
 		if (detect_write_misaligned(sp, gpa, bytes) ||
 		      detect_write_flooding(sp)) {

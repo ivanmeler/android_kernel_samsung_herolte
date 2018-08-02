@@ -371,6 +371,24 @@ static unsigned long isolate_freepages_block(struct compact_control *cc,
 
 		if (!valid_page)
 			valid_page = page;
+
+		/*
+		 * For compound pages such as THP and hugetlbfs, we can save
+		 * potentially a lot of iterations if we skip them at once.
+		 * The check is racy, but we can consider only valid values
+		 * and the only danger is skipping too much.
+		 */
+		if (PageCompound(page)) {
+			unsigned int comp_order = compound_order(page);
+
+			if (likely(comp_order < MAX_ORDER)) {
+				blockpfn += (1UL << comp_order) - 1;
+				cursor += (1UL << comp_order) - 1;
+			}
+
+			goto isolate_fail;
+		}
+
 		if (!PageBuddy(page))
 			goto isolate_fail;
 
@@ -402,18 +420,23 @@ static unsigned long isolate_freepages_block(struct compact_control *cc,
 
 		/* Found a free page, break it into order-0 pages */
 		isolated = split_free_page(page);
+		if (!isolated)
+			break;
+
 		total_isolated += isolated;
+		cc->nr_freepages += isolated;
 		for (i = 0; i < isolated; i++) {
 			list_add(&page->lru, freelist);
 			page++;
 		}
-
-		/* If a page was split, advance to the end of it */
-		if (isolated) {
-			blockpfn += isolated - 1;
-			cursor += isolated - 1;
-			continue;
+		if (!strict && cc->nr_migratepages <= cc->nr_freepages) {
+			blockpfn += isolated;
+			break;
 		}
+		/* Advance to the end of split page */
+		blockpfn += isolated - 1;
+		cursor += isolated - 1;
+		continue;
 
 isolate_fail:
 		if (strict)
@@ -422,6 +445,16 @@ isolate_fail:
 			continue;
 
 	}
+
+	if (locked)
+		spin_unlock_irqrestore(&cc->zone->lock, flags);
+
+	/*
+	 * There is a tiny chance that we have read bogus compound_order(),
+	 * so be careful to not go outside of the pageblock.
+	 */
+	if (unlikely(blockpfn > end_pfn))
+		blockpfn = end_pfn;
 
 	/* Record how far we have got within the block */
 	*start_pfn = blockpfn;
@@ -435,9 +468,6 @@ isolate_fail:
 	 */
 	if (strict && blockpfn < end_pfn)
 		total_isolated = 0;
-
-	if (locked)
-		spin_unlock_irqrestore(&cc->zone->lock, flags);
 
 	/* Update the pageblock-skip if the whole pageblock was scanned */
 	if (blockpfn == end_pfn)
@@ -784,16 +814,8 @@ isolate_migratepages_range(struct compact_control *cc, unsigned long start_pfn,
 		pfn = isolate_migratepages_block(cc, pfn, block_end_pfn,
 							ISOLATE_UNEVICTABLE);
 
-		/*
-		 * In case of fatal failure, release everything that might
-		 * have been isolated in the previous iteration, and signal
-		 * the failure back to caller.
-		 */
-		if (!pfn) {
-			putback_movable_pages(&cc->migratepages);
-			cc->nr_migratepages = 0;
+		if (!pfn)
 			break;
-		}
 
 		if (cc->nr_migratepages == COMPACT_CLUSTER_MAX)
 			break;
@@ -872,7 +894,12 @@ static void isolate_freepages(struct compact_control *cc)
 
 		/* Found a block suitable for isolating free pages from. */
 		isolated = isolate_freepages_block(cc, &isolate_start_pfn,
-					block_end_pfn, freelist, false);
+						block_end_pfn, freelist, false);
+		/* If isolation failed early, do not continue needlessly */
+		if (!isolated && isolate_start_pfn < block_end_pfn &&
+		    cc->nr_migratepages > cc->nr_freepages)
+			break;
+
 		nr_freepages += isolated;
 
 		/*
@@ -1315,7 +1342,7 @@ unsigned long try_to_compact_pages(struct zonelist *zonelist,
 		return COMPACT_SKIPPED;
 
 #ifdef CONFIG_CMA
-	if (gfpflags_to_migratetype(gfp_mask) == MIGRATE_MOVABLE)
+	if (gfp_mask & __GFP_CMA)
 		alloc_flags |= ALLOC_CMA;
 #endif
 	/* Compact each zone in the list */
@@ -1421,6 +1448,14 @@ static void __compact_pgdat(pg_data_t *pgdat, struct compact_control *cc)
 		INIT_LIST_HEAD(&cc->freepages);
 		INIT_LIST_HEAD(&cc->migratepages);
 
+		/*
+		 * When called via /proc/sys/vm/compact_memory
+		 * this makes sure we compact the whole zone regardless of
+		 * cached scanner positions.
+		 */
+		if (cc->order == -1)
+			__reset_isolation_suitable(zone);
+
 		if (cc->order == -1 || !compaction_deferred(zone, cc->order))
 			compact_zone(zone, cc);
 
@@ -1452,7 +1487,7 @@ static void compact_node(int nid)
 {
 	struct compact_control cc = {
 		.order = -1,
-		.mode = MIGRATE_SYNC,
+		.mode = MIGRATE_SYNC_LIGHT,
 		.ignore_skip_hint = true,
 	};
 
@@ -1478,8 +1513,16 @@ int sysctl_compact_memory;
 int sysctl_compaction_handler(struct ctl_table *table, int write,
 			void __user *buffer, size_t *length, loff_t *ppos)
 {
-	if (write)
+	if (write) {
+		pr_info("compact_memory start.(%d times so far)\n",
+			sysctl_compact_memory);
+		sysctl_compact_memory++;
 		compact_nodes();
+		pr_info("compact_memory done.(%d times so far)\n",
+			sysctl_compact_memory);
+	}
+	else
+		proc_dointvec(table, write, buffer, length, ppos);
 
 	return 0;
 }

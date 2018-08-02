@@ -342,7 +342,6 @@ static int pcie_device_init(struct pci_dev *pdev, int service, int irq)
 		     pci_name(pdev),
 		     get_descriptor_id(pci_pcie_type(pdev), service));
 	device->parent = &pdev->dev;
-	device_enable_async_suspend(device);
 
 	retval = device_register(device);
 	if (retval) {

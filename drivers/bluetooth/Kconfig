@@ -241,6 +241,18 @@ config BT_WILINK
 	  core driver to communicate with the BT core of the combo chip.
 
 	  Say Y here to compile support for Texas Instrument's WiLink7 driver
-	  into the kernel or say M to compile it as module (btwilink).
+	  into the kernel or say M to compile it as module.
+config BT_BCM4358
+	bool "Enable BCM4358 driver"
+	default n
+	help
+	  Adds BCM4358 RFKILL driver for Broadcom BCM4358 chipset for exynos54xx.
+	  default is n.
 
+config BT_BCM4359
+	bool "Enable BCM4359 driver"
+	default n
+	help
+	  Adds BCM4359 RFKILL driver for Broadcom BCM4359 chipset for exynos54xx.
+	  default is n.
 endmenu

@@ -527,6 +527,12 @@ struct crypto_aead *crypto_alloc_aead(const char *alg_name, u32 type, u32 mask)
 	struct crypto_tfm *tfm;
 	int err;
 
+#ifdef CONFIG_CRYPTO_FIPS
+        if (unlikely(in_fips_err())) {
+                printk(KERN_ERR "FIPS : aead.c:crypto_alloc_aead FIPS in Error!!!\n");
+                return ERR_PTR(-EACCES);
+        }
+#endif
 	type &= ~(CRYPTO_ALG_TYPE_MASK | CRYPTO_ALG_GENIV);
 	type |= CRYPTO_ALG_TYPE_AEAD;
 	mask &= ~(CRYPTO_ALG_TYPE_MASK | CRYPTO_ALG_GENIV);

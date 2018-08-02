@@ -95,7 +95,9 @@ struct mmc_command {
  *              actively failing requests
  */
 
+	unsigned int		cmd_timeout_ms;	/* in milliseconds */
 	unsigned int		busy_timeout;	/* busy detect timeout in ms */
+
 	/* Set this flag only for blocking sanitize request */
 	bool			sanitize_busy;
 
@@ -135,6 +137,10 @@ struct mmc_request {
 	struct completion	completion;
 	void			(*done)(struct mmc_request *);/* completion function */
 	struct mmc_host		*host;
+#ifdef CONFIG_BLOCK
+	ktime_t			io_start;
+	int			lat_hist_enabled;
+#endif
 };
 
 struct mmc_card;

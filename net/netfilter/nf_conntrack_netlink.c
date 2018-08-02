@@ -45,6 +45,8 @@
 #include <net/netfilter/nf_conntrack_zones.h>
 #include <net/netfilter/nf_conntrack_timestamp.h>
 #include <net/netfilter/nf_conntrack_labels.h>
+#include <net/netfilter/nf_conntrack_seqadj.h>
+#include <net/netfilter/nf_conntrack_synproxy.h>
 #ifdef CONFIG_NF_NAT_NEEDED
 #include <net/netfilter/nf_nat_core.h>
 #include <net/netfilter/nf_nat_l4proto.h>
@@ -1688,6 +1690,8 @@ ctnetlink_create_conntrack(struct net *net, u16 zone,
 	nf_ct_tstamp_ext_add(ct, GFP_ATOMIC);
 	nf_ct_ecache_ext_add(ct, 0, 0, GFP_ATOMIC);
 	nf_ct_labels_ext_add(ct);
+	nfct_seqadj_ext_add(ct);
+	nfct_synproxy_ext_add(ct);
 
 	/* we must add conntrack extensions before confirmation. */
 	ct->status |= IPS_CONFIRMED;
@@ -2956,11 +2960,6 @@ ctnetlink_create_expect(struct net *net, u16 zone,
 	}
 
 	err = nf_ct_expect_related_report(exp, portid, report);
-	if (err < 0)
-		goto err_exp;
-
-	return 0;
-err_exp:
 	nf_ct_expect_put(exp);
 err_ct:
 	nf_ct_put(ct);
@@ -3243,6 +3242,7 @@ static void __exit ctnetlink_exit(void)
 #ifdef CONFIG_NETFILTER_NETLINK_QUEUE_CT
 	RCU_INIT_POINTER(nfq_ct_hook, NULL);
 #endif
+	synchronize_rcu();
 }
 
 module_init(ctnetlink_init);

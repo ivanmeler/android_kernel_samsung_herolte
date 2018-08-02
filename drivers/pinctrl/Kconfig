@@ -28,7 +28,8 @@ config DEBUG_PINCTRL
 
 config PINCTRL_ADI2
 	bool "ADI pin controller driver"
-	depends on BLACKFIN
+	depends on (BF54x || BF60x)
+	depends on !GPIO_ADI
 	select PINMUX
 	select IRQ_DOMAIN
 	help
@@ -202,6 +203,9 @@ config PINCTRL_PALMAS
 	  functionality. This driver supports the pinmux, push-pull and
 	  open drain configuration for the Palmas series devices like
 	  TPS65913, TPS80036 etc.
+
+config MST_SECURE_GPIO
+	bool "setting MST gpio as secure pin"
 
 source "drivers/pinctrl/berlin/Kconfig"
 source "drivers/pinctrl/freescale/Kconfig"

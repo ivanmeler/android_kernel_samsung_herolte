@@ -49,6 +49,7 @@
 #include <linux/sched/deadline.h>
 #include <linux/timer.h>
 #include <linux/freezer.h>
+#include <linux/exynos-ss.h>
 
 #include <asm/uaccess.h>
 
@@ -193,6 +194,12 @@ hrtimer_check_target(struct hrtimer *timer, struct hrtimer_clock_base *new_base)
 /*
  * Switch the timer base to the current CPU when possible.
  */
+
+#ifdef CONFIG_SCHED_HMP
+extern struct cpumask hmp_fast_cpu_mask;
+extern struct cpumask hmp_slow_cpu_mask;
+#endif
+
 static inline struct hrtimer_clock_base *
 switch_hrtimer_base(struct hrtimer *timer, struct hrtimer_clock_base *base,
 		    int pinned)
@@ -202,6 +209,42 @@ switch_hrtimer_base(struct hrtimer *timer, struct hrtimer_clock_base *base,
 	int this_cpu = smp_processor_id();
 	int cpu = get_nohz_timer_target(pinned);
 	int basenum = base->index;
+
+#ifdef CONFIG_SCHED_HMP
+	/* Switch the timer base to boot cluster on HMP */
+	if (timer->bounded_to_boot_cluster &&
+		cpumask_test_cpu(this_cpu, &hmp_fast_cpu_mask) &&
+		!pinned && get_sysctl_timer_migration()) {
+		int bound_cpu = 0;
+
+		if (unlikely(hrtimer_callback_running(timer)))
+			return base;
+
+		/* Use the nearest busy cpu to switch timer base
+		 * from an idle cpu. */
+		for_each_cpu(cpu, &hmp_slow_cpu_mask) {
+			if (!idle_cpu(cpu)) {
+				bound_cpu = cpu;
+				break;
+			}
+		}
+
+		new_cpu_base = &per_cpu(hrtimer_bases, bound_cpu);
+		new_base = &new_cpu_base->clock_base[basenum];
+
+		/* See the comment in lock_timer_base() */
+		timer->base = NULL;
+		raw_spin_unlock(&base->cpu_base->lock);
+		raw_spin_lock(&new_base->cpu_base->lock);
+
+		base = timer->base = new_base;
+
+		raw_spin_unlock(&new_base->cpu_base->lock);
+		raw_spin_lock(&base->cpu_base->lock);
+
+		return new_base;
+	}
+#endif
 
 again:
 	new_cpu_base = &per_cpu(hrtimer_bases, cpu);
@@ -266,23 +309,25 @@ lock_hrtimer_base(const struct hrtimer *timer, unsigned long *flags)
 /*
  * Divide a ktime value by a nanosecond value
  */
-u64 ktime_divns(const ktime_t kt, s64 div)
+s64 __ktime_divns(const ktime_t kt, s64 div)
 {
-	u64 dclc;
 	int sft = 0;
+	s64 dclc;
+	u64 tmp;
 
 	dclc = ktime_to_ns(kt);
+	tmp = dclc < 0 ? -dclc : dclc;
+
 	/* Make sure the divisor is less than 2^32: */
 	while (div >> 32) {
 		sft++;
 		div >>= 1;
 	}
-	dclc >>= sft;
-	do_div(dclc, (unsigned long) div);
-
-	return dclc;
+	tmp >>= sft;
+	do_div(tmp, (unsigned long) div);
+	return dclc < 0 ? -tmp : tmp;
 }
-EXPORT_SYMBOL_GPL(ktime_divns);
+EXPORT_SYMBOL_GPL(__ktime_divns);
 #endif /* BITS_PER_LONG >= 64 */
 
 /*
@@ -1215,7 +1260,9 @@ static void __run_hrtimer(struct hrtimer *timer, ktime_t *now)
 	 */
 	raw_spin_unlock(&cpu_base->lock);
 	trace_hrtimer_expire_entry(timer, now);
+	exynos_ss_hrtimer(timer, &now->tv64, fn, ESS_FLAG_IN);
 	restart = fn(timer);
+	exynos_ss_hrtimer(timer, &now->tv64, fn, ESS_FLAG_OUT);
 	trace_hrtimer_expire_exit(timer);
 	raw_spin_lock(&cpu_base->lock);
 
@@ -1591,7 +1638,7 @@ long hrtimer_nanosleep(struct timespec *rqtp, struct timespec __user *rmtp,
 			goto out;
 	}
 
-	restart = &current_thread_info()->restart_block;
+	restart = &current->restart_block;
 	restart->fn = hrtimer_nanosleep_restart;
 	restart->nanosleep.clockid = t.timer.base->clockid;
 	restart->nanosleep.rmtp = rmtp;

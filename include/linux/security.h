@@ -54,6 +54,11 @@ struct xattr;
 struct xfrm_sec_ctx;
 struct mm_struct;
 
+#ifdef CONFIG_RKP_KDP
+/* For understand size of struct cred*/
+#include <linux/rkp_entry.h>
+#endif /*CONFIG_RKP_KDP*/
+
 /* Maximum number of letters for an LSM name string */
 #define SECURITY_NAME_MAX	10
 
@@ -68,6 +73,37 @@ struct ctl_table;
 struct audit_krule;
 struct user_namespace;
 struct timezone;
+
+#ifdef CONFIG_RKP_KDP
+
+#define rocred_uc_read(x) atomic_read(x->use_cnt)
+#define rocred_uc_inc(x)  atomic_inc(x->use_cnt)
+#define rocred_uc_dec_and_test(x) atomic_dec_and_test(x->use_cnt)
+#define rocred_uc_inc_not_zero(x) atomic_inc_not_zero(x->use_cnt)
+#define rocred_uc_set(x,v) atomic_set(x->use_cnt,v)
+
+#define RKP_RO_AREA __attribute__((section (".rkp.prot.page")))
+extern int rkp_cred_enable;
+extern char __rkp_ro_start[], __rkp_ro_end[];
+extern struct cred init_cred;
+extern struct task_security_struct init_sec;
+/*Check whether the address belong to Cred Area*/
+static inline u8 rkp_ro_page(unsigned long addr)
+{
+	if(!rkp_cred_enable)
+		return (u8)0;
+	if((addr == ((unsigned long)&init_cred)) || 
+		(addr == ((unsigned long)&init_sec)))
+		return (u8)1;
+	else
+		return rkp_is_pg_protected(addr);
+}
+extern int security_integrity_current(void);
+
+#else
+#define RKP_RO_AREA   
+#define security_integrity_current()  0
+#endif /*CONFIG_RKP_KDP*/
 
 /*
  * These functions are in security/capability.c and are used
@@ -1441,6 +1477,11 @@ static inline void security_free_mnt_opts(struct security_mnt_opts *opts)
 struct security_operations {
 	char name[SECURITY_NAME_MAX + 1];
 
+	int (*binder_set_context_mgr) (struct task_struct *mgr);
+	int (*binder_transaction) (struct task_struct *from, struct task_struct *to);
+	int (*binder_transfer_binder) (struct task_struct *from, struct task_struct *to);
+	int (*binder_transfer_file) (struct task_struct *from, struct task_struct *to, struct file *file);
+
 	int (*ptrace_access_check) (struct task_struct *child, unsigned int mode);
 	int (*ptrace_traceme) (struct task_struct *parent);
 	int (*capget) (struct task_struct *target,
@@ -1739,6 +1780,10 @@ extern void __init security_fixup_ops(struct security_operations *ops);
 
 
 /* Security operations */
+int security_binder_set_context_mgr(struct task_struct *mgr);
+int security_binder_transaction(struct task_struct *from, struct task_struct *to);
+int security_binder_transfer_binder(struct task_struct *from, struct task_struct *to);
+int security_binder_transfer_file(struct task_struct *from, struct task_struct *to, struct file *file);
 int security_ptrace_access_check(struct task_struct *child, unsigned int mode);
 int security_ptrace_traceme(struct task_struct *parent);
 int security_capget(struct task_struct *target,
@@ -1923,6 +1968,26 @@ static inline void security_free_mnt_opts(struct security_mnt_opts *opts)
  */
 
 static inline int security_init(void)
+{
+	return 0;
+}
+
+static inline int security_binder_set_context_mgr(struct task_struct *mgr)
+{
+	return 0;
+}
+
+static inline int security_binder_transaction(struct task_struct *from, struct task_struct *to)
+{
+	return 0;
+}
+
+static inline int security_binder_transfer_binder(struct task_struct *from, struct task_struct *to)
+{
+	return 0;
+}
+
+static inline int security_binder_transfer_file(struct task_struct *from, struct task_struct *to, struct file *file)
 {
 	return 0;
 }
@@ -2471,7 +2536,7 @@ static inline int security_task_prctl(int option, unsigned long arg2,
 				      unsigned long arg4,
 				      unsigned long arg5)
 {
-	return cap_task_prctl(option, arg2, arg3, arg3, arg5);
+	return cap_task_prctl(option, arg2, arg3, arg4, arg5);
 }
 
 static inline void security_task_to_inode(struct task_struct *p, struct inode *inode)

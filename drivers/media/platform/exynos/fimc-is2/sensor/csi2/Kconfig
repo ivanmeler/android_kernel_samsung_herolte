@@ -1,0 +1,22 @@
+config CSIS_V4_0
+	bool "Use csi v4.0"
+        depends on EXYNOS_DEVICE_MIPI_CSIS_VER2
+	default n
+	select USE_CSI_DMAOUT_FEATURE
+	help
+	  csi version 4.0
+
+config CSIS_V4_1
+	bool "Use csi v4.1"
+        depends on EXYNOS_DEVICE_MIPI_CSIS_VER2
+	default n
+	select USE_CSI_DMAOUT_FEATURE
+	help
+	  csi version 4.1
+
+config USE_CSI_DMAOUT_FEATURE
+	bool "Use csi dmaout feature"
+        depends on CSIS_V4_0 || CSIS_V4_1
+	default n
+	help
+	  csi dmaout feature

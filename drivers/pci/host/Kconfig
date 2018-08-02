@@ -20,9 +20,13 @@ config PCIE_DW
 
 config PCI_EXYNOS
 	bool "Samsung Exynos PCIe controller"
-	depends on SOC_EXYNOS5440
+	depends on SOC_EXYNOS8890
 	select PCIEPORTBUS
 	select PCIE_DW
+
+config PCI_EXYNOS_TEST
+	bool "EXYNOS PCIe driver test"
+	depends on PCI_EXYNOS
 
 config PCI_IMX6
 	bool "Freescale i.MX6 PCIe controller"
@@ -80,6 +84,10 @@ config PCIE_XILINX
 	help
 	  Say 'Y' here if you want kernel to support the Xilinx AXI PCIe
 	  Host Bridge driver.
+
+config SEC_PANIC_PCIE_ERR
+	depends on PCI_EXYNOS
+	bool "PANIC on PCIe Error"
 
 config PCI_XGENE
 	bool "X-Gene PCIe controller"

@@ -24,9 +24,12 @@
 #include <linux/spinlock.h>
 #include <linux/uhid.h>
 #include <linux/wait.h>
+#include <linux/fb.h>
 
 #define UHID_NAME	"uhid"
 #define UHID_BUFSIZE	32
+
+static DEFINE_MUTEX(uhid_open_mutex);
 
 struct uhid_device {
 	struct mutex devlock;
@@ -51,9 +54,27 @@ struct uhid_device {
 	u32 report_id;
 	u32 report_type;
 	struct uhid_event report_buf;
+	struct work_struct worker;
 };
 
 static struct miscdevice uhid_misc;
+
+bool lcd_is_on = true;
+
+static void uhid_device_add_worker(struct work_struct *work)
+{
+	struct uhid_device *uhid = container_of(work, struct uhid_device, worker);
+	int ret;
+
+	ret = hid_add_device(uhid->hid);
+	if (ret) {
+		hid_err(uhid->hid, "Cannot register HID device: error %d\n", ret);
+
+		hid_destroy_device(uhid->hid);
+		uhid->hid = NULL;
+		uhid->running = false;
+	}
+}
 
 static void uhid_queue(struct uhid_device *uhid, struct uhid_event *ev)
 {
@@ -126,15 +147,26 @@ static void uhid_hid_stop(struct hid_device *hid)
 static int uhid_hid_open(struct hid_device *hid)
 {
 	struct uhid_device *uhid = hid->driver_data;
+	int retval = 0;
 
-	return uhid_queue_event(uhid, UHID_OPEN);
+	mutex_lock(&uhid_open_mutex);
+	if (!hid->open++) {
+		retval = uhid_queue_event(uhid, UHID_OPEN);
+		if (retval)
+			hid->open--;
+	}
+	mutex_unlock(&uhid_open_mutex);
+	return retval;
 }
 
 static void uhid_hid_close(struct hid_device *hid)
 {
 	struct uhid_device *uhid = hid->driver_data;
 
-	uhid_queue_event(uhid, UHID_CLOSE);
+	mutex_lock(&uhid_open_mutex);
+	if (!--hid->open)
+		uhid_queue_event(uhid, UHID_CLOSE);
+	mutex_unlock(&uhid_open_mutex);
 }
 
 static int uhid_hid_parse(struct hid_device *hid)
@@ -161,7 +193,7 @@ static int __uhid_report_queue_and_wait(struct uhid_device *uhid,
 
 	ret = wait_event_interruptible_timeout(uhid->report_wait,
 				!uhid->report_running || !uhid->running,
-				5 * HZ);
+				10/*5 * HZ*/);  // from 5000 to 10 due to BT stuck when connecting apple magic mouse during a2dp playing
 	if (!ret || !uhid->running || uhid->report_running)
 		ret = -EIO;
 	else if (ret < 0)
@@ -498,18 +530,14 @@ static int uhid_dev_create2(struct uhid_device *uhid,
 	uhid->hid = hid;
 	uhid->running = true;
 
-	ret = hid_add_device(hid);
-	if (ret) {
-		hid_err(hid, "Cannot register HID device\n");
-		goto err_hid;
-	}
+	/* Adding of a HID device is done through a worker, to allow HID drivers
+	 * which use feature requests during .probe to work, without they would
+	 * be blocked on devlock, which is held by uhid_char_write.
+	 */
+	schedule_work(&uhid->worker);
 
 	return 0;
 
-err_hid:
-	hid_destroy_device(hid);
-	uhid->hid = NULL;
-	uhid->running = false;
 err_free:
 	kfree(uhid->rd_data);
 	uhid->rd_data = NULL;
@@ -549,6 +577,8 @@ static int uhid_dev_destroy(struct uhid_device *uhid)
 
 	uhid->running = false;
 	wake_up_interruptible(&uhid->report_wait);
+
+	cancel_work_sync(&uhid->worker);
 
 	hid_destroy_device(uhid->hid);
 	kfree(uhid->rd_data);
@@ -612,6 +642,7 @@ static int uhid_char_open(struct inode *inode, struct file *file)
 	init_waitqueue_head(&uhid->waitq);
 	init_waitqueue_head(&uhid->report_wait);
 	uhid->running = false;
+	INIT_WORK(&uhid->worker, uhid_device_add_worker);
 
 	file->private_data = uhid;
 	nonseekable_open(inode, file);
@@ -765,13 +796,43 @@ static struct miscdevice uhid_misc = {
 	.name		= UHID_NAME,
 };
 
+static int fb_state_change(struct notifier_block *nb,
+    unsigned long val, void *data)
+{
+	struct fb_event *evdata = data;
+	unsigned int blank;
+    dbg_hid("fb_state_change");
+	if (val != FB_EVENT_BLANK)
+		return 0;
+
+	blank = *(int *)evdata->data;
+
+	switch (blank) {
+	case FB_BLANK_POWERDOWN:
+		lcd_is_on = false;
+		break;
+	case FB_BLANK_UNBLANK:
+		lcd_is_on = true;
+		break;
+	default:
+		break;
+	}
+
+	return NOTIFY_OK;
+}
+static struct notifier_block fb_block = {
+    .notifier_call = fb_state_change,
+};
+
 static int __init uhid_init(void)
 {
+	fb_register_client(&fb_block);
 	return misc_register(&uhid_misc);
 }
 
 static void __exit uhid_exit(void)
 {
+	fb_unregister_client(&fb_block);
 	misc_deregister(&uhid_misc);
 }
 

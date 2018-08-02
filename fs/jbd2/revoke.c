@@ -577,7 +577,7 @@ static void write_one_revoke_record(journal_t *journal,
 {
 	int csum_size = 0;
 	struct buffer_head *descriptor;
-	int offset;
+	int sz, offset;
 	journal_header_t *header;
 
 	/* If we are already aborting, this all becomes a noop.  We
@@ -594,9 +594,14 @@ static void write_one_revoke_record(journal_t *journal,
 	if (jbd2_journal_has_csum_v2or3(journal))
 		csum_size = sizeof(struct jbd2_journal_revoke_tail);
 
+	if (JBD2_HAS_INCOMPAT_FEATURE(journal, JBD2_FEATURE_INCOMPAT_64BIT))
+		sz = 8;
+	else
+		sz = 4;
+
 	/* Make sure we have a descriptor with space left for the record */
 	if (descriptor) {
-		if (offset >= journal->j_blocksize - csum_size) {
+		if (offset + sz > journal->j_blocksize - csum_size) {
 			flush_descriptor(journal, descriptor, offset, write_op);
 			descriptor = NULL;
 		}
@@ -619,16 +624,13 @@ static void write_one_revoke_record(journal_t *journal,
 		*descriptorp = descriptor;
 	}
 
-	if (JBD2_HAS_INCOMPAT_FEATURE(journal, JBD2_FEATURE_INCOMPAT_64BIT)) {
+	if (JBD2_HAS_INCOMPAT_FEATURE(journal, JBD2_FEATURE_INCOMPAT_64BIT))
 		* ((__be64 *)(&descriptor->b_data[offset])) =
 			cpu_to_be64(record->blocknr);
-		offset += 8;
-
-	} else {
+	else
 		* ((__be32 *)(&descriptor->b_data[offset])) =
 			cpu_to_be32(record->blocknr);
-		offset += 4;
-	}
+	offset += sz;
 
 	*offsetp = offset;
 }
@@ -673,6 +675,10 @@ static void flush_descriptor(journal_t *journal,
 	set_buffer_jwrite(descriptor);
 	BUFFER_TRACE(descriptor, "write");
 	set_buffer_dirty(descriptor);
+#ifdef CONFIG_JOURNAL_DATA_TAG
+	if (journal->j_flags & JBD2_JOURNAL_TAG)
+		set_buffer_journal(descriptor);
+#endif
 	write_dirty_buffer(descriptor, write_op);
 }
 #endif

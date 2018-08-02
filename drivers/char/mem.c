@@ -28,6 +28,14 @@
 #include <linux/io.h>
 #include <linux/aio.h>
 
+#ifdef CONFIG_KNOX_KAP
+#include <linux/knox_kap.h>
+#endif
+
+#ifdef CONFIG_MST_LDO
+#include <linux/mst_ctrl.h>
+#endif
+
 #include <asm/uaccess.h>
 
 #ifdef CONFIG_IA64
@@ -58,7 +66,12 @@ static inline int valid_mmap_phys_addr_range(unsigned long pfn, size_t size)
 }
 #endif
 
+#if defined(CONFIG_DEVMEM) || defined(CONFIG_DEVKMEM)
 #ifdef CONFIG_STRICT_DEVMEM
+static inline int page_is_allowed(unsigned long pfn)
+{
+	return devmem_is_allowed(pfn);
+}
 static inline int range_is_allowed(unsigned long pfn, unsigned long size)
 {
 	u64 from = ((u64)pfn) << PAGE_SHIFT;
@@ -78,12 +91,18 @@ static inline int range_is_allowed(unsigned long pfn, unsigned long size)
 	return 1;
 }
 #else
+static inline int page_is_allowed(unsigned long pfn)
+{
+	return 1;
+}
 static inline int range_is_allowed(unsigned long pfn, unsigned long size)
 {
 	return 1;
 }
 #endif
+#endif
 
+#ifdef CONFIG_DEVMEM
 void __weak unxlate_dev_mem_ptr(unsigned long phys, void *addr)
 {
 }
@@ -122,23 +141,31 @@ static ssize_t read_mem(struct file *file, char __user *buf,
 
 	while (count > 0) {
 		unsigned long remaining;
+		int allowed;
 
 		sz = size_inside_page(p, count);
 
-		if (!range_is_allowed(p >> PAGE_SHIFT, count))
+		allowed = page_is_allowed(p >> PAGE_SHIFT);
+		if (!allowed)
 			return -EPERM;
+		if (allowed == 2) {
+			/* Show zeros for restricted memory. */
+			remaining = clear_user(buf, sz);
+		} else {
+			/*
+			 * On ia64 if a page has been mapped somewhere as
+			 * uncached, then it must also be accessed uncached
+			 * by the kernel or data corruption may occur.
+			 */
+			ptr = xlate_dev_mem_ptr(p);
+			if (!ptr)
+				return -EFAULT;
 
-		/*
-		 * On ia64 if a page has been mapped somewhere as uncached, then
-		 * it must also be accessed uncached by the kernel or data
-		 * corruption may occur.
-		 */
-		ptr = xlate_dev_mem_ptr(p);
-		if (!ptr)
-			return -EFAULT;
+			remaining = copy_to_user(buf, ptr, sz);
 
-		remaining = copy_to_user(buf, ptr, sz);
-		unxlate_dev_mem_ptr(p, ptr);
+			unxlate_dev_mem_ptr(p, ptr);
+		}
+
 		if (remaining)
 			return -EFAULT;
 
@@ -181,30 +208,36 @@ static ssize_t write_mem(struct file *file, const char __user *buf,
 #endif
 
 	while (count > 0) {
+		int allowed;
+
 		sz = size_inside_page(p, count);
 
-		if (!range_is_allowed(p >> PAGE_SHIFT, sz))
+		allowed = page_is_allowed(p >> PAGE_SHIFT);
+		if (!allowed)
 			return -EPERM;
 
-		/*
-		 * On ia64 if a page has been mapped somewhere as uncached, then
-		 * it must also be accessed uncached by the kernel or data
-		 * corruption may occur.
-		 */
-		ptr = xlate_dev_mem_ptr(p);
-		if (!ptr) {
-			if (written)
-				break;
-			return -EFAULT;
-		}
+		/* Skip actual writing when a page is marked as restricted. */
+		if (allowed == 1) {
+			/*
+			 * On ia64 if a page has been mapped somewhere as
+			 * uncached, then it must also be accessed uncached
+			 * by the kernel or data corruption may occur.
+			 */
+			ptr = xlate_dev_mem_ptr(p);
+			if (!ptr) {
+				if (written)
+					break;
+				return -EFAULT;
+			}
 
-		copied = copy_from_user(ptr, buf, sz);
-		unxlate_dev_mem_ptr(p, ptr);
-		if (copied) {
-			written += sz - copied;
-			if (written)
-				break;
-			return -EFAULT;
+			copied = copy_from_user(ptr, buf, sz);
+			unxlate_dev_mem_ptr(p, ptr);
+			if (copied) {
+				written += sz - copied;
+				if (written)
+					break;
+				return -EFAULT;
+			}
 		}
 
 		buf += sz;
@@ -216,6 +249,9 @@ static ssize_t write_mem(struct file *file, const char __user *buf,
 	*ppos += written;
 	return written;
 }
+#endif	/* CONFIG_DEVMEM */
+
+#if defined(CONFIG_DEVMEM) || defined(CONFIG_DEVKMEM)
 
 int __weak phys_mem_access_prot_allowed(struct file *file,
 	unsigned long pfn, unsigned long size, pgprot_t *vma_prot)
@@ -307,6 +343,11 @@ static const struct vm_operations_struct mmap_mem_ops = {
 static int mmap_mem(struct file *file, struct vm_area_struct *vma)
 {
 	size_t size = vma->vm_end - vma->vm_start;
+	phys_addr_t offset = (phys_addr_t)vma->vm_pgoff << PAGE_SHIFT;
+
+	/* It's illegal to wrap around the end of the physical address space. */
+	if (offset + (phys_addr_t)size - 1 < offset)
+		return -EINVAL;
 
 	if (!valid_mmap_phys_addr_range(vma->vm_pgoff, size))
 		return -EINVAL;
@@ -337,6 +378,7 @@ static int mmap_mem(struct file *file, struct vm_area_struct *vma)
 	}
 	return 0;
 }
+#endif	/* CONFIG_DEVMEM */
 
 #ifdef CONFIG_DEVKMEM
 static int mmap_kmem(struct file *file, struct vm_area_struct *vma)
@@ -667,6 +709,8 @@ static loff_t null_lseek(struct file *file, loff_t offset, int orig)
 	return file->f_pos = 0;
 }
 
+#if defined(CONFIG_DEVMEM) || defined(CONFIG_DEVKMEM) || defined(CONFIG_DEVPORT)
+
 /*
  * The memory devices use the full 32/64 bits of the offset, and so we cannot
  * check against negative addresses: they are ok. The return value is weird,
@@ -700,10 +744,14 @@ static loff_t memory_lseek(struct file *file, loff_t offset, int orig)
 	return ret;
 }
 
+#endif
+
+#if defined(CONFIG_DEVMEM) || defined(CONFIG_DEVKMEM) || defined(CONFIG_DEVPORT)
 static int open_port(struct inode *inode, struct file *filp)
 {
 	return capable(CAP_SYS_RAWIO) ? 0 : -EPERM;
 }
+#endif
 
 #define zero_lseek	null_lseek
 #define full_lseek      null_lseek
@@ -712,6 +760,7 @@ static int open_port(struct inode *inode, struct file *filp)
 #define open_mem	open_port
 #define open_kmem	open_mem
 
+#ifdef CONFIG_DEVMEM
 static const struct file_operations mem_fops = {
 	.llseek		= memory_lseek,
 	.read		= read_mem,
@@ -720,6 +769,7 @@ static const struct file_operations mem_fops = {
 	.open		= open_mem,
 	.get_unmapped_area = get_unmapped_area_mem,
 };
+#endif
 
 #ifdef CONFIG_DEVKMEM
 static const struct file_operations kmem_fops = {
@@ -782,7 +832,9 @@ static const struct memdev {
 	const struct file_operations *fops;
 	struct backing_dev_info *dev_info;
 } devlist[] = {
+#ifdef CONFIG_DEVMEM
 	 [1] = { "mem", 0, &mem_fops, &directly_mappable_cdev_bdi },
+#endif
 #ifdef CONFIG_DEVKMEM
 	 [2] = { "kmem", 0, &kmem_fops, &directly_mappable_cdev_bdi },
 #endif
@@ -796,6 +848,12 @@ static const struct memdev {
 	 [9] = { "urandom", 0666, &urandom_fops, NULL },
 #ifdef CONFIG_PRINTK
 	[11] = { "kmsg", 0644, &kmsg_fops, NULL },
+#endif
+#ifdef CONFIG_KNOX_KAP
+	[13] = { "knox_kap", 0664, &knox_kap_fops, NULL },
+#endif
+#ifdef CONFIG_MST_LDO
+	[14] = { "mst_ctrl", 0666, &mst_ctrl_fops, NULL },
 #endif
 };
 

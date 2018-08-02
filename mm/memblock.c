@@ -1305,7 +1305,7 @@ void __init __memblock_free_late(phys_addr_t base, phys_addr_t size)
 	end = PFN_DOWN(base + size);
 
 	for (; cursor < end; cursor++) {
-		__free_pages_bootmem(pfn_to_page(cursor), 0);
+		__free_pages_bootmem(pfn_to_page(cursor), cursor, 0);
 		totalram_pages++;
 	}
 }
@@ -1581,10 +1581,10 @@ static int __init memblock_init_debugfs(void)
 	struct dentry *root = debugfs_create_dir("memblock", NULL);
 	if (!root)
 		return -ENXIO;
-	debugfs_create_file("memory", S_IRUGO, root, &memblock.memory, &memblock_debug_fops);
-	debugfs_create_file("reserved", S_IRUGO, root, &memblock.reserved, &memblock_debug_fops);
+	debugfs_create_file("memory", S_IRUSR | S_IRGRP, root, &memblock.memory, &memblock_debug_fops);
+	debugfs_create_file("reserved", S_IRUSR | S_IRGRP, root, &memblock.reserved, &memblock_debug_fops);
 #ifdef CONFIG_HAVE_MEMBLOCK_PHYS_MAP
-	debugfs_create_file("physmem", S_IRUGO, root, &memblock.physmem, &memblock_debug_fops);
+	debugfs_create_file("physmem", S_IRUSR | S_IRGRP, root, &memblock.physmem, &memblock_debug_fops);
 #endif
 
 	return 0;

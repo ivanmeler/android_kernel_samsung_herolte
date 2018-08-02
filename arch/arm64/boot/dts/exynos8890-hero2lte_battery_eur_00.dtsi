@@ -1,0 +1,86 @@
+/*
+ * SAMSUNG UNIVERSAL5433 board device tree source
+ *
+ * Copyright (c) 2013 Samsung Electronics Co., Ltd.
+ *		http://www.samsung.com
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+*/
+
+#include "exynos8890-hero2lte_battery.dtsi"
+/ {
+	pinctrl@10580000 {
+		da9155_irq: da9155-irq {
+			samsung,pins = "gpa3-7";
+			samsung,pin-function = <0xf>;
+			samsung,pin-pud = <0>;
+			samsung,pin-drv = <0>;
+		};
+	};
+
+	hsi2c@14E50000 {
+		status = "okay";
+
+		da9155-charger@58 {
+			status = "okay";
+			compatible = "dlg,da9155-charger";
+			pinctrl-names = "default";
+			pinctrl-0 = <&da9155_irq>;
+			reg = <0x58>;
+			da9155-charger,irq-gpio = <&gpa3 7 1>;
+		};
+	};
+
+	battery {
+		/* battery,charger_name = "sec-multi-charger"; */
+
+		battery,slave_chg_temp_check = <1>;
+		battery,slave_chg_temp_table_adc = <542 638 665 733 782 855 1000 1168 1237 1341 1530
+					     1736 1949 2170 2378 2583 2801 2975 3081 3149 3284 3413 3504>;
+		battery,slave_chg_temp_table_data = <700 650 630 600 580 550 500 450 430 400 350
+					    300 250 200 150 100 50 0 (-30) (-50) (-100) (-150) (-200)>;
+
+		battery,fast_charging_current = <1900 450 450 1900 800 1200 1000 460 1200 450 1900 1900 1900 1600 1900 450 450 400 700 1300 300 1000 1500 450 1900 1900 1000 1900 80 1800 1000 1400 450 1000 1900 1900 1900>;
+
+		io-channels = <&exynos_adc 1>, <&exynos_adc 3>, <&exynos_adc 6>, <&exynos_adc 3>, <&exynos_adc 5>;
+		io-channel-names = "adc-temp", "adc-chg-temp", "adc-in-bat", "adc-wpc-temp", "adc-slave-chg-temp";
+	};
+
+	max77854-fuelgauge {
+		fuelgauge,fg_resistor = <2>;
+		fuelgauge,qrtable20 = <0x2080>;
+		fuelgauge,qrtable30 = <0x1A03>;
+		fuelgauge,rcomp0 = <0x40>;
+		fuelgauge,rcomp_charging = <0x40>;
+		fuelgauge,capacity = <0x0EA8>;
+	};
+
+	sec-multi-charger {
+		status = "disable";
+		compatible = "samsung,sec-multi-charger";
+
+		charger,battery_name = "battery";
+		charger,main_charger = "max77854-charger";
+		charger,sub_charger = "da9155-charger";
+
+		charger,is_serial;
+
+		charger,sub_charger_condition = <0x13>;
+		charger,sub_charger_condition_current_max = <1200>;
+		charger,sub_charger_condition_current_now = <500>;
+		charger,sub_charger_condition_online = <3 24 26>;
+
+		charger,main_charger_temp_threshold = <1000>;
+		charger,main_charger_temp_step = <5>;
+		charger,main_charger_temp_drop_level = <2>;
+
+		charger,sub_charger_temp_threshold = <1000>;
+		charger,sub_charger_temp_step = <5>;
+		charger,sub_charger_temp_drop_level = <2>;
+
+		charger,main_charger_current_level = <100>;
+		charger,sub_charger_current_level = <100>;
+	};
+};

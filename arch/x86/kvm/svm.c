@@ -511,8 +511,10 @@ static void skip_emulated_instruction(struct kvm_vcpu *vcpu)
 {
 	struct vcpu_svm *svm = to_svm(vcpu);
 
-	if (svm->vmcb->control.next_rip != 0)
+	if (svm->vmcb->control.next_rip != 0) {
+		WARN_ON_ONCE(!static_cpu_has(X86_FEATURE_NRIPS));
 		svm->next_rip = svm->vmcb->control.next_rip;
+	}
 
 	if (!svm->next_rip) {
 		if (emulate_instruction(vcpu, EMULTYPE_SKIP) !=
@@ -1101,6 +1103,7 @@ static void init_vmcb(struct vcpu_svm *svm)
 	set_exception_intercept(svm, PF_VECTOR);
 	set_exception_intercept(svm, UD_VECTOR);
 	set_exception_intercept(svm, MC_VECTOR);
+	set_exception_intercept(svm, AC_VECTOR);
 
 	set_intercept(svm, INTERCEPT_INTR);
 	set_intercept(svm, INTERCEPT_NMI);
@@ -1581,7 +1584,7 @@ static void svm_set_cr0(struct kvm_vcpu *vcpu, unsigned long cr0)
 
 static int svm_set_cr4(struct kvm_vcpu *vcpu, unsigned long cr4)
 {
-	unsigned long host_cr4_mce = read_cr4() & X86_CR4_MCE;
+	unsigned long host_cr4_mce = cr4_read_shadow() & X86_CR4_MCE;
 	unsigned long old_cr4 = to_svm(vcpu)->vmcb->save.cr4;
 
 	if (cr4 & X86_CR4_VMXE)
@@ -1782,8 +1785,16 @@ static int ud_interception(struct vcpu_svm *svm)
 	int er;
 
 	er = emulate_instruction(&svm->vcpu, EMULTYPE_TRAP_UD);
+	if (er == EMULATE_USER_EXIT)
+		return 0;
 	if (er != EMULATE_DONE)
 		kvm_queue_exception(&svm->vcpu, UD_VECTOR);
+	return 1;
+}
+
+static int ac_interception(struct vcpu_svm *svm)
+{
+	kvm_queue_exception_e(&svm->vcpu, AC_VECTOR, 0);
 	return 1;
 }
 
@@ -3178,6 +3189,13 @@ static int svm_set_msr(struct kvm_vcpu *vcpu, struct msr_data *msr)
 	u32 ecx = msr->index;
 	u64 data = msr->data;
 	switch (ecx) {
+	case MSR_IA32_CR_PAT:
+		if (!kvm_mtrr_valid(vcpu, MSR_IA32_CR_PAT, data))
+			return 1;
+		vcpu->arch.pat = data;
+		svm->vmcb->save.g_pat = data;
+		mark_dirty(svm->vmcb, VMCB_NPT);
+		break;
 	case MSR_IA32_TSC:
 		kvm_write_tsc(vcpu, msr);
 		break;
@@ -3348,6 +3366,7 @@ static int (*const svm_exit_handlers[])(struct vcpu_svm *svm) = {
 	[SVM_EXIT_EXCP_BASE + PF_VECTOR]	= pf_interception,
 	[SVM_EXIT_EXCP_BASE + NM_VECTOR]	= nm_interception,
 	[SVM_EXIT_EXCP_BASE + MC_VECTOR]	= mc_interception,
+	[SVM_EXIT_EXCP_BASE + AC_VECTOR]	= ac_interception,
 	[SVM_EXIT_INTR]				= intr_interception,
 	[SVM_EXIT_NMI]				= nmi_interception,
 	[SVM_EXIT_SMI]				= nop_on_interception,
@@ -4306,7 +4325,9 @@ static int svm_check_intercept(struct kvm_vcpu *vcpu,
 		break;
 	}
 
-	vmcb->control.next_rip  = info->next_rip;
+	/* TODO: Advertise NRIPS to guest hypervisor unconditionally */
+	if (static_cpu_has(X86_FEATURE_NRIPS))
+		vmcb->control.next_rip  = info->next_rip;
 	vmcb->control.exit_code = icpt_info.exit_code;
 	vmexit = nested_svm_exit_handled(svm);
 
@@ -4370,6 +4391,7 @@ static struct kvm_x86_ops svm_x86_ops = {
 	.cache_reg = svm_cache_reg,
 	.get_rflags = svm_get_rflags,
 	.set_rflags = svm_set_rflags,
+	.fpu_activate = svm_fpu_activate,
 	.fpu_deactivate = svm_fpu_deactivate,
 
 	.tlb_flush = svm_flush_tlb,

@@ -19,6 +19,7 @@
 #include <linux/slab.h>
 #include <linux/stat.h>
 #include <linux/pm_opp.h>
+#include <linux/pm_qos.h>
 #include <linux/devfreq.h>
 #include <linux/workqueue.h>
 #include <linux/platform_device.h>
@@ -91,7 +92,7 @@ static int devfreq_get_freq_level(struct devfreq *devfreq, unsigned long freq)
  */
 static int devfreq_update_status(struct devfreq *devfreq, unsigned long freq)
 {
-	int lev, prev_lev, ret = 0;
+	int lev, prev_lev = 0, ret = 0;
 	unsigned long cur_time;
 
 	cur_time = jiffies;
@@ -111,7 +112,13 @@ static int devfreq_update_status(struct devfreq *devfreq, unsigned long freq)
 		goto out;
 	}
 
-	if (lev != prev_lev) {
+	if (freq != devfreq->previous_freq) {
+		prev_lev = devfreq_get_freq_level(devfreq,
+						devfreq->previous_freq);
+		if (prev_lev && prev_lev < 0) {
+			pr_err("DEVFREQ: invalid index to update status\n");
+			return -EINVAL;
+		}
 		devfreq->trans_table[(prev_lev *
 				devfreq->profile->max_state) + lev]++;
 		devfreq->total_trans++;
@@ -162,6 +169,10 @@ int update_devfreq(struct devfreq *devfreq)
 	unsigned long freq;
 	int err = 0;
 	u32 flags = 0;
+#if IS_ENABLED(CONFIG_DEVFREQ_GOV_SIMPLE_EXYNOS)
+	struct devfreq_simple_exynos_data *gov_data = devfreq->data;
+	unsigned long pm_qos_max;
+#endif
 
 	if (!mutex_is_locked(&devfreq->lock)) {
 		WARN(true, "devfreq->lock must be locked by the caller.\n");
@@ -192,6 +203,15 @@ int update_devfreq(struct devfreq *devfreq)
 		freq = devfreq->max_freq;
 		flags |= DEVFREQ_FLAG_LEAST_UPPER_BOUND; /* Use LUB */
 	}
+#if IS_ENABLED(CONFIG_DEVFREQ_GOV_SIMPLE_EXYNOS)
+	if (!strcmp(devfreq->governor->name, "simple_exynos") && gov_data->pm_qos_class_max) {
+		pm_qos_max = (unsigned long)pm_qos_request(gov_data->pm_qos_class_max);
+		if (freq > pm_qos_max) {
+			freq = pm_qos_max;
+			flags |= DEVFREQ_FLAG_LEAST_UPPER_BOUND; /* Use LUB */
+		}
+	}
+#endif
 
 	err = devfreq->profile->target(devfreq->dev.parent, &freq, flags);
 	if (err)
@@ -220,11 +240,15 @@ static void devfreq_monitor(struct work_struct *work)
 
 	mutex_lock(&devfreq->lock);
 	err = update_devfreq(devfreq);
-	if (err)
+	if (err && err != -EAGAIN)
 		dev_err(&devfreq->dev, "dvfs failed with (%d) error\n", err);
-
+#ifdef CONFIG_SCHED_HMP
+	mod_delayed_work_on(0, devfreq_wq, &devfreq->work,
+				msecs_to_jiffies(devfreq->profile->polling_ms));
+#else
 	queue_delayed_work(devfreq_wq, &devfreq->work,
 				msecs_to_jiffies(devfreq->profile->polling_ms));
+#endif
 	mutex_unlock(&devfreq->lock);
 }
 
@@ -239,7 +263,7 @@ static void devfreq_monitor(struct work_struct *work)
  */
 void devfreq_monitor_start(struct devfreq *devfreq)
 {
-	INIT_DEFERRABLE_WORK(&devfreq->work, devfreq_monitor);
+	INIT_DELAYED_WORK(&devfreq->work, devfreq_monitor);
 	if (devfreq->profile->polling_ms)
 		queue_delayed_work(devfreq_wq, &devfreq->work,
 			msecs_to_jiffies(devfreq->profile->polling_ms));
@@ -483,7 +507,7 @@ struct devfreq *devfreq_add_device(struct device *dev,
 						devfreq->profile->max_state *
 						devfreq->profile->max_state,
 						GFP_KERNEL);
-	devfreq->time_in_state = devm_kzalloc(dev, sizeof(unsigned int) *
+	devfreq->time_in_state = devm_kzalloc(dev, sizeof(unsigned long) *
 						devfreq->profile->max_state,
 						GFP_KERNEL);
 	devfreq->last_stat_updated = jiffies;
@@ -1036,6 +1060,28 @@ static ssize_t trans_stat_show(struct device *dev,
 }
 static DEVICE_ATTR_RO(trans_stat);
 
+static ssize_t time_in_state_show(struct device *dev,
+				struct device_attribute *attr, char *buf)
+{
+	struct devfreq *devfreq = to_devfreq(dev);
+	ssize_t len = 0;
+	int i, err;
+	unsigned int max_state = devfreq->profile->max_state;
+
+	err = devfreq_update_status(devfreq, devfreq->previous_freq);
+	if (err)
+		return 0;
+
+	for (i = 0; i < max_state; i++) {
+		len += sprintf(buf + len, "%8u",
+				devfreq->profile->freq_table[i]);
+		len += sprintf(buf + len, "%10u\n",
+			jiffies_to_msecs(devfreq->time_in_state[i]));
+	}
+	return len;
+}
+static DEVICE_ATTR_RO(time_in_state);
+
 static struct attribute *devfreq_attrs[] = {
 	&dev_attr_governor.attr,
 	&dev_attr_available_governors.attr,
@@ -1046,6 +1092,7 @@ static struct attribute *devfreq_attrs[] = {
 	&dev_attr_min_freq.attr,
 	&dev_attr_max_freq.attr,
 	&dev_attr_trans_stat.attr,
+	&dev_attr_time_in_state.attr,
 	NULL,
 };
 ATTRIBUTE_GROUPS(devfreq);

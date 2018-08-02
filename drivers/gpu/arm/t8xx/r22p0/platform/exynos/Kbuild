@@ -1,0 +1,43 @@
+#
+# (C) COPYRIGHT 2012-2013, 2017 ARM Limited. All rights reserved.
+#
+# This program is free software and is provided to you under the terms of the
+# GNU General Public License version 2 as published by the Free Software
+# Foundation, and any use by you of this program is subject to the terms
+# of such GNU licence.
+#
+# This program is distributed in the hope that it will be useful,
+# but WITHOUT ANY WARRANTY; without even the implied warranty of
+# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+# GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License
+# along with this program; if not, you can access it online at
+# http://www.gnu.org/licenses/gpl-2.0.html.
+#
+# SPDX-License-Identifier: GPL-2.0
+#
+#
+
+MALI_CUSTOMER_RELEASE = 1
+
+ccflags-y += $(DEFINES)
+subdir-ccflags-y += $(DEFINES)
+
+soc_name := $(shell echo $(CONFIG_EXYNOS_SOC_NAME))
+
+mali_kbase-y += $(MALI_PLATFORM_DIR)/gpu_integration_callbacks.o
+mali_kbase-y += $(MALI_PLATFORM_DIR)/mali_kbase_platform.o
+mali_kbase-y += $(MALI_PLATFORM_DIR)/gpu_notifier.o
+mali_kbase-y += $(MALI_PLATFORM_DIR)/gpu_exynos$(soc_name).o
+mali_kbase-y += $(MALI_PLATFORM_DIR)/gpu_control.o
+mali_kbase-y += $(MALI_PLATFORM_DIR)/gpu_pmqos.o
+mali_kbase-y += $(MALI_PLATFORM_DIR)/gpu_utilization.o
+mali_kbase-y += $(MALI_PLATFORM_DIR)/gpu_dvfs_handler.o
+mali_kbase-y += $(MALI_PLATFORM_DIR)/gpu_dvfs_api.o
+mali_kbase-y += $(MALI_PLATFORM_DIR)/gpu_dvfs_governor.o
+mali_kbase-y += $(MALI_PLATFORM_DIR)/gpu_perf.o
+mali_kbase-y += $(MALI_PLATFORM_DIR)/gpu_job_fence_debug.o
+mali_kbase-$(CONFIG_MALI_SEC_HWCNT) += $(MALI_PLATFORM_DIR)/gpu_hwcnt_sec.o
+mali_kbase-$(CONFIG_MALI_DEBUG_SYS) += $(MALI_PLATFORM_DIR)/gpu_custom_interface.o
+mali_kbase-$(CONFIG_CPU_THERMAL_IPA) += $(MALI_PLATFORM_DIR)/gpu_ipa.o

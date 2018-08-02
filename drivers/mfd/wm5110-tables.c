@@ -249,6 +249,16 @@ static const struct reg_default wm5110_revd_patch[] = {
 	{ 0x80, 0x0 },
 };
 
+/* Add extra headphone write sequence locations */
+static const struct reg_default wm5110_reve_patch[] = {
+	{ 0x80, 0x3 },
+	{ 0x80, 0x3 },
+	{ 0x4b, 0x138 },
+	{ 0x4c, 0x13d },
+	{ 0x80, 0x0 },
+	{ 0x80, 0x0 },
+};
+
 /* We use a function so we can use ARRAY_SIZE() */
 int wm5110_patch(struct arizona *arizona)
 {
@@ -266,7 +276,9 @@ int wm5110_patch(struct arizona *arizona)
 					     wm5110_revd_patch,
 					     ARRAY_SIZE(wm5110_revd_patch));
 	default:
-		return 0;
+		return regmap_register_patch(arizona->regmap,
+					     wm5110_reve_patch,
+					     ARRAY_SIZE(wm5110_reve_patch));
 	}
 }
 EXPORT_SYMBOL_GPL(wm5110_patch);
@@ -763,6 +775,7 @@ static const struct reg_default wm5110_reg_default[] = {
 	{ 0x000002A7, 0x372C },    /* R679   - Mic Detect Level 2 */
 	{ 0x000002A8, 0x1422 },    /* R680   - Mic Detect Level 3 */
 	{ 0x000002A9, 0x300A },    /* R681   - Mic Detect Level 4 */
+	{ 0x000002AB, 0x0000 },    /* R683   - Mic Detect 4 */
 	{ 0x000002C3, 0x0000 },    /* R707   - Mic noise mix control 1 */
 	{ 0x000002CB, 0x0000 },    /* R715   - Isolation control */
 	{ 0x000002D3, 0x0000 },    /* R723   - Jack detect analogue */
@@ -1464,6 +1477,7 @@ static const struct reg_default wm5110_reg_default[] = {
 	{ 0x00000C04, 0xA101 },    /* R3076  - GPIO5 CTRL */
 	{ 0x00000C0F, 0x0400 },    /* R3087  - IRQ CTRL 1 */
 	{ 0x00000C10, 0x1000 },    /* R3088  - GPIO Debounce Config */
+	{ 0x00000C18, 0x0000 },    /* R3096  - GP Switch 1 */
 	{ 0x00000C20, 0x8002 },    /* R3104  - Misc Pad Ctrl 1 */
 	{ 0x00000C21, 0x8001 },    /* R3105  - Misc Pad Ctrl 2 */
 	{ 0x00000C22, 0x0000 },    /* R3106  - Misc Pad Ctrl 3 */
@@ -1797,6 +1811,7 @@ static bool wm5110_readable_register(struct device *dev, unsigned int reg)
 	case ARIZONA_MIC_DETECT_1:
 	case ARIZONA_MIC_DETECT_2:
 	case ARIZONA_MIC_DETECT_3:
+	case ARIZONA_MIC_DETECT_4:
 	case ARIZONA_MIC_DETECT_LEVEL_1:
 	case ARIZONA_MIC_DETECT_LEVEL_2:
 	case ARIZONA_MIC_DETECT_LEVEL_3:
@@ -2505,6 +2520,7 @@ static bool wm5110_readable_register(struct device *dev, unsigned int reg)
 	case ARIZONA_GPIO5_CTRL:
 	case ARIZONA_IRQ_CTRL_1:
 	case ARIZONA_GPIO_DEBOUNCE_CONFIG:
+	case ARIZONA_GP_SWITCH_1:
 	case ARIZONA_MISC_PAD_CTRL_1:
 	case ARIZONA_MISC_PAD_CTRL_2:
 	case ARIZONA_MISC_PAD_CTRL_3:
@@ -2825,6 +2841,7 @@ static bool wm5110_volatile_register(struct device *dev, unsigned int reg)
 	case ARIZONA_ASYNC_SAMPLE_RATE_1_STATUS:
 	case ARIZONA_ASYNC_SAMPLE_RATE_2_STATUS:
 	case ARIZONA_MIC_DETECT_3:
+	case ARIZONA_MIC_DETECT_4:
 	case ARIZONA_HEADPHONE_DETECT_2:
 	case ARIZONA_INPUT_ENABLES_STATUS:
 	case ARIZONA_OUTPUT_STATUS_1:

@@ -32,9 +32,14 @@
 #include <linux/cpufreq.h>
 #include <linux/cpuidle.h>
 #include <linux/timer.h>
+#include <linux/wakeup_reason.h>
 
 #include "../base.h"
 #include "power.h"
+
+#ifdef CONFIG_SEC_DEBUG
+#include <linux/sec_debug.h>
+#endif
 
 typedef int (*pm_callback_t)(struct device *);
 
@@ -185,6 +190,17 @@ void device_pm_move_last(struct device *dev)
 	pr_debug("PM: Moving %s:%s to end of list\n",
 		 dev->bus ? dev->bus->name : "No Bus", dev_name(dev));
 	list_move_tail(&dev->power.entry, &dpm_list);
+}
+
+/**
+ * device_pm_move_first - Move device to first of the PM core's list of devices.
+ * @dev: Device to move in dpm_list.
+ */
+void device_pm_move_first(struct device *dev)
+{
+	pr_debug("PM: Moving %s:%s to first of list\n",
+		 dev->bus ? dev->bus->name : "No Bus", dev_name(dev));
+	list_move(&dev->power.entry, &dpm_list);
 }
 
 static ktime_t initcall_debug_start(struct device *dev)
@@ -367,6 +383,7 @@ static void dpm_show_time(ktime_t starttime, pm_message_t state, char *info)
 	usecs = usecs64;
 	if (usecs == 0)
 		usecs = 1;
+
 	pr_info("PM: %s%s%s of devices complete after %ld.%03ld msecs\n",
 		info ?: "", info ? " " : "", pm_verb(state.event),
 		usecs / USEC_PER_MSEC, usecs % USEC_PER_MSEC);
@@ -385,7 +402,9 @@ static int dpm_run_callback(pm_callback_t cb, struct device *dev,
 
 	pm_dev_dbg(dev, state, info);
 	trace_device_pm_callback_start(dev, info, state.event);
+	exynos_ss_suspend(cb, dev, ESS_FLAG_IN);
 	error = cb(dev);
+	exynos_ss_suspend(cb, dev, ESS_FLAG_OUT);
 	trace_device_pm_callback_end(dev, error);
 	suspend_report_result(cb, error);
 
@@ -417,6 +436,9 @@ static void dpm_watchdog_handler(unsigned long data)
 	struct dpm_watchdog *wd = (void *)data;
 
 	dev_emerg(wd->dev, "**** DPM device timeout ****\n");
+#ifdef CONFIG_SEC_DEBUG_EXTRA_INFO
+	sec_debug_set_extra_info_dpm_timeout(dev_name(wd->dev));
+#endif
 	show_stack(wd->tsk, NULL);
 	panic("%s %s: unrecoverable failure\n",
 		dev_driver_string(wd->dev), dev_name(wd->dev));
@@ -1251,14 +1273,15 @@ int dpm_suspend_late(pm_message_t state)
 		error = device_suspend_late(dev);
 
 		mutex_lock(&dpm_list_mtx);
+		if (!list_empty(&dev->power.entry))
+			list_move(&dev->power.entry, &dpm_late_early_list);
+
 		if (error) {
 			pm_dev_err(dev, state, " late", error);
 			dpm_save_failed_dev(dev_name(dev));
 			put_device(dev);
 			break;
 		}
-		if (!list_empty(&dev->power.entry))
-			list_move(&dev->power.entry, &dpm_late_early_list);
 		put_device(dev);
 
 		if (async_error)
@@ -1336,6 +1359,7 @@ static int __device_suspend(struct device *dev, pm_message_t state, bool async)
 	pm_callback_t callback = NULL;
 	char *info = NULL;
 	int error = 0;
+	char suspend_abort[MAX_SUSPEND_ABORT_LEN];
 	DECLARE_DPM_WATCHDOG_ON_STACK(wd);
 
 	dpm_wait_for_children(dev, async);
@@ -1353,6 +1377,9 @@ static int __device_suspend(struct device *dev, pm_message_t state, bool async)
 		pm_wakeup_event(dev, 0);
 
 	if (pm_wakeup_pending()) {
+		pm_get_active_wakeup_sources(suspend_abort,
+			MAX_SUSPEND_ABORT_LEN);
+		log_suspend_abort_reason(suspend_abort);
 		async_error = -EBUSY;
 		goto Complete;
 	}

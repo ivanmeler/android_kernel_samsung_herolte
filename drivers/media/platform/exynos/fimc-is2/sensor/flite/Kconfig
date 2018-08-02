@@ -1,0 +1,27 @@
+config FIMC_BNS_V2_0
+	bool "Use bns v2.0 (Exynos7420)"
+	depends on EXYNOS_FIMC_BNS
+	default n
+	help
+	  bns version 3.0
+
+config FIMC_BNS_V4_0
+	bool "Use bns v4.0 (Exynos8890)"
+	depends on EXYNOS_FIMC_BNS
+	default n
+	help
+	  bns version 4.0
+
+config FIMC_BNS_V4_10_0
+	bool "Use bns v4.10.0 (Exynos7870)"
+	depends on EXYNOS_FIMC_BNS
+	default n
+	help
+	  bns version 4.10.0
+
+config FIMC_BNS_V4_20_0
+	bool "Use bns v4.20.0 (Exynos8890 EVT1)"
+	depends on EXYNOS_FIMC_BNS
+	default n
+	help
+	  bns version 4.20.0

@@ -236,11 +236,16 @@ static int read_mos_reg(struct usb_serial *serial, unsigned int serial_portnum,
 
 	status = usb_control_msg(usbdev, pipe, request, requesttype, value,
 				     index, buf, 1, MOS_WDR_TIMEOUT);
-	if (status == 1)
+	if (status == 1) {
 		*data = *buf;
-	else if (status < 0)
+	} else {
 		dev_err(&usbdev->dev,
 			"mos7720: usb_control_msg() failed: %d\n", status);
+		if (status >= 0)
+			status = -EIO;
+		*data = 0;
+	}
+
 	kfree(buf);
 
 	return status;
@@ -1239,7 +1244,7 @@ static int mos7720_write(struct tty_struct *tty, struct usb_serial_port *port,
 
 	if (urb->transfer_buffer == NULL) {
 		urb->transfer_buffer = kmalloc(URB_TRANSFER_BUFFER_SIZE,
-					       GFP_KERNEL);
+					       GFP_ATOMIC);
 		if (!urb->transfer_buffer)
 			goto exit;
 	}

@@ -22,6 +22,10 @@
 #include <linux/slab.h>
 #include <linux/sched_clock.h>
 
+#if defined(CONFIG_SEC_BSP)
+#include <linux/sec_bsp.h>
+#endif
+
 #include <asm/arch_timer.h>
 #include <asm/virt.h>
 
@@ -68,6 +72,7 @@ static struct clock_event_device __percpu *arch_timer_evt;
 static bool arch_timer_use_virtual = true;
 static bool arch_timer_c3stop;
 static bool arch_timer_mem_use_virtual;
+static bool arch_timer_use_clocksource_only = false;
 
 /*
  * Architected system timer support.
@@ -339,13 +344,24 @@ static void arch_counter_set_user_access(void)
 			| ARCH_TIMER_USR_PCT_ACCESS_EN);
 
 	/* Enable user access to the virtual counter */
-	cntkctl |= ARCH_TIMER_USR_VCT_ACCESS_EN;
+	if (IS_ENABLED(CONFIG_ARM_ARCH_TIMER_VCT_ACCESS))
+		cntkctl |= ARCH_TIMER_USR_VCT_ACCESS_EN;
+	else
+		cntkctl &= ~ARCH_TIMER_USR_VCT_ACCESS_EN;
 
 	arch_timer_set_cntkctl(cntkctl);
 }
 
 static int arch_timer_setup(struct clock_event_device *clk)
 {
+	/*
+	 * If arch_timer is used to clocksource only,
+	 * it doesn't need to setup clockevent configuration.
+	 * This is only for Exynos
+	 */
+	if (arch_timer_use_clocksource_only)
+		goto skip_clockevent_setup;
+
 	__arch_timer_setup(ARCH_CP15_TIMER, clk);
 
 	if (arch_timer_use_virtual)
@@ -356,6 +372,7 @@ static int arch_timer_setup(struct clock_event_device *clk)
 			enable_percpu_irq(arch_timer_ppi[PHYS_NONSECURE_PPI], 0);
 	}
 
+skip_clockevent_setup:
 	arch_counter_set_user_access();
 	if (IS_ENABLED(CONFIG_ARM_ARCH_TIMER_EVTSTREAM))
 		arch_timer_configure_evtstream();
@@ -436,12 +453,18 @@ static cycle_t arch_counter_read_cc(const struct cyclecounter *cc)
 	return arch_timer_read_counter();
 }
 
+static void arch_timer_resume(struct clocksource *cs)
+{
+	arch_timer_setup(this_cpu_ptr(arch_timer_evt));
+}
+
 static struct clocksource clocksource_counter = {
 	.name	= "arch_sys_counter",
 	.rating	= 400,
 	.read	= arch_counter_read,
 	.mask	= CLOCKSOURCE_MASK(56),
-	.flags	= CLOCK_SOURCE_IS_CONTINUOUS | CLOCK_SOURCE_SUSPEND_NONSTOP,
+	.flags	= CLOCK_SOURCE_IS_CONTINUOUS,
+	.resume	= arch_timer_resume,
 };
 
 static struct cyclecounter cyclecounter = {
@@ -489,6 +512,14 @@ static void __init arch_counter_register(unsigned type)
 
 static void arch_timer_stop(struct clock_event_device *clk)
 {
+	/*
+	 * If arch_timer is used to clocksource only,
+	 * it doesn't need to stop clockevent configuration.
+	 * This is only for Exynos
+	 */
+	if (arch_timer_use_clocksource_only)
+		return;
+
 	pr_debug("arch_timer_teardown disable IRQ%d cpu #%d\n",
 		 clk->irq, smp_processor_id());
 
@@ -703,6 +734,16 @@ static void __init arch_timer_init(struct device_node *np)
 	for (i = PHYS_SECURE_PPI; i < MAX_TIMER_PPI; i++)
 		arch_timer_ppi[i] = irq_of_parse_and_map(np, i);
 	arch_timer_detect_rate(NULL, np);
+
+#if defined(CONFIG_SEC_BSP)
+	sec_boot_stat_get_mct(arch_timer_rate);
+#endif
+
+	/* Exynos Specific Device Tree Information */
+	if (of_property_read_bool(np, "use-clocksource-only")) {
+		pr_info("%s: arch_timer is used only clocksource\n", __func__);
+		arch_timer_use_clocksource_only = true;
+	}
 
 	/*
 	 * If HYP mode is available, we know that the physical timer

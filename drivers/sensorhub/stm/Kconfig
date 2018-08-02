@@ -1,0 +1,114 @@
+#
+# sensor drivers configuration
+#
+
+config SENSORS_SSP
+	tristate "Sensors ssp"
+	default n
+	depends on SPI
+	help
+	  ssp driver for sensor hub.
+          If you say yes here you get ssp support for
+	  sensor hub.
+	  To compile this driver as a module, choose M here: the
+	  module will be called ssp.
+
+config SENSORS_SSP_STM
+	tristate "Sensors ssp stm"
+	default n
+	depends on SPI
+	help
+	  ssp driver for sensor hub.
+          If you say yes here you get ssp support for
+	  sensor hub.
+	  To compile this driver as a module, choose M here: the
+	  module will be called ssp.
+
+config SENSORS_MAX86900
+	tristate "MAXIM MAX86900 HRM Sensor"
+	default n
+	depends on I2C && SYSFS
+	help
+	  If you say yes here you get support for the MAX86900
+	  HRM sensor.
+	  This driver can also be built as a module.  If so, the module
+	  will be called max86900.
+
+config SENSORS_MAX86902
+	tristate "MAXIM MAX86902 UV HRM Sensor"
+	default n
+	depends on I2C
+	help
+	  If you say yes here you get support for the MAX86902
+	  HRM sensor & uv sensor.
+	  This driver can also be built as a module.  If so, the module
+	  will be called MAX86902.
+
+config SENSORS_MULTIPLE_GLASS_TYPE
+	tristate "Sensors ssp multiple glass type"
+	default n
+	depends on SPI
+	help
+	  If you want to use multiple glass type, it should be set.
+
+config SENSORS_SSP_IRDATA_FOR_CAMERA
+	tristate "Sensors ssp irdata for camera"
+	default n
+	depends on SPI
+	help
+	  If you want to use irdata, it should be set.
+
+config SENSORS_SX9310
+	depends on I2C
+	tristate "SX9310 driver"
+	default n
+	help
+	  Say Y here if you use sx9310.
+	  This option enables grip sensors using
+	  SemTech sx9310 device driver.
+	  Say N here if you do not use sx9310.
+
+config SENSORS_SX9310_INIT_TOUCH_THRESHOLD
+	int "SX9310 Grip sensor threshold for init touch"
+	depends on SENSORS_SX9310
+	default "3000"
+	help
+	  This value is the standard of init touch using
+	  SemTech sx9310 device driver.
+
+config SENSORS_SX9310_NORMAL_TOUCH_THRESHOLD
+	int "SX9310 Grip sensor threshold for normal touch"
+	depends on SENSORS_SX9310
+	default "17"
+	help
+	  This value is the standard of normal touch using
+	  SemTech sx9310 device driver.
+
+config SENSORS_SX9310_CP_LDO_CONTROL
+	depends on SENSORS_SX9310
+	tristate "SX9310 driver"
+	default n
+	help
+	  Say Y here if you control grip power in cp.
+	  Say N here if you do not use grip power in cp.
+
+config SENSORS_SSP_NOBLELTE
+	tristate "Sensors ssp for noble project"
+	default n
+	help
+	  If you want to use noble project, it should be set.
+
+config SENSORS_SSP_ZENLTE
+	tristate "Sensors ssp for zen project"
+	default n
+	help
+	  If you want to use zen project, it should be set.
+
+config SENSORS_SSP_VLTE
+	tristate "Sensors ssp for v project"
+	default n
+	help
+	  If you want to use v project, it should be set.
+
+source "drivers/sensorhub/stm/factory/Kconfig"
+source "drivers/sensorhub/brcm/max_notchfilter/Kconfig"

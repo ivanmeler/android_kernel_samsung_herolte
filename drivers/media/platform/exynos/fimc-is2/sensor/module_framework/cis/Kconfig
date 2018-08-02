@@ -1,0 +1,52 @@
+menuconfig CAMERA_CIS_SELECT
+	bool "Sensor cis select"
+	depends on USE_DIRECT_IS_CONTROL
+	help
+	  Say Y here to enable support for platform-specific V4L drivers.
+
+config CAMERA_CIS_6B2_OBJ
+        bool "Use 6B2 camera cis"
+	depends on USE_DIRECT_IS_CONTROL
+	depends on CAMERA_CIS_SELECT
+        default n
+        help
+          Use to build 6B2 camera sensor.
+
+config CAMERA_CIS_5E2_OBJ
+        bool "Use 5E2 camera cis"
+	depends on USE_DIRECT_IS_CONTROL
+	depends on CAMERA_CIS_SELECT
+        default n
+        help
+          Use to build 5E2 camera sensor.
+
+config CAMERA_CIS_4H5YC_OBJ
+        bool "Use 4H5YC camera cis"
+	depends on USE_DIRECT_IS_CONTROL
+	depends on CAMERA_CIS_SELECT
+        default n
+        help
+          Use to build 4H5YC camera sensor.
+
+config CAMERA_CIS_4H5_OBJ
+        bool "Use 4H5 camera cis"
+	depends on USE_DIRECT_IS_CONTROL
+	depends on CAMERA_CIS_SELECT
+        default n
+        help
+          Use to build 4H5 camera sensor.
+
+config CAMERA_CIS_2P2_OBJ
+		bool "Use 2P2 camera cis"
+	depends on USE_DIRECT_IS_CONTROL
+	depends on CAMERA_CIS_SELECT
+		default n
+		help
+		  Use to build 2P2 camera sensor.
+config CAMERA_CIS_2P8_OBJ
+		bool "Use 2P8 camera cis"
+	depends on USE_DIRECT_IS_CONTROL
+	depends on CAMERA_CIS_SELECT
+		default n
+		help
+		  Use to build 2P8 camera sensor.

@@ -16,6 +16,10 @@
 #include <linux/cryptohash.h>
 #include <linux/kernel.h>
 #include <linux/export.h>
+#ifdef CONFIG_MPTCP
+#include <net/mptcp.h>
+#include <net/mptcp_v4.h>
+#endif
 #include <net/tcp.h>
 #include <net/route.h>
 
@@ -337,7 +341,7 @@ struct sock *cookie_v4_check(struct sock *sk, struct sk_buff *skb)
 			   RT_CONN_FLAGS(sk), RT_SCOPE_UNIVERSE, IPPROTO_TCP,
 			   inet_sk_flowi_flags(sk),
 			   opt->srr ? opt->faddr : ireq->ir_rmt_addr,
-			   ireq->ir_loc_addr, th->source, th->dest);
+			   ireq->ir_loc_addr, th->source, th->dest, sk->sk_uid);
 	security_req_classify_flow(req, flowi4_to_flowi(&fl4));
 	rt = ip_route_output_key(sock_net(sk), &fl4);
 	if (IS_ERR(rt)) {
@@ -348,11 +352,17 @@ struct sock *cookie_v4_check(struct sock *sk, struct sk_buff *skb)
 	/* Try to redo what tcp_v4_send_synack did. */
 	req->window_clamp = tp->window_clamp ? :dst_metric(&rt->dst, RTAX_WINDOW);
 
+#ifdef CONFIG_MPTCP
+	tp->ops->select_initial_window(tcp_full_space(sk), req->mss,
+				       &req->rcv_wnd, &req->window_clamp,
+				       ireq->wscale_ok, &rcv_wscale,
+				       dst_metric(&rt->dst, RTAX_INITRWND), sk);
+#else
 	tcp_select_initial_window(tcp_full_space(sk), req->mss,
 				  &req->rcv_wnd, &req->window_clamp,
 				  ireq->wscale_ok, &rcv_wscale,
 				  dst_metric(&rt->dst, RTAX_INITRWND));
-
+#endif
 	ireq->rcv_wscale  = rcv_wscale;
 
 	ret = get_cookie_sock(sk, skb, req, &rt->dst);

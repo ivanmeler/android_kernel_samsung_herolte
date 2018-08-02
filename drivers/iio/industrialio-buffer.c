@@ -93,7 +93,7 @@ unsigned int iio_buffer_poll(struct file *filp,
 	struct iio_buffer *rb = indio_dev->buffer;
 
 	if (!indio_dev->info)
-		return -ENODEV;
+		return 0;
 
 	poll_wait(filp, &rb->pollq, wait);
 	if (iio_buffer_data_available(rb))
@@ -791,6 +791,24 @@ done:
 	return (ret < 0) ? ret : len;
 }
 EXPORT_SYMBOL(iio_buffer_store_enable);
+
+int iio_sw_buffer_preenable(struct iio_dev *indio_dev)
+{
+	struct iio_buffer *buffer;
+	unsigned bytes;
+	dev_dbg(&indio_dev->dev, "%s\n", __func__);
+
+	list_for_each_entry(buffer, &indio_dev->buffer_list, buffer_list)
+		if (buffer->access->set_bytes_per_datum) {
+			bytes = iio_compute_scan_bytes(indio_dev,
+						       buffer->scan_mask,
+						       buffer->scan_timestamp);
+
+			buffer->access->set_bytes_per_datum(buffer, bytes);
+		}
+	return 0;
+}
+EXPORT_SYMBOL(iio_sw_buffer_preenable);
 
 /**
  * iio_validate_scan_mask_onehot() - Validates that exactly one channel is selected

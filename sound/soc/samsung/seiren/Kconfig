@@ -1,0 +1,28 @@
+config SND_SAMSUNG_SEIREN
+	bool "SEIREN Audio support"
+	depends on SND_SOC_SAMSUNG && SND_SAMSUNG_AUDSS
+	help
+	  Say Y if you want to support SEIREN AUDIO.
+
+config SND_SAMSUNG_SEIREN_OFFLOAD
+	bool "Enable Offload for SEIREN Audio"
+	depends on SND_SAMSUNG_SEIREN && SND_SAMSUNG_I2S
+	select SND_SAMSUNG_COMPR
+	select SND_SOC_SAMSUNG_OFFLOAD
+	default n
+	help
+	  Say Y if you want to add Offload support for SEIREN Audio.
+
+config SND_SAMSUNG_SEIREN_DEBUG
+	bool "Enable debug message for SEIREN Audio"
+	depends on SND_SAMSUNG_SEIREN
+	default n
+	help
+	  Say Y if you want to add debug message for SEIREN Audio.
+
+config SND_SAMSUNG_ELPE
+	bool "Enable Exynos Low Power Effect Function"
+	depends on SND_SAMSUNG_SEIREN_OFFLOAD
+	default y
+	help
+	  Say Y if you want to add support for Low Power Effect Function

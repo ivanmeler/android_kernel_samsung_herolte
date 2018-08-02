@@ -634,7 +634,7 @@ static void talitos_unregister_rng(struct device *dev)
  * crypto alg
  */
 #define TALITOS_CRA_PRIORITY		3000
-#define TALITOS_MAX_KEY_SIZE		96
+#define TALITOS_MAX_KEY_SIZE		(AES_MAX_KEY_SIZE + SHA512_BLOCK_SIZE)
 #define TALITOS_MAX_IV_LENGTH		16 /* max of AES_BLOCK_SIZE, DES3_EDE_BLOCK_SIZE */
 
 #define MD5_BLOCK_SIZE    64
@@ -927,7 +927,8 @@ static int sg_to_link_tbl(struct scatterlist *sg, int sg_count,
 		sg_count--;
 		link_tbl_ptr--;
 	}
-	be16_add_cpu(&link_tbl_ptr->len, cryptlen);
+	link_tbl_ptr->len = cpu_to_be16(be16_to_cpu(link_tbl_ptr->len)
+					+ cryptlen);
 
 	/* tag end of link table */
 	link_tbl_ptr->j_extent = DESC_PTR_LNKTBL_RETURN;
@@ -1323,6 +1324,11 @@ static int ablkcipher_setkey(struct crypto_ablkcipher *cipher,
 {
 	struct talitos_ctx *ctx = crypto_ablkcipher_ctx(cipher);
 
+	if (keylen > TALITOS_MAX_KEY_SIZE) {
+		crypto_ablkcipher_set_flags(cipher, CRYPTO_TFM_RES_BAD_KEY_LEN);
+		return -EINVAL;
+	}
+
 	memcpy(&ctx->key, key, keylen);
 	ctx->keylen = keylen;
 
@@ -1575,9 +1581,9 @@ static int common_nonsnoop_hash(struct talitos_edesc *edesc,
 		req_ctx->swinit = 0;
 	} else {
 		desc->ptr[1] = zero_entry;
-		/* Indicate next op is not the first. */
-		req_ctx->first = 0;
 	}
+	/* Indicate next op is not the first. */
+	req_ctx->first = 0;
 
 	/* HMAC key */
 	if (ctx->keylen)
@@ -2563,6 +2569,7 @@ static struct talitos_crypto_alg *talitos_alg_alloc(struct device *dev,
 		break;
 	default:
 		dev_err(dev, "unknown algorithm type %d\n", t_alg->algt.type);
+		kfree(t_alg);
 		return ERR_PTR(-EINVAL);
 	}
 

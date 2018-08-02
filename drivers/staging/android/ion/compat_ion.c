@@ -39,12 +39,79 @@ struct compat_ion_handle_data {
 	compat_int_t handle;
 };
 
+struct compat_ion_preload_object {
+	compat_size_t len;
+	compat_uint_t count;
+};
+
+struct compat_ion_preload_data {
+	compat_uint_t heap_id_mask;
+	compat_uint_t flags;
+	compat_uint_t count;
+	compat_uptr_t obj; /* struct ion_preload_object *obj */
+};
+
+struct compat_ion_fd_partial_data {
+	compat_int_t handle;
+	compat_int_t fd;
+	compat_off_t offset;
+	compat_size_t len;
+};
+
 #define COMPAT_ION_IOC_ALLOC	_IOWR(ION_IOC_MAGIC, 0, \
 				      struct compat_ion_allocation_data)
 #define COMPAT_ION_IOC_FREE	_IOWR(ION_IOC_MAGIC, 1, \
 				      struct compat_ion_handle_data)
 #define COMPAT_ION_IOC_CUSTOM	_IOWR(ION_IOC_MAGIC, 6, \
 				      struct compat_ion_custom_data)
+#define COMPAT_ION_IOC_PRELOAD_ALLOC	_IOW(ION_IOC_MAGIC, 8, \
+					     struct compat_ion_preload_data)
+#define COMPAT_ION_IOC_SYNC_PARTIAL	_IOWR(ION_IOC_MAGIC, 9, \
+					struct compat_ion_fd_partial_data)
+
+static int compat_get_ion_preload_data(
+		struct compat_ion_preload_data __user *data32,
+		struct ion_preload_data __user *data)
+{
+	compat_uint_t u, count;
+	compat_uptr_t p;
+	compat_size_t s;
+	struct compat_ion_preload_object __user *objs32;
+	struct ion_preload_object __user *objs;
+	int i, err;
+
+	err = get_user(u, &data32->heap_id_mask);
+	err |= put_user(u, &data->heap_id_mask);
+	err |= get_user(u, &data32->flags);
+	err |= put_user(u, &data->flags);
+	err |= get_user(count, &data32->count);
+	err |= put_user(count, &data->count);
+	err |= get_user(p, &data32->obj);
+
+	if (count > 8) {
+		pr_warn("%s: number of object types should be < 9\n", __func__);
+		return -EPERM;
+	}
+
+	objs32 = compat_ptr(p);
+	if (!access_ok(VERIFY_READ, objs32, sizeof(*objs32) * count))
+		return -EFAULT;
+
+	objs = compat_alloc_user_space(sizeof(*data) + sizeof(*objs) * count);
+	if (objs == NULL)
+		return -ENOMEM;
+
+	for (i = 0; i < count; i++) {
+		err |= get_user(s, &objs32[i].len);
+		err |= put_user(s, &objs[i].len);
+		err |= get_user(u, &objs32[i].count);
+		err |= put_user(u, &objs[i].count);
+	}
+
+	err |= put_user(objs, &data->obj);
+
+	return err;
+}
 
 static int compat_get_ion_allocation_data(
 			struct compat_ion_allocation_data __user *data32,
@@ -121,6 +188,28 @@ static int compat_get_ion_custom_data(
 	return err;
 };
 
+static int compat_get_ion_fd_partial_data(
+			struct compat_ion_fd_partial_data __user *data32,
+			struct ion_fd_partial_data __user *data)
+{
+	compat_int_t handle;
+	compat_int_t fd;
+	compat_off_t offset;
+	compat_size_t len;
+	int err;
+
+	err = get_user(handle, &data32->handle);
+	err |= put_user(handle, &data->handle);
+	err |= get_user(fd, &data32->fd);
+	err |= put_user(fd, &data->fd);
+	err |= get_user(offset, &data32->offset);
+	err |= put_user(offset, &data->offset);
+	err |= get_user(len, &data32->len);
+	err |= put_user(len, &data->len);
+
+	return err;
+}
+
 long compat_ion_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 {
 	long ret;
@@ -166,6 +255,23 @@ long compat_ion_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 		return filp->f_op->unlocked_ioctl(filp, ION_IOC_FREE,
 							(unsigned long)data);
 	}
+	case COMPAT_ION_IOC_PRELOAD_ALLOC: {
+		struct compat_ion_preload_data __user *data32;
+		struct ion_preload_data __user *data;
+		int err;
+
+		data32 = compat_ptr(arg);
+		data = compat_alloc_user_space(sizeof(*data));
+		if (data == NULL)
+			return -EFAULT;
+
+		err = compat_get_ion_preload_data(data32, data);
+		if (err)
+			return err;
+
+		return filp->f_op->unlocked_ioctl(filp, ION_IOC_PRELOAD_ALLOC,
+							(unsigned long)data);
+	}
 	case COMPAT_ION_IOC_CUSTOM: {
 		struct compat_ion_custom_data __user *data32;
 		struct ion_custom_data __user *data;
@@ -181,6 +287,24 @@ long compat_ion_ioctl(struct file *filp, unsigned int cmd, unsigned long arg)
 			return err;
 
 		return filp->f_op->unlocked_ioctl(filp, ION_IOC_CUSTOM,
+							(unsigned long)data);
+	}
+	case COMPAT_ION_IOC_SYNC_PARTIAL:
+	{
+		struct compat_ion_fd_partial_data __user *data32;
+		struct ion_fd_partial_data __user *data;
+		int err;
+
+		data32 = compat_ptr(arg);
+		data = compat_alloc_user_space(sizeof(*data));
+		if (data == NULL)
+			return -EFAULT;
+
+		err = compat_get_ion_fd_partial_data(data32, data);
+		if (err)
+			return err;
+
+		return filp->f_op->unlocked_ioctl(filp, ION_IOC_SYNC_PARTIAL,
 							(unsigned long)data);
 	}
 	case ION_IOC_SHARE:

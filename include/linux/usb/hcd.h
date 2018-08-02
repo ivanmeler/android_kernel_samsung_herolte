@@ -169,10 +169,12 @@ struct usb_hcd {
 	 * bandwidth_mutex should be dropped after a successful control message
 	 * to the device, or resetting the bandwidth after a failed attempt.
 	 */
+	struct mutex		*address0_mutex;
 	struct mutex		*bandwidth_mutex;
 	struct usb_hcd		*shared_hcd;
 	struct usb_hcd		*primary_hcd;
 
+	bool			is_in_hub_event;
 
 #define HCD_BUFFER_POOLS	4
 	struct dma_pool		*pool[HCD_BUFFER_POOLS];
@@ -498,6 +500,45 @@ extern void usb_destroy_configuration(struct usb_device *dev);
 
 #include <linux/usb/ch11.h>
 
+#ifdef CONFIG_HOST_COMPLIANT_TEST
+/*
+ * Hub Port Test Mode Selector Codes
+ * See USB 2.0 spec Table 11-24
+ */
+#define USB_PORT_TEST_J			0x01
+#define USB_PORT_TEST_K			0x02
+#define USB_PORT_TEST_SE0_NAK		0x03
+#define USB_PORT_TEST_PACKET		0x04
+#define USB_PORT_TEST_FORCE_ENABLE	0x05
+
+/*
+ * Product IDs used to trigger USB Hi-Speed Host Electrical Tests
+ * on the root hub. See USB 2.0 spec 7.1.20 and the
+ * Embedded High-speed Host Electrical Test Procedure.
+ */
+#define EHSET_TEST_SE0_NAK			0x0101
+#define EHSET_TEST_J				0x0102
+#define EHSET_TEST_K				0x0103
+#define EHSET_TEST_PACKET			0x0104
+/* Note that the FORCE ENABLE test is no longer used in the EHSET spec. */
+#define EHSET_TEST_FORCE_ENABLE			0x0105
+#define EHSET_HS_HOST_PORT_SUSPEND_RESUME	0x0106
+#define EHSET_SINGLE_STEP_GET_DEV_DESC		0x0107
+#define EHSET_SINGLE_STEP_SET_FEATURE		0x0108
+#define LOW_LEVEL_TEST_J			0x010a
+#define LOW_LEVEL_TEST_K			0x010b
+#define LOW_LEVEL_SE0_NAK			0x010c
+#define LOW_LEVEL_TEST_PACKET			0x010d
+
+/*
+ * This is used for the Hi-Speed Host Electrical Tests
+ * on the root hub. See USB 2.0 spec 7.1.20 and the
+ * Embedded High-speed Host Electrical Test Procedure.
+ */
+#define USB_PORT_TEST_SINGLE_STEP_SET_FEATURE	0x00
+
+#endif
+
 /*
  * As of USB 2.0, full/low speed devices are segregated into trees.
  * One type grows from USB 1.1 host controllers (OHCI, UHCI etc).
@@ -544,9 +585,9 @@ extern void usb_ep0_reinit(struct usb_device *);
 	((USB_DIR_IN|USB_TYPE_STANDARD|USB_RECIP_INTERFACE)<<8)
 
 #define EndpointRequest \
-	((USB_DIR_IN|USB_TYPE_STANDARD|USB_RECIP_INTERFACE)<<8)
+	((USB_DIR_IN|USB_TYPE_STANDARD|USB_RECIP_ENDPOINT)<<8)
 #define EndpointOutRequest \
-	((USB_DIR_OUT|USB_TYPE_STANDARD|USB_RECIP_INTERFACE)<<8)
+	((USB_DIR_OUT|USB_TYPE_STANDARD|USB_RECIP_ENDPOINT)<<8)
 
 /* class requests from the USB 2.0 hub spec, table 11-15 */
 /* GetBusState and SetHubDescriptor are optional, omitted */

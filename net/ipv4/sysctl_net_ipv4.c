@@ -45,10 +45,10 @@ static int ip_ping_group_range_max[] = { GID_T_MAX, GID_T_MAX };
 /* Update system visible IP port range */
 static void set_local_port_range(struct net *net, int range[2])
 {
-	write_seqlock(&net->ipv4.ip_local_ports.lock);
+	write_seqlock_bh(&net->ipv4.ip_local_ports.lock);
 	net->ipv4.ip_local_ports.range[0] = range[0];
 	net->ipv4.ip_local_ports.range[1] = range[1];
-	write_sequnlock(&net->ipv4.ip_local_ports.lock);
+	write_sequnlock_bh(&net->ipv4.ip_local_ports.lock);
 }
 
 /* Validate changes from /proc interface. */
@@ -103,10 +103,10 @@ static void set_ping_group_range(struct ctl_table *table, kgid_t low, kgid_t hig
 	kgid_t *data = table->data;
 	struct net *net =
 		container_of(table->data, struct net, ipv4.ping_group_range.range);
-	write_seqlock(&net->ipv4.ip_local_ports.lock);
+	write_seqlock_bh(&net->ipv4.ip_local_ports.lock);
 	data[0] = low;
 	data[1] = high;
-	write_sequnlock(&net->ipv4.ip_local_ports.lock);
+	write_sequnlock_bh(&net->ipv4.ip_local_ports.lock);
 }
 
 /* Validate changes from /proc interface. */
@@ -141,6 +141,21 @@ static int ipv4_ping_group_range(struct ctl_table *table, int write,
 		}
 		set_ping_group_range(table, low, high);
 	}
+
+	return ret;
+}
+
+/* Validate changes from /proc interface. */
+static int proc_tcp_default_init_rwnd(struct ctl_table *ctl, int write,
+				      void __user *buffer,
+				      size_t *lenp, loff_t *ppos)
+{
+	int old_value = *(int *)ctl->data;
+	int ret = proc_dointvec(ctl, write, buffer, lenp, ppos);
+	int new_value = *(int *)ctl->data;
+
+	if (write && ret == 0 && (new_value < 3 || new_value > 100))
+		*(int *)ctl->data = old_value;
 
 	return ret;
 }
@@ -720,6 +735,13 @@ static struct ctl_table ipv4_table[] = {
 		.proc_handler	= proc_dointvec_minmax,
 		.extra1		= &zero,
 		.extra2		= &one,
+	},
+	{
+		.procname       = "tcp_default_init_rwnd",
+		.data           = &sysctl_tcp_default_init_rwnd,
+		.maxlen         = sizeof(int),
+		.mode           = 0644,
+		.proc_handler   = proc_tcp_default_init_rwnd
 	},
 	{
 		.procname	= "icmp_msgs_per_sec",

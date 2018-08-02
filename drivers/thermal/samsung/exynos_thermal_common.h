@@ -23,15 +23,19 @@
 #ifndef _EXYNOS_THERMAL_COMMON_H
 #define _EXYNOS_THERMAL_COMMON_H
 
+#include <linux/types.h>
+
 /* In-kernel thermal framework related macros & definations */
 #define SENSOR_NAME_LEN	16
 #define MAX_TRIP_COUNT	8
 #define MAX_COOLING_DEVICE 4
 #define MAX_TRIMINFO_CTRL_REG	2
 
-#define ACTIVE_INTERVAL 500
-#define IDLE_INTERVAL 10000
+#define ACTIVE_INTERVAL 300
+#define IDLE_INTERVAL 	500
 #define MCELSIUS	1000
+
+#define MAX_TMU_COUNT	4
 
 /* CPU Zone information */
 #define PANIC_ZONE      4
@@ -42,11 +46,25 @@
 #define GET_ZONE(trip) (trip + 2)
 #define GET_TRIP(zone) (zone - 2)
 
+/* Bit type */
+#define TYPE_8BIT_MASK	(0xFF)
+#define TYPE_9BIT_MASK	(0x1FF)
+
+#define CLUSTER0_CORE	(0)
+#define CLUSTER1_CORE	(4)
+
 enum trigger_type {
 	THROTTLE_ACTIVE = 1,
 	THROTTLE_PASSIVE,
 	SW_TRIP,
 	HW_TRIP,
+};
+
+enum dev_type {
+	CLUSTER0,
+	CLUSTER1,
+	GPU,
+	ISP,
 };
 
 /**
@@ -69,6 +87,7 @@ struct	thermal_trip_point_conf {
 	int trip_val[MAX_TRIP_COUNT];
 	int trip_type[MAX_TRIP_COUNT];
 	int trip_count;
+	int trip_old_val;
 	unsigned char trigger_falling;
 };
 
@@ -86,6 +105,12 @@ struct thermal_sensor_conf {
 	void *driver_data;
 	void *pzone_data;
 	struct device *dev;
+	enum dev_type d_type;
+	int id;
+	bool hotplug_enable;
+	int count;
+	int hotplug_in_threshold;
+	int hotplug_out_threshold;
 };
 
 /*Functions used exynos based thermal sensor driver*/
@@ -93,6 +118,7 @@ struct thermal_sensor_conf {
 void exynos_unregister_thermal(struct thermal_sensor_conf *sensor_conf);
 int exynos_register_thermal(struct thermal_sensor_conf *sensor_conf);
 void exynos_report_trigger(struct thermal_sensor_conf *sensor_conf);
+void change_core_boost_thermal(struct thermal_sensor_conf *quad, struct thermal_sensor_conf *dual, int mode);
 #else
 static inline void
 exynos_unregister_thermal(struct thermal_sensor_conf *sensor_conf) { return; }
@@ -104,4 +130,11 @@ static inline void
 exynos_report_trigger(struct thermal_sensor_conf *sensor_conf) { return; }
 
 #endif /* CONFIG_EXYNOS_THERMAL_CORE */
+#if defined(CONFIG_EXYNOS_BIG_FREQ_BOOST)
+void core_boost_lock(void);
+void core_boost_unlock(void);
+#else
+static inline void core_boost_lock(void) {return ;}
+static inline void core_boost_unlock(void) {return ;}
+#endif
 #endif /* _EXYNOS_THERMAL_COMMON_H */

@@ -137,6 +137,7 @@ page_table_range_init_count(unsigned long start, unsigned long end)
 
 	vaddr = start;
 	pgd_idx = pgd_index(vaddr);
+	pmd_idx = pmd_index(vaddr);
 
 	for ( ; (pgd_idx < PTRS_PER_PGD) && (vaddr != end); pgd_idx++) {
 		for (; (pmd_idx < PTRS_PER_PMD) && (vaddr != end);
@@ -870,7 +871,6 @@ static noinline int do_test_wp_bit(void)
 	return flag;
 }
 
-#ifdef CONFIG_DEBUG_RODATA
 const int rodata_test_data = 0xC3;
 EXPORT_SYMBOL_GPL(rodata_test_data);
 
@@ -957,5 +957,3 @@ void mark_rodata_ro(void)
 #endif
 	mark_nxdata_nx();
 }
-#endif
-

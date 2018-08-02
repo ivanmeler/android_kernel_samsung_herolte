@@ -10,6 +10,7 @@
  */
 
 #include <linux/err.h>
+#include <linux/module.h>
 #include <linux/pm_runtime.h>
 
 #include <linux/mmc/host.h>
@@ -27,6 +28,10 @@
 #include "sd_ops.h"
 #include "sdio_ops.h"
 #include "sdio_cis.h"
+
+#ifdef CONFIG_MMC_EMBEDDED_SDIO
+#include <linux/mmc/sdio_ids.h>
+#endif
 
 static int sdio_read_fbr(struct sdio_func *func)
 {
@@ -567,17 +572,11 @@ static int mmc_sdio_init_uhs_card(struct mmc_card *card)
 	 * SPI mode doesn't define CMD19 and tuning is only valid for SDR50 and
 	 * SDR104 mode SD-cards. Note that tuning is mandatory for SDR104.
 	 */
-	if (!mmc_host_is_spi(card->host) && card->host->ops->execute_tuning &&
-			((card->sw_caps.sd3_bus_mode & SD_MODE_UHS_SDR50) ||
-			 (card->sw_caps.sd3_bus_mode & SD_MODE_UHS_SDR104))) {
-		mmc_host_clk_hold(card->host);
-		err = card->host->ops->execute_tuning(card->host,
-						      MMC_SEND_TUNING_BLOCK);
-		mmc_host_clk_release(card->host);
-	}
-
+	if (!mmc_host_is_spi(card->host) &&
+	    ((card->host->ios.timing == MMC_TIMING_UHS_SDR50) ||
+	      (card->host->ios.timing == MMC_TIMING_UHS_SDR104)))
+		err = mmc_execute_tuning(card);
 out:
-
 	return err;
 }
 
@@ -669,7 +668,7 @@ try_again:
 	 */
 	if (!powered_resume && (rocr & ocr & R4_18V_PRESENT)) {
 		err = mmc_set_signal_voltage(host, MMC_SIGNAL_VOLTAGE_180,
-					ocr);
+					ocr_card);
 		if (err == -EAGAIN) {
 			sdio_reset(host);
 			mmc_go_idle(host);
@@ -738,19 +737,35 @@ try_again:
 		goto finish;
 	}
 
-	/*
-	 * Read the common registers.
-	 */
-	err = sdio_read_cccr(card, ocr);
-	if (err)
-		goto remove;
+#ifdef CONFIG_MMC_EMBEDDED_SDIO
+	if (host->embedded_sdio_data.cccr)
+		memcpy(&card->cccr, host->embedded_sdio_data.cccr, sizeof(struct sdio_cccr));
+	else {
+#endif
+		/*
+		 * Read the common registers.
+		 */
+		err = sdio_read_cccr(card,  ocr);
+		if (err)
+			goto remove;
+#ifdef CONFIG_MMC_EMBEDDED_SDIO
+	}
+#endif
 
-	/*
-	 * Read the common CIS tuples.
-	 */
-	err = sdio_read_common_cis(card);
-	if (err)
-		goto remove;
+#ifdef CONFIG_MMC_EMBEDDED_SDIO
+	if (host->embedded_sdio_data.cis)
+		memcpy(&card->cis, host->embedded_sdio_data.cis, sizeof(struct sdio_cis));
+	else {
+#endif
+		/*
+		 * Read the common CIS tuples.
+		 */
+		err = sdio_read_common_cis(card);
+		if (err)
+			goto remove;
+#ifdef CONFIG_MMC_EMBEDDED_SDIO
+	}
+#endif
 
 	if (oldcard) {
 		int same = (card->cis.vendor == oldcard->cis.vendor &&
@@ -1143,14 +1158,36 @@ int mmc_attach_sdio(struct mmc_host *host)
 	funcs = (ocr & 0x70000000) >> 28;
 	card->sdio_funcs = 0;
 
+#ifdef CONFIG_MMC_EMBEDDED_SDIO
+	if (host->embedded_sdio_data.funcs)
+		card->sdio_funcs = funcs = host->embedded_sdio_data.num_funcs;
+#endif
+
 	/*
 	 * Initialize (but don't add) all present functions.
 	 */
 	for (i = 0; i < funcs; i++, card->sdio_funcs++) {
-		err = sdio_init_func(host->card, i + 1);
-		if (err)
-			goto remove;
+#ifdef CONFIG_MMC_EMBEDDED_SDIO
+		if (host->embedded_sdio_data.funcs) {
+			struct sdio_func *tmp;
 
+			tmp = sdio_alloc_func(host->card);
+			if (IS_ERR(tmp))
+				goto remove;
+			tmp->num = (i + 1);
+			card->sdio_func[i] = tmp;
+			tmp->class = host->embedded_sdio_data.funcs[i].f_class;
+			tmp->max_blksize = host->embedded_sdio_data.funcs[i].f_maxblksize;
+			tmp->vendor = card->cis.vendor;
+			tmp->device = card->cis.device;
+		} else {
+#endif
+			err = sdio_init_func(host->card, i + 1);
+			if (err)
+				goto remove;
+#ifdef CONFIG_MMC_EMBEDDED_SDIO
+		}
+#endif
 		/*
 		 * Enable Runtime PM for this func (if supported)
 		 */
@@ -1198,3 +1235,40 @@ err:
 	return err;
 }
 
+int sdio_reset_comm(struct mmc_card *card)
+{
+	struct mmc_host *host = card->host;
+	u32 ocr;
+	u32 rocr;
+	int err;
+
+	printk("%s():\n", __func__);
+	mmc_claim_host(host);
+
+	mmc_go_idle(host);
+
+	mmc_set_clock(host, host->f_min);
+
+	err = mmc_send_io_op_cond(host, 0, &ocr);
+	if (err)
+		goto err;
+
+	rocr = mmc_select_voltage(host, ocr);
+	if (!rocr) {
+		err = -EINVAL;
+		goto err;
+	}
+
+	err = mmc_sdio_init_card(host, rocr, card, 0);
+	if (err)
+		goto err;
+
+	mmc_release_host(host);
+	return 0;
+err:
+	printk("%s: Error resetting SDIO communications (%d)\n",
+	       mmc_hostname(host), err);
+	mmc_release_host(host);
+	return err;
+}
+EXPORT_SYMBOL(sdio_reset_comm);

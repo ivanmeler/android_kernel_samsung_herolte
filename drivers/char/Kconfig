@@ -6,6 +6,19 @@ menu "Character devices"
 
 source "drivers/tty/Kconfig"
 
+config DEVMEM
+	bool "Memory device driver"
+	default y
+	help
+	  The memory driver provides two character devices, mem and kmem, which
+	  provide access to the system's memory. The mem device is a view of
+	  physical memory, and each byte in the device corresponds to the
+	  matching physical address. The kmem device is the same as mem, but
+	  the addresses correspond to the kernel's virtual address space rather
+	  than physical memory. These devices are standard parts of a Linux
+	  system and most users should say Y here. You might say N if very
+	  security conscience or memory is tight.
+
 config DEVKMEM
 	bool "/dev/kmem virtual device support"
 	default y
@@ -574,10 +587,13 @@ config TELCLOCK
 	  controlling the behavior of this hardware.
 
 config DEVPORT
-	bool
-	depends on !M68K
+	bool "/dev/port character device"
+	depends on !ARM64
 	depends on ISA || PCI
 	default y
+	help
+	  Say Y here if you want to support the /dev/port device. The /dev/port
+	  device is similar to /dev/mem, but for I/O ports.
 
 source "drivers/s390/char/Kconfig"
 
@@ -601,6 +617,8 @@ config TILE_SROM
 	  how to partition a single ROM for multiple purposes.
 
 source "drivers/char/xillybus/Kconfig"
+
+source "drivers/char/exynos-mcomp/Kconfig"
 
 endmenu
 

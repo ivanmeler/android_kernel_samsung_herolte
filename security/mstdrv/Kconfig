@@ -1,0 +1,4 @@
+#
+config MST_LDO
+	def_bool y
+

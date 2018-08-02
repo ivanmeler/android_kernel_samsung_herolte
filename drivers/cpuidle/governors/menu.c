@@ -178,7 +178,12 @@ static inline int performance_multiplier(unsigned long nr_iowaiters, unsigned lo
 
 	/* for higher loadavg, we are more reluctant */
 
-	mult += 2 * get_loadavg(load);
+	/*
+	 * this doesn't work as intended - it is almost always 0, but can
+	 * sometimes, depending on workload, spike very high into the hundreds
+	 * even when the average cpu load is under 10%.
+	 */
+	/* mult += 2 * get_loadavg(); */
 
 	/* for IO wait tasks (per cpu!) we add 5x each */
 	mult += 10 * nr_iowaiters;
@@ -317,9 +322,12 @@ static int menu_select(struct cpuidle_driver *drv, struct cpuidle_device *dev)
 	 * operands are 32 bits.
 	 * Make sure to round up for half microseconds.
 	 */
-	data->predicted_us = div_round64((uint64_t)data->next_timer_us *
-					 data->correction_factor[data->bucket],
-					 RESOLUTION * DECAY);
+	if (drv->skip_correction)
+		data->predicted_us = data->next_timer_us;
+	else
+		data->predicted_us = div_round64((uint64_t)data->next_timer_us *
+				data->correction_factor[data->bucket],
+				RESOLUTION * DECAY);
 
 	get_typical_interval(data);
 

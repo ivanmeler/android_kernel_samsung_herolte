@@ -119,6 +119,28 @@ _c_flags += $(if $(patsubst n%,, \
 		$(CFLAGS_GCOV))
 endif
 
+#
+# Enable address sanitizer flags for kernel except some files or directories
+# we don't want to check (depends on variables KASAN_SANITIZE_obj.o, KASAN_SANITIZE)
+#
+ifeq ($(CONFIG_KASAN),y)
+_c_flags += $(if $(patsubst n%,, \
+		$(KASAN_SANITIZE_$(basetarget).o)$(KASAN_SANITIZE)$(CONFIG_KASAN_SANITIZE_ALL)), \
+		$(CFLAGS_KASAN))
+endif
+
+ifeq ($(CONFIG_UBSAN),y)
+_c_flags += $(if $(patsubst n%,, \
+		$(UBSAN_SANITIZE_$(basetarget).o)$(UBSAN_SANITIZE)$(CONFIG_UBSAN_SANITIZE_ALL)), \
+		$(CFLAGS_UBSAN))
+endif
+
+ifeq ($(CONFIG_KCOV),y)
+_c_flags += $(if $(patsubst n%,, \
+	$(KCOV_INSTRUMENT_$(basetarget).o)$(KCOV_INSTRUMENT)y), \
+	$(CFLAGS_KCOV))
+endif
+
 # If building the kernel in a separate objtree expand all occurrences
 # of -Idir to -I$(srctree)/dir except for absolute paths (starting with '/').
 
@@ -152,8 +174,11 @@ ld_flags       = $(LDFLAGS) $(ldflags-y)
 dtc_cpp_flags  = -Wp,-MD,$(depfile).pre.tmp -nostdinc                    \
 		 -I$(srctree)/arch/$(SRCARCH)/boot/dts                   \
 		 -I$(srctree)/arch/$(SRCARCH)/boot/dts/include           \
+		 -I$(srctree)/include                                    \
 		 -I$(srctree)/drivers/of/testcase-data                   \
-		 -undef -D__DTS__
+		 -undef -D__DTS__                                        \
+		 -DANDROID_VERSION=$(ANDROID_VERSION)                    \
+		 -DANDROID_MAJOR_VERSION=$(ANDROID_MAJOR_VERSION)
 
 # Finds the multi-part object the current object will be linked into
 modname-multi = $(sort $(foreach m,$(multi-used),\
@@ -294,6 +319,12 @@ _dtbinst_pre_:
 
 %.dtb_dtbinst_: $(obj)/%.dtb _dtbinst_pre_
 	$(call cmd,dtb_install,$(INSTALL_DTBS_PATH))
+
+# cat
+# ---------------------------------------------------------------------------
+# Concatentate multiple files together
+quiet_cmd_cat = CAT     $@
+cmd_cat = (cat $(filter-out FORCE,$^) > $@) || (rm -f $@; false)
 
 # Bzip2
 # ---------------------------------------------------------------------------

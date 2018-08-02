@@ -35,8 +35,6 @@
 config SCSI_UFSHCD
 	tristate "Universal Flash Storage Controller Driver Core"
 	depends on SCSI && SCSI_DMA
-	select PM_DEVFREQ
-	select DEVFREQ_GOV_SIMPLE_ONDEMAND
 	---help---
 	This selects the support for UFS devices in Linux, say Y and make
 	  sure that you know the name of your UFS host adapter (the card
@@ -49,6 +47,14 @@ config SCSI_UFSHCD
 	  However, do not compile this as a module if your root file system
 	  (the one containing the directory /) is located on a UFS device.
 
+config UFS_UN_18DIGITS
+	bool "The digits of SEC unique number"
+	depends on SCSI_UFSHCD
+
+config UFS_DYNAMIC_H8
+	bool "UFS Dynamic Hibernation (EXPERIMENTAL)"
+	depends on SCSI_UFSHCD
+
 config SCSI_UFSHCD_PCI
 	tristate "PCI bus based UFS Controller support"
 	depends on SCSI_UFSHCD && PCI
@@ -57,8 +63,6 @@ config SCSI_UFSHCD_PCI
 	you have UFS Host Controller with PCI Interface.
 
 	  If you have a controller with this interface, say Y or M here.
-
-	  If unsure, say N.
 
 config SCSI_UFSHCD_PLATFORM
 	tristate "Platform bus based UFS Controller support"
@@ -70,3 +74,24 @@ config SCSI_UFSHCD_PLATFORM
 	If you have a controller with this interface, say Y or M here.
 
 	  If unsure, say N.
+
+config SCSI_UFS_TEST_MODE
+	bool "Samsung UFS TEST feature"
+	depends on SCSI_UFSHCD && SCSI_UFSHCD_PLATFORM
+	---help---
+	  This selects support for test mode for debugging.
+	  Select this option if this feature is needed on working.
+	  
+config SCSI_UFS_EXYNOS
+	tristate "EXYNOS UFS Host Controller Driver"
+	depends on SCSI_UFSHCD && SCSI_UFSHCD_PLATFORM
+	---help---
+	  This selects the EXYNOS UFS host controller driver.
+
+	  If you have a controller with this interface, say Y or M here.
+
+	  If unsure, say N.
+
+config NO_ORDERED_DISCARD
+	bool "Do not set ordered flag on discard"
+	default n

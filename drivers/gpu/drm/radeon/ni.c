@@ -1269,7 +1269,8 @@ static int cayman_pcie_gart_enable(struct radeon_device *rdev)
 	 */
 	for (i = 1; i < 8; i++) {
 		WREG32(VM_CONTEXT0_PAGE_TABLE_START_ADDR + (i << 2), 0);
-		WREG32(VM_CONTEXT0_PAGE_TABLE_END_ADDR + (i << 2), rdev->vm_manager.max_pfn);
+		WREG32(VM_CONTEXT0_PAGE_TABLE_END_ADDR + (i << 2),
+			rdev->vm_manager.max_pfn - 1);
 		WREG32(VM_CONTEXT0_PAGE_TABLE_BASE_ADDR + (i << 2),
 		       rdev->vm_manager.saved_table_addr[i]);
 	}
@@ -1338,9 +1339,7 @@ static void cayman_pcie_gart_fini(struct radeon_device *rdev)
 void cayman_cp_int_cntl_setup(struct radeon_device *rdev,
 			      int ring, u32 cp_int_cntl)
 {
-	u32 srbm_gfx_cntl = RREG32(SRBM_GFX_CNTL) & ~3;
-
-	WREG32(SRBM_GFX_CNTL, srbm_gfx_cntl | (ring & 3));
+	WREG32(SRBM_GFX_CNTL, RINGID(ring));
 	WREG32(CP_INT_CNTL, cp_int_cntl);
 }
 

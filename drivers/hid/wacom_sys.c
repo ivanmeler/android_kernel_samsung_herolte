@@ -1101,13 +1101,15 @@ static int wacom_allocate_inputs(struct wacom *wacom)
 
 	input_dev = wacom_allocate_input(wacom);
 	pad_input_dev = wacom_allocate_input(wacom);
+
+	wacom_wac->input = input_dev;
+	wacom_wac->pad_input = pad_input_dev;
+
 	if (!input_dev || !pad_input_dev) {
 		wacom_free_inputs(wacom);
 		return -ENOMEM;
 	}
 
-	wacom_wac->input = input_dev;
-	wacom_wac->pad_input = pad_input_dev;
 	wacom_wac->pad_input->name = wacom_wac->pad_name;
 
 	return 0;

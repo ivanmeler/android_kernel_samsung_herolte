@@ -133,11 +133,13 @@ enum {
 #define UFSHCD_ERROR_MASK	(UIC_ERROR |\
 				DEVICE_FATAL_ERROR |\
 				CONTROLLER_FATAL_ERROR |\
-				SYSTEM_BUS_FATAL_ERROR)
+				SYSTEM_BUS_FATAL_ERROR |\
+				UIC_LINK_LOST)
 
 #define INT_FATAL_ERRORS	(DEVICE_FATAL_ERROR |\
 				CONTROLLER_FATAL_ERROR |\
-				SYSTEM_BUS_FATAL_ERROR)
+				SYSTEM_BUS_FATAL_ERROR |\
+				UIC_LINK_LOST)
 
 /* HCS - Host Controller Status 30h */
 #define DEVICE_PRESENT				UFS_BIT(0)
@@ -168,15 +170,29 @@ enum {
 /* UECDL - Host UIC Error Code Data Link Layer 3Ch */
 #define UIC_DATA_LINK_LAYER_ERROR		UFS_BIT(31)
 #define UIC_DATA_LINK_LAYER_ERROR_CODE_MASK	0x7FFF
-#define UIC_DATA_LINK_LAYER_ERROR_PA_INIT	0x2000
+#define UIC_DATA_LINK_LAYER_ERROR_TCX_REP_TIMER_EXP	UFS_BIT(1)
+#define UIC_DATA_LINK_LAYER_ERROR_AFCX_REQ_TIMER_EXP	UFS_BIT(2)
+#define UIC_DATA_LINK_LAYER_ERROR_FCX_PRO_TIMER_EXP	UFS_BIT(3)
+#define UIC_DATA_LINK_LAYER_ERROR_RX_BUF_OF	UFS_BIT(5)
+#define UIC_DATA_LINK_LAYER_ERROR_PA_INIT	UFS_BIT(13)
 
 /* UECN - Host UIC Error Code Network Layer 40h */
 #define UIC_NETWORK_LAYER_ERROR			UFS_BIT(31)
 #define UIC_NETWORK_LAYER_ERROR_CODE_MASK	0x7
+#define UIC_NETWORK_UNSUPPORTED_HEADER_TYPE	BIT(0)
+#define UIC_NETWORK_BAD_DEVICEID_ENC		BIT(1)
+#define UIC_NETWORK_LHDR_TRAP_PACKET_DROPPING	BIT(2)
 
 /* UECT - Host UIC Error Code Transport Layer 44h */
 #define UIC_TRANSPORT_LAYER_ERROR		UFS_BIT(31)
 #define UIC_TRANSPORT_LAYER_ERROR_CODE_MASK	0x7F
+#define UIC_TRANSPORT_UNSUPPORTED_HEADER_TYPE	BIT(0)
+#define UIC_TRANSPORT_UNKNOWN_CPORTID		BIT(1)
+#define UIC_TRANSPORT_NO_CONNECTION_RX		BIT(2)
+#define UIC_TRANSPORT_CONTROLLED_SEGMENT_DROPPING	BIT(3)
+#define UIC_TRANSPORT_BAD_TC			BIT(4)
+#define UIC_TRANSPORT_E2E_CREDIT_OVERFOW	BIT(5)
+#define UIC_TRANSPORT_SAFETY_VALUE_DROPPING	BIT(6)
 
 /* UECDME - Host UIC Error Code DME 48h */
 #define UIC_DME_ERROR			UFS_BIT(31)
@@ -211,6 +227,16 @@ enum {
 #define UIC_ARG_MIB(attr)		UIC_ARG_MIB_SEL(attr, 0)
 #define UIC_ARG_ATTR_TYPE(t)		(((t) & 0xFF) << 16)
 #define UIC_GET_ATTR_ID(v)		(((v) >> 16) & 0xFFFF)
+
+/*
+ * UFS Protector configuration
+ */
+#define UFS_BYPASS_SECTOR_BEGIN			0x0
+#define UFS_ENCRYPTION_SECTOR_BEGIN		0x0000FFFF
+#define UFS_FILE_ENCRYPTION_SECTOR_BEGIN	0xFFFF0000
+
+#define UFSHCI_SECTOR_SIZE			0x1000
+#define MIN_SECTOR_SIZE				0x200
 
 /* UIC Commands */
 enum uic_cmd_dme {
@@ -304,6 +330,11 @@ enum {
 /* The granularity of the data byte count field in the PRDT is 32-bit */
 #define PRDT_DATA_BYTE_COUNT_PAD	4
 
+/* FMP bypass/encrypt mode */
+#define CLEAR		0
+#define AES_CBC		1
+#define AES_XTS		2
+
 /**
  * struct ufshcd_sg_entry - UFSHCI PRD Entry
  * @base_addr: Lower 32bit physical address DW-0
@@ -316,6 +347,42 @@ struct ufshcd_sg_entry {
 	__le32    upper_addr;
 	__le32    reserved;
 	__le32    size;
+#define FKL	BIT(26)
+#define DKL	BIT(27)
+#define SET_FAS(d, v) \
+	((d)->size = ((d)->size & 0xcfffffff) | v << 28)
+#define SET_DAS(d, v) \
+	((d)->size = ((d)->size & 0x3fffffff) | v << 30)
+#if defined(CONFIG_UFS_FMP_DM_CRYPT) || defined(CONFIG_UFS_FMP_ECRYPT_FS)
+	__le32	file_iv0;
+	__le32	file_iv1;
+	__le32	file_iv2;
+	__le32	file_iv3;
+	__le32	file_enckey0;
+	__le32	file_enckey1;
+	__le32	file_enckey2;
+	__le32	file_enckey3;
+	__le32	file_enckey4;
+	__le32	file_enckey5;
+	__le32	file_enckey6;
+	__le32	file_enckey7;
+	__le32	file_twkey0;
+	__le32	file_twkey1;
+	__le32	file_twkey2;
+	__le32	file_twkey3;
+	__le32	file_twkey4;
+	__le32	file_twkey5;
+	__le32	file_twkey6;
+	__le32	file_twkey7;
+	__le32	disk_iv0;
+	__le32	disk_iv1;
+	__le32	disk_iv2;
+	__le32	disk_iv3;
+	__le32	reserved0;
+	__le32	reserved1;
+	__le32	reserved2;
+	__le32	reserved3;
+#endif
 };
 
 /**

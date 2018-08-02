@@ -10,6 +10,8 @@
 #include <linux/kernel.h>
 #include <linux/delay.h>
 #include <linux/init.h>
+#include <linux/of.h>
+#include <linux/of_pci.h>
 #include <linux/pci.h>
 #include <linux/pm.h>
 #include <linux/slab.h>
@@ -1142,8 +1144,8 @@ EXPORT_SYMBOL_GPL(pci_store_saved_state);
  * @dev: PCI device that we're dealing with
  * @state: Saved state returned from pci_store_saved_state()
  */
-static int pci_load_saved_state(struct pci_dev *dev,
-				struct pci_saved_state *state)
+int pci_load_saved_state(struct pci_dev *dev,
+			 struct pci_saved_state *state)
 {
 	struct pci_cap_saved_data *cap;
 
@@ -1171,6 +1173,7 @@ static int pci_load_saved_state(struct pci_dev *dev,
 	dev->state_saved = true;
 	return 0;
 }
+EXPORT_SYMBOL_GPL(pci_load_saved_state);
 
 /**
  * pci_load_and_free_saved_state - Reload the save state pointed to by state,
@@ -1683,8 +1686,8 @@ static void pci_pme_list_scan(struct work_struct *work)
 		}
 	}
 	if (!list_empty(&pci_pme_list))
-		schedule_delayed_work(&pci_pme_work,
-				      msecs_to_jiffies(PME_TIMEOUT));
+		queue_delayed_work(system_freezable_wq, &pci_pme_work,
+				   msecs_to_jiffies(PME_TIMEOUT));
 	mutex_unlock(&pci_pme_list_mutex);
 }
 
@@ -1744,8 +1747,9 @@ void pci_pme_active(struct pci_dev *dev, bool enable)
 			mutex_lock(&pci_pme_list_mutex);
 			list_add(&pme_dev->list, &pci_pme_list);
 			if (list_is_singular(&pci_pme_list))
-				schedule_delayed_work(&pci_pme_work,
-						      msecs_to_jiffies(PME_TIMEOUT));
+				queue_delayed_work(system_freezable_wq,
+						   &pci_pme_work,
+						   msecs_to_jiffies(PME_TIMEOUT));
 			mutex_unlock(&pci_pme_list_mutex);
 		} else {
 			mutex_lock(&pci_pme_list_mutex);
@@ -1985,6 +1989,10 @@ bool pci_dev_run_wake(struct pci_dev *dev)
 	if (!dev->pme_support)
 		return false;
 
+	/* PME-capable in principle, but not from the intended sleep state */
+	if (!pci_pme_capable(dev, pci_target_state(dev)))
+		return false;
+
 	while (bus->parent) {
 		struct pci_dev *bridge = bus->self;
 
@@ -2046,7 +2054,6 @@ void pci_pm_init(struct pci_dev *dev)
 	pm_runtime_forbid(&dev->dev);
 	pm_runtime_set_active(&dev->dev);
 	pm_runtime_enable(&dev->dev);
-	device_enable_async_suspend(&dev->dev);
 	dev->wakeup_prepared = false;
 
 	dev->pm_cap = 0;
@@ -3206,7 +3213,7 @@ static int pci_pm_reset(struct pci_dev *dev, int probe)
 {
 	u16 csr;
 
-	if (!dev->pm_cap)
+	if (!dev->pm_cap || dev->dev_flags & PCI_DEV_FLAGS_NO_PM_RESET)
 		return -ENOTTY;
 
 	pci_read_config_word(dev, dev->pm_cap + PCI_PM_CTRL, &csr);
@@ -3572,6 +3579,10 @@ EXPORT_SYMBOL_GPL(pci_try_reset_function);
 static bool pci_bus_resetable(struct pci_bus *bus)
 {
 	struct pci_dev *dev;
+
+
+	if (bus->self && (bus->self->dev_flags & PCI_DEV_FLAGS_NO_BUS_RESET))
+		return false;
 
 	list_for_each_entry(dev, &bus->devices, bus_list) {
 		if (dev->dev_flags & PCI_DEV_FLAGS_NO_BUS_RESET ||
@@ -4299,6 +4310,17 @@ bool pci_device_is_present(struct pci_dev *pdev)
 }
 EXPORT_SYMBOL_GPL(pci_device_is_present);
 
+void pci_ignore_hotplug(struct pci_dev *dev)
+{
+	struct pci_dev *bridge = dev->bus->self;
+
+	dev->ignore_hotplug = 1;
+	/* Propagate the "ignore hotplug" setting to the parent bridge. */
+	if (bridge)
+		bridge->ignore_hotplug = 1;
+}
+EXPORT_SYMBOL_GPL(pci_ignore_hotplug);
+
 #define RESOURCE_ALIGNMENT_PARAM_SIZE COMMAND_LINE_SIZE
 static char resource_alignment_param[RESOURCE_ALIGNMENT_PARAM_SIZE] = {0};
 static DEFINE_SPINLOCK(resource_alignment_lock);
@@ -4479,6 +4501,55 @@ int pci_get_new_domain_nr(void)
 {
 	return atomic_inc_return(&__domain_nr);
 }
+
+#ifdef CONFIG_PCI_DOMAINS_GENERIC
+void pci_bus_assign_domain_nr(struct pci_bus *bus, struct device *parent)
+{
+	static int use_dt_domains = -1;
+	int domain = -1;
+
+	if (parent)
+		domain = of_get_pci_domain_nr(parent->of_node);
+	/*
+	 * Check DT domain and use_dt_domains values.
+	 *
+	 * If DT domain property is valid (domain >= 0) and
+	 * use_dt_domains != 0, the DT assignment is valid since this means
+	 * we have not previously allocated a domain number by using
+	 * pci_get_new_domain_nr(); we should also update use_dt_domains to
+	 * 1, to indicate that we have just assigned a domain number from
+	 * DT.
+	 *
+	 * If DT domain property value is not valid (ie domain < 0), and we
+	 * have not previously assigned a domain number from DT
+	 * (use_dt_domains != 1) we should assign a domain number by
+	 * using the:
+	 *
+	 * pci_get_new_domain_nr()
+	 *
+	 * API and update the use_dt_domains value to keep track of method we
+	 * are using to assign domain numbers (use_dt_domains = 0).
+	 *
+	 * All other combinations imply we have a platform that is trying
+	 * to mix domain numbers obtained from DT and pci_get_new_domain_nr(),
+	 * which is a recipe for domain mishandling and it is prevented by
+	 * invalidating the domain value (domain = -1) and printing a
+	 * corresponding error.
+	 */
+	if (domain >= 0 && use_dt_domains) {
+		use_dt_domains = 1;
+	} else if (domain < 0 && use_dt_domains != 1) {
+		use_dt_domains = 0;
+		domain = pci_get_new_domain_nr();
+	} else {
+		dev_err(parent, "Node %s has inconsistent \"linux,pci-domain\" property in DT\n",
+			parent->of_node->full_name);
+		domain = -1;
+	}
+
+	bus->domain_nr = domain;
+}
+#endif
 #endif
 
 /**

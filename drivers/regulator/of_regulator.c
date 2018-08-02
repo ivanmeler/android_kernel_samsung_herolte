@@ -73,6 +73,10 @@ static void of_get_regulation_constraints(struct device_node *np,
 	ret = of_property_read_u32(np, "regulator-enable-ramp-delay", &pval);
 	if (!ret)
 		constraints->enable_time = pval;
+
+	ret = of_property_read_u32(np, "regulator-initial-mode", &pval);
+	if (!ret)
+		constraints->initial_mode = pval;
 }
 
 /**

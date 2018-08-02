@@ -61,6 +61,13 @@ DEFINE_EVENT(regulator_basic, regulator_disable,
 
 );
 
+DEFINE_EVENT(regulator_basic, regulator_disable_delay,
+
+	TP_PROTO(const char *name),
+
+	TP_ARGS(name)
+
+);
 DEFINE_EVENT(regulator_basic, regulator_disable_complete,
 
 	TP_PROTO(const char *name),

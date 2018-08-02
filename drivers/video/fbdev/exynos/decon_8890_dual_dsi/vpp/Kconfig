@@ -1,0 +1,6 @@
+config EXYNOS_VPP
+	bool "Samsung Exynos Video Post Processor driver"
+	depends on EXYNOS_DECON_DUAL_DSI
+	default y
+	help
+	  Enable VPP driver.

@@ -1,0 +1,122 @@
+#
+# Wacom configuration
+#
+
+config INPUT_WACOM
+	tristate "Wacom penabled i2c touchscreen"
+	depends on I2C
+	help
+	  Say Y here if you have an Wacom penabled i2c touchscreen
+	  connected to your system.
+
+	  If unsure, say N.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called wacom_GXXX.
+
+config EPEN_WACOM_G5SP
+	tristate "Wacom G5SP penabled i2c touchscreen"
+	depends on I2C
+	help
+	  Say Y here if you have an Wacom G5SP penabled i2c touchscreen
+	  connected to your system.
+
+	  If unsure, say N.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called wacom_G5SP.
+
+config EPEN_WACOM_G9PM
+	tristate "Wacom G9PM penabled i2c touchscreen"
+	depends on I2C
+	help
+	  Say Y here if you have an Wacom G9PM penabled i2c touchscreen
+	  connected to your system.
+
+	  If unsure, say N.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called wacom_G9PM.
+
+config EPEN_WACOM_G9PL
+	tristate "Wacom G9PL penabled i2c touchscreen"
+	depends on I2C
+	help
+	  Say Y here if you have an Wacom G9PL penabled i2c touchscreen
+	  connected to your system.
+
+	  If unsure, say N.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called wacom_G9PL.
+
+config EPEN_WACOM_G9PLL
+	tristate "Wacom G9PLL penabled i2c touchscreen"
+	depends on I2C
+	help
+	  Say Y here if you have an Wacom G9PLL penabled i2c touchscreen
+	  connected to your system.
+
+	  If unsure, say N.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called wacom_G9PLL.
+
+config EPEN_WACOM_G10PM
+	tristate "Wacom G10PM penabled i2c touchscreen"
+	depends on I2C
+	help
+	  Say Y here if you have an Wacom G10PM penabled i2c touchscreen
+	  connected to your system.
+
+	  If unsure, say N.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called wacom_G10PM.
+
+config EPEN_WACOM_W9012
+	tristate "Wacom W9012 penabled i2c touchscreen"
+	depends on I2C
+	help
+	  Say Y here if you have an Wacom G10PM penabled i2c touchscreen
+	  connected to your system.
+
+	  If unsure, say N.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called wacom_W9012.
+
+config EPEN_WACOM_W9014
+	tristate "Wacom W9014 penabled i2c touchscreen"
+	depends on I2C
+	help
+	  Say Y here if you have an Wacom G10PM penabled i2c touchscreen
+	  connected to your system.
+
+	  If unsure, say N.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called wacom_W9014.
+
+config EPEN_WACOM_W9018
+	tristate "Wacom W9018 penabled i2c touchscreen"
+	depends on I2C
+	help
+	  Say Y here if you have an Wacom G10PM penabled i2c touchscreen
+	  connected to your system.
+
+	  If unsure, say N.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called wacom_W9018.
+
+
+config WACOM_LCD_FREQ_COMPENSATE
+	bool "Wacom LCD vsync/hsync frequency compensate rotuine"
+	help
+	  Say Y here if you have an Wacom lcd freq compensate config
+
+	  If unsure, say N.
+
+	  To compile this driver as a module, choose M here: the
+	  module will be called wacom.

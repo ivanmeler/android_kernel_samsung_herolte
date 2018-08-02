@@ -38,6 +38,7 @@
 #include <linux/mm.h>
 #include <linux/delay.h>
 #include <linux/errno.h>
+#include <linux/file.h>
 #include <linux/string.h>
 #include <linux/ratelimit.h>
 #include <linux/printk.h>
@@ -242,15 +243,12 @@ const u32 nfs4_fsinfo_bitmap[3] = { FATTR4_WORD0_MAXFILESIZE
 };
 
 const u32 nfs4_fs_locations_bitmap[3] = {
-	FATTR4_WORD0_TYPE
-	| FATTR4_WORD0_CHANGE
+	FATTR4_WORD0_CHANGE
 	| FATTR4_WORD0_SIZE
 	| FATTR4_WORD0_FSID
 	| FATTR4_WORD0_FILEID
 	| FATTR4_WORD0_FS_LOCATIONS,
-	FATTR4_WORD1_MODE
-	| FATTR4_WORD1_NUMLINKS
-	| FATTR4_WORD1_OWNER
+	FATTR4_WORD1_OWNER
 	| FATTR4_WORD1_OWNER_GROUP
 	| FATTR4_WORD1_RAWDEV
 	| FATTR4_WORD1_SPACE_USED
@@ -1230,6 +1228,7 @@ static void __update_open_stateid(struct nfs4_state *state, nfs4_stateid *open_s
 	 * Protect the call to nfs4_state_set_mode_locked and
 	 * serialise the stateid update
 	 */
+	spin_lock(&state->owner->so_lock);
 	write_seqlock(&state->seqlock);
 	if (deleg_stateid != NULL) {
 		nfs4_stateid_copy(&state->stateid, deleg_stateid);
@@ -1238,7 +1237,6 @@ static void __update_open_stateid(struct nfs4_state *state, nfs4_stateid *open_s
 	if (open_stateid != NULL)
 		nfs_set_open_stateid_locked(state, open_stateid, fmode);
 	write_sequnlock(&state->seqlock);
-	spin_lock(&state->owner->so_lock);
 	update_open_stateflags(state, fmode);
 	spin_unlock(&state->owner->so_lock);
 }
@@ -2257,9 +2255,9 @@ static int _nfs4_open_and_get_state(struct nfs4_opendata *opendata,
 		dentry = d_add_unique(dentry, igrab(state->inode));
 		if (dentry == NULL) {
 			dentry = opendata->dentry;
-		} else if (dentry != ctx->dentry) {
+		} else {
 			dput(ctx->dentry);
-			ctx->dentry = dget(dentry);
+			ctx->dentry = dentry;
 		}
 		nfs_set_verifier(dentry,
 				nfs_save_change_attribute(opendata->dir->d_inode));
@@ -2345,7 +2343,7 @@ static int _nfs4_do_open(struct inode *dir,
 		goto err_free_label;
 	state = ctx->state;
 
-	if ((opendata->o_arg.open_flags & O_EXCL) &&
+	if ((opendata->o_arg.open_flags & (O_CREAT|O_EXCL)) == (O_CREAT|O_EXCL) &&
 	    (opendata->o_arg.createmode != NFS4_CREATE_GUARDED)) {
 		nfs4_exclusive_attrset(opendata, sattr);
 
@@ -2634,11 +2632,10 @@ static void nfs4_close_prepare(struct rpc_task *task, void *data)
 			call_close |= is_wronly;
 		else if (is_wronly)
 			calldata->arg.fmode |= FMODE_WRITE;
+		if (calldata->arg.fmode != (FMODE_READ|FMODE_WRITE))
+			call_close |= is_rdwr;
 	} else if (is_rdwr)
 		calldata->arg.fmode |= FMODE_READ|FMODE_WRITE;
-
-	if (calldata->arg.fmode == 0)
-		call_close |= is_rdwr;
 
 	if (!nfs4_valid_open_stateid(state))
 		call_close = 0;
@@ -3057,16 +3054,13 @@ int nfs4_proc_get_rootfh(struct nfs_server *server, struct nfs_fh *fhandle,
 			 struct nfs_fsinfo *info,
 			 bool auth_probe)
 {
-	int status;
+	int status = 0;
 
-	switch (auth_probe) {
-	case false:
+	if (!auth_probe)
 		status = nfs4_lookup_root(server, fhandle, info);
-		if (status != -NFS4ERR_WRONGSEC)
-			break;
-	default:
+
+	if (auth_probe || status == NFS4ERR_WRONGSEC)
 		status = nfs4_do_find_root_sec(server, fhandle, info);
-	}
 
 	if (status == 0)
 		status = nfs4_server_capabilities(server, fhandle);
@@ -5550,6 +5544,7 @@ static struct nfs4_lockdata *nfs4_alloc_lockdata(struct file_lock *fl,
 	p->server = server;
 	atomic_inc(&lsp->ls_count);
 	p->ctx = get_nfs_open_context(ctx);
+	get_file(fl->fl_file);
 	memcpy(&p->fl, fl, sizeof(p->fl));
 	return p;
 out_free_seqid:
@@ -5639,6 +5634,7 @@ static void nfs4_lock_release(void *calldata)
 		nfs_free_seqid(data->arg.lock_seqid);
 	nfs4_put_lock_state(data->lsp);
 	put_nfs_open_context(data->ctx);
+	fput(data->fl.fl_file);
 	kfree(data);
 	dprintk("%s: done!\n", __func__);
 }
@@ -6144,9 +6140,7 @@ static int _nfs4_proc_fs_locations(struct rpc_clnt *client, struct inode *dir,
 				   struct page *page)
 {
 	struct nfs_server *server = NFS_SERVER(dir);
-	u32 bitmask[3] = {
-		[0] = FATTR4_WORD0_FSID | FATTR4_WORD0_FS_LOCATIONS,
-	};
+	u32 bitmask[3];
 	struct nfs4_fs_locations_arg args = {
 		.dir_fh = NFS_FH(dir),
 		.name = name,
@@ -6165,12 +6159,15 @@ static int _nfs4_proc_fs_locations(struct rpc_clnt *client, struct inode *dir,
 
 	dprintk("%s: start\n", __func__);
 
+	bitmask[0] = nfs4_fattr_bitmap[0] | FATTR4_WORD0_FS_LOCATIONS;
+	bitmask[1] = nfs4_fattr_bitmap[1];
+
 	/* Ask for the fileid of the absent filesystem if mounted_on_fileid
 	 * is not supported */
 	if (NFS_SERVER(dir)->attr_bitmask[1] & FATTR4_WORD1_MOUNTED_ON_FILEID)
-		bitmask[1] |= FATTR4_WORD1_MOUNTED_ON_FILEID;
+		bitmask[0] &= ~FATTR4_WORD0_FILEID;
 	else
-		bitmask[0] |= FATTR4_WORD0_FILEID;
+		bitmask[1] &= ~FATTR4_WORD1_MOUNTED_ON_FILEID;
 
 	nfs_fattr_init(&fs_locations->fattr);
 	fs_locations->server = server;
@@ -8385,7 +8382,6 @@ static const struct nfs4_minor_version_ops nfs_v4_0_minor_ops = {
 	.minor_version = 0,
 	.init_caps = NFS_CAP_READDIRPLUS
 		| NFS_CAP_ATOMIC_OPEN
-		| NFS_CAP_CHANGE_ATTR
 		| NFS_CAP_POSIX_LOCK,
 	.init_client = nfs40_init_client,
 	.shutdown_client = nfs40_shutdown_client,
@@ -8404,7 +8400,6 @@ static const struct nfs4_minor_version_ops nfs_v4_1_minor_ops = {
 	.minor_version = 1,
 	.init_caps = NFS_CAP_READDIRPLUS
 		| NFS_CAP_ATOMIC_OPEN
-		| NFS_CAP_CHANGE_ATTR
 		| NFS_CAP_POSIX_LOCK
 		| NFS_CAP_STATEID_NFSV41
 		| NFS_CAP_ATOMIC_OPEN_V1,
@@ -8426,7 +8421,6 @@ static const struct nfs4_minor_version_ops nfs_v4_2_minor_ops = {
 	.minor_version = 2,
 	.init_caps = NFS_CAP_READDIRPLUS
 		| NFS_CAP_ATOMIC_OPEN
-		| NFS_CAP_CHANGE_ATTR
 		| NFS_CAP_POSIX_LOCK
 		| NFS_CAP_STATEID_NFSV41
 		| NFS_CAP_ATOMIC_OPEN_V1
@@ -8440,6 +8434,7 @@ static const struct nfs4_minor_version_ops nfs_v4_2_minor_ops = {
 	.reboot_recovery_ops = &nfs41_reboot_recovery_ops,
 	.nograce_recovery_ops = &nfs41_nograce_recovery_ops,
 	.state_renewal_ops = &nfs41_state_renewal_ops,
+	.mig_recovery_ops = &nfs41_mig_recovery_ops,
 };
 #endif
 

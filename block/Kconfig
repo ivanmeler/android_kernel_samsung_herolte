@@ -111,6 +111,20 @@ config BLK_CMDLINE_PARSER
 
 	See Documentation/block/cmdline-partition.txt for more information.
 
+config JOURNAL_DATA_TAG
+	bool "Enable FS journal tagging for UFS & eMMC"
+	default n
+	---help---
+	Enable FS journal tagging for UFS & eMMC. If unsure, say N.
+
+config JOURNAL_DATA_TAG_DEBUG
+	bool "Enable FS journal tagging debug"
+	default n
+	depends on JOURNAL_DATA_TAG
+	---help---
+	Enable FS journal tagging debug. If unsure, say N.
+
+
 menu "Partition Types"
 
 source "block/partitions/Kconfig"
@@ -124,4 +138,9 @@ config BLOCK_COMPAT
 	depends on BLOCK && COMPAT
 	default y
 
+config BLOCK_SUPPORT_STLOG
+ 	bool "Enable storage log"
+ 	depends on BLOCK && PROC_STLOG
+ 	default y
+	
 source block/Kconfig.iosched

@@ -17,8 +17,10 @@
 #include <linux/scatterlist.h>
 #include <linux/dma-mapping.h>
 
+#include <linux/version.h>
 #include <linux/mmc/card.h>
 #include <linux/mmc/host.h>
+#include <linux/sched/rt.h>
 #include "queue.h"
 
 #define MMC_QUEUE_BOUNCESZ	65536
@@ -38,7 +40,7 @@ static int mmc_prep_request(struct request_queue *q, struct request *req)
 		return BLKPREP_KILL;
 	}
 
-	if (mq && mmc_card_removed(mq->card))
+	if (mq && (mmc_card_removed(mq->card) || mmc_access_rpmb(mq)))
 		return BLKPREP_KILL;
 
 	req->cmd_flags |= REQ_DONTPREP;
@@ -50,6 +52,11 @@ static int mmc_queue_thread(void *d)
 {
 	struct mmc_queue *mq = d;
 	struct request_queue *q = mq->queue;
+	struct sched_param scheduler_params = {0};
+
+	scheduler_params.sched_priority = 1;
+
+	sched_setscheduler(current, SCHED_FIFO, &scheduler_params);
 
 	current->flags |= PF_MEMALLOC;
 
@@ -61,7 +68,12 @@ static int mmc_queue_thread(void *d)
 
 		spin_lock_irq(q->queue_lock);
 		set_current_state(TASK_INTERRUPTIBLE);
-		req = blk_fetch_request(q);
+		if (mq->mqrq_prev->req &&
+				(mq->card && (mq->card->type == MMC_TYPE_SD) &&
+				mq->card->host->pm_progress))
+			req = NULL;
+		else
+			req = blk_fetch_request(q);
 		mq->mqrq_cur->req = req;
 		spin_unlock_irq(q->queue_lock);
 
@@ -291,6 +303,15 @@ int mmc_init_queue(struct mmc_queue *mq, struct mmc_card *card,
 	mq->thread = kthread_run(mmc_queue_thread, mq, "mmcqd/%d%s",
 		host->index, subname ? subname : "");
 
+#ifdef CONFIG_LARGE_DIRTY_BUFFER
+	if (mmc_card_sd(card)) {
+		/* apply more throttle on external sdcard */
+		mq->queue->backing_dev_info.max_ratio = 10;
+		mq->queue->backing_dev_info.min_ratio = 10;
+		mq->queue->backing_dev_info.capabilities |= BDI_CAP_STRICTLIMIT;
+	}
+#endif
+
 	if (IS_ERR(mq->thread)) {
 		ret = PTR_ERR(mq->thread);
 		goto free_bounce_sg;
@@ -410,10 +431,12 @@ void mmc_packed_clean(struct mmc_queue *mq)
  * complete any outstanding requests.  This ensures that we
  * won't suspend while a request is being processed.
  */
-void mmc_queue_suspend(struct mmc_queue *mq)
+int mmc_queue_suspend(struct mmc_queue *mq, int wait)
 {
 	struct request_queue *q = mq->queue;
+	struct request *req;
 	unsigned long flags;
+	int rc = 0;
 
 	if (!(mq->flags & MMC_QUEUE_SUSPENDED)) {
 		mq->flags |= MMC_QUEUE_SUSPENDED;
@@ -422,8 +445,43 @@ void mmc_queue_suspend(struct mmc_queue *mq)
 		blk_stop_queue(q);
 		spin_unlock_irqrestore(q->queue_lock, flags);
 
-		down(&mq->thread_sem);
+		rc = down_trylock(&mq->thread_sem);
+		if (rc && !wait) {
+			mq->flags &= ~MMC_QUEUE_SUSPENDED;
+			spin_lock_irqsave(q->queue_lock, flags);
+			blk_start_queue(q);
+			spin_unlock_irqrestore(q->queue_lock, flags);
+			rc = -EBUSY;
+		} else if (wait) {
+			printk("%s: mq->flags: %x, q->queue_flags: 0x%lx, \
+					q->in_flight (%d, %d) \n",
+					mmc_hostname(mq->card->host), mq->flags,
+					q->queue_flags, q->in_flight[0], q->in_flight[1]);
+			mutex_lock(&q->sysfs_lock);
+			if (LINUX_VERSION_CODE >= KERNEL_VERSION(3, 8, 0)) {
+				queue_flag_set_unlocked(QUEUE_FLAG_DYING, q);
+				spin_lock_irqsave(q->queue_lock, flags);
+				queue_flag_set(QUEUE_FLAG_DYING, q);
+			} else if (LINUX_VERSION_CODE < KERNEL_VERSION(3, 8, 0)) {
+				queue_flag_set_unlocked(QUEUE_FLAG_DEAD, q);
+				spin_lock_irqsave(q->queue_lock, flags);
+				queue_flag_set(QUEUE_FLAG_DEAD, q);
+			}
+
+			while ((req = blk_fetch_request(q)) != NULL) {
+				req->cmd_flags |= REQ_QUIET;
+				__blk_end_request_all(req, -EIO);
+			}
+
+			spin_unlock_irqrestore(q->queue_lock, flags);
+			mutex_unlock(&q->sysfs_lock);
+			if (rc) {
+				down(&mq->thread_sem);
+				rc = 0;
+			}
+		}
 	}
+	return rc;
 }
 
 /**

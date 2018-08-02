@@ -398,7 +398,7 @@ sysenter_past_esp:
 	 * A tiny bit of offset fixup is necessary - 4*4 means the 4 words
 	 * pushed above; +8 corresponds to copy_thread's esp0 setting.
 	 */
-	pushl_cfi ((TI_sysenter_return)-THREAD_SIZE+8+4*4)(%esp)
+	pushl_cfi ((TI_sysenter_return)-THREAD_SIZE+TOP_OF_KERNEL_STACK_PADDING+4*4)(%esp)
 	CFI_REL_OFFSET eip, 0
 
 	pushl_cfi %eax
@@ -982,6 +982,9 @@ ENTRY(xen_hypervisor_callback)
 ENTRY(xen_do_upcall)
 1:	mov %esp, %eax
 	call xen_evtchn_do_upcall
+#ifndef CONFIG_PREEMPT
+	call xen_maybe_preempt_hcall
+#endif
 	jmp  ret_from_intr
 	CFI_ENDPROC
 ENDPROC(xen_hypervisor_callback)

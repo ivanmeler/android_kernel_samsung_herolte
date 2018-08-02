@@ -123,6 +123,10 @@ enum scsi_timeouts {
 #define VARIABLE_LENGTH_CMD   0x7f
 #define REPORT_LUNS           0xa0
 #define SECURITY_PROTOCOL_IN  0xa2
+/* SECURITY PROTOCOL */
+#define SECU_PROT_UFS			0xEC
+#define SECU_PROT_SPEC_CERT_DATA	0x0001
+
 #define MAINTENANCE_IN        0xa3
 #define MAINTENANCE_OUT       0xa4
 #define MOVE_MEDIUM           0xa5
@@ -525,6 +529,7 @@ static inline int scsi_is_wlun(u64 lun)
 */
 #define FORMAT_UNIT_TIMEOUT		(2 * 60 * 60 * HZ)
 #define START_STOP_TIMEOUT		(60 * HZ)
+#define UFS_START_STOP_TIMEOUT		(10 * HZ)
 #define MOVE_MEDIUM_TIMEOUT		(5 * 60 * HZ)
 #define READ_ELEMENT_STATUS_TIMEOUT	(5 * 60 * HZ)
 #define READ_DEFECT_DATA_TIMEOUT	(60 * HZ )

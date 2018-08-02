@@ -328,6 +328,9 @@ static void pci_read_bases(struct pci_dev *dev, unsigned int howmany, int rom)
 {
 	unsigned int pos, reg;
 
+	if (dev->non_compliant_bars)
+		return;
+
 	for (pos = 0; pos < howmany; pos++) {
 		struct resource *res = &dev->resource[pos];
 		reg = PCI_BASE_ADDRESS_0 + (pos << 2);
@@ -985,6 +988,8 @@ void set_pcie_port_type(struct pci_dev *pdev)
 {
 	int pos;
 	u16 reg16;
+	int type;
+	struct pci_dev *parent;
 
 	pos = pci_find_capability(pdev, PCI_CAP_ID_EXP);
 	if (!pos)
@@ -994,6 +999,22 @@ void set_pcie_port_type(struct pci_dev *pdev)
 	pdev->pcie_flags_reg = reg16;
 	pci_read_config_word(pdev, pos + PCI_EXP_DEVCAP, &reg16);
 	pdev->pcie_mpss = reg16 & PCI_EXP_DEVCAP_PAYLOAD;
+
+	/*
+	 * A Root Port is always the upstream end of a Link.  No PCIe
+	 * component has two Links.  Two Links are connected by a Switch
+	 * that has a Port on each Link and internal logic to connect the
+	 * two Ports.
+	 */
+	type = pci_pcie_type(pdev);
+	if (type == PCI_EXP_TYPE_ROOT_PORT)
+		pdev->has_secondary_link = 1;
+	else if (type == PCI_EXP_TYPE_UPSTREAM ||
+		 type == PCI_EXP_TYPE_DOWNSTREAM) {
+		parent = pci_upstream_bridge(pdev);
+		if (!parent->has_secondary_link)
+			pdev->has_secondary_link = 1;
+	}
 }
 
 void set_pcie_hotplug_bridge(struct pci_dev *pdev)
@@ -1110,6 +1131,7 @@ int pci_cfg_space_size(struct pci_dev *dev)
 int pci_setup_device(struct pci_dev *dev)
 {
 	u32 class;
+	u16 cmd;
 	u8 hdr_type;
 	struct pci_slot *slot;
 	int pos = 0;
@@ -1133,7 +1155,7 @@ int pci_setup_device(struct pci_dev *dev)
 
 	/* Assume 32-bit PCI; let 64-bit PCI cards (which are far rarer)
 	   set this higher, assuming the system even supports it.  */
-	dev->dma_mask = 0xffffffff;
+	dev->dma_mask = 0xffffffffffffffff;
 
 	dev_set_name(&dev->dev, "%04x:%02x:%02x.%d", pci_domain_nr(dev->bus),
 		     dev->bus->number, PCI_SLOT(dev->devfn),
@@ -1156,6 +1178,16 @@ int pci_setup_device(struct pci_dev *dev)
 	pci_fixup_device(pci_fixup_early, dev);
 	/* device class may be changed after fixup */
 	class = dev->class >> 8;
+
+	if (dev->non_compliant_bars) {
+		pci_read_config_word(dev, PCI_COMMAND, &cmd);
+		if (cmd & (PCI_COMMAND_IO | PCI_COMMAND_MEMORY)) {
+			dev_info(&dev->dev, "device has non-compliant BARs; disabling IO/MEM decoding\n");
+			cmd &= ~PCI_COMMAND_IO;
+			cmd &= ~PCI_COMMAND_MEMORY;
+			pci_write_config_word(dev, PCI_COMMAND, cmd);
+		}
+	}
 
 	switch (dev->hdr_type) {		    /* header type */
 	case PCI_HEADER_TYPE_NORMAL:		    /* standard header */
@@ -1297,8 +1329,16 @@ static void program_hpp_type0(struct pci_dev *dev, struct hpp_type0 *hpp)
 
 static void program_hpp_type1(struct pci_dev *dev, struct hpp_type1 *hpp)
 {
-	if (hpp)
-		dev_warn(&dev->dev, "PCI-X settings not supported\n");
+	int pos;
+
+	if (!hpp)
+		return;
+
+	pos = pci_find_capability(dev, PCI_CAP_ID_PCIX);
+	if (!pos)
+		return;
+
+	dev_warn(&dev->dev, "PCI-X settings not supported\n");
 }
 
 static void program_hpp_type2(struct pci_dev *dev, struct hpp_type2 *hpp)
@@ -1307,6 +1347,9 @@ static void program_hpp_type2(struct pci_dev *dev, struct hpp_type2 *hpp)
 	u32 reg32;
 
 	if (!hpp)
+		return;
+
+	if (!pci_is_pcie(dev))
 		return;
 
 	if (hpp->revision > 1) {
@@ -1532,10 +1575,10 @@ void pci_device_add(struct pci_dev *dev, struct pci_bus *bus)
 	set_dev_node(&dev->dev, pcibus_to_node(bus));
 	dev->dev.dma_mask = &dev->dma_mask;
 	dev->dev.dma_parms = &dev->dma_parms;
-	dev->dev.coherent_dma_mask = 0xffffffffull;
+	dev->dev.coherent_dma_mask = 0xffffffffffffffffull;
 
 	pci_set_dma_max_seg_size(dev, 65536);
-	pci_set_dma_seg_boundary(dev, 0xffffffff);
+	pci_set_dma_seg_boundary(dev, 0xffffffffffffffff);
 
 	/* Fix up broken headers */
 	pci_fixup_device(pci_fixup_header, dev);
@@ -1948,7 +1991,6 @@ struct pci_bus *pci_create_root_bus(struct device *parent, int bus,
 		goto err_out;
 	}
 	b->bridge = get_device(&bridge->dev);
-	device_enable_async_suspend(b->bridge);
 	pci_set_bus_of_node(b);
 
 	if (!parent)

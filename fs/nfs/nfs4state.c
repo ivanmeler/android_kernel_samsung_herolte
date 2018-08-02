@@ -1455,6 +1455,8 @@ restart:
 					spin_unlock(&state->state_lock);
 				}
 				nfs4_put_open_state(state);
+				clear_bit(NFS4CLNT_RECLAIM_NOGRACE,
+					&state->flags);
 				spin_lock(&sp->so_lock);
 				goto restart;
 			}
@@ -1648,7 +1650,6 @@ static int nfs4_recovery_handle_error(struct nfs_client *clp, int error)
 			break;
 		case -NFS4ERR_STALE_CLIENTID:
 			set_bit(NFS4CLNT_LEASE_EXPIRED, &clp->cl_state);
-			nfs4_state_clear_reclaim_reboot(clp);
 			nfs4_state_start_reclaim_reboot(clp);
 			break;
 		case -NFS4ERR_EXPIRED:

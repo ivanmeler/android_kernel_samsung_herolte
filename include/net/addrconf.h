@@ -1,8 +1,9 @@
 #ifndef _ADDRCONF_H
 #define _ADDRCONF_H
 
-#define MAX_RTR_SOLICITATIONS		3
+#define MAX_RTR_SOLICITATIONS		-1		/* unlimited */
 #define RTR_SOLICITATION_INTERVAL	(4*HZ)
+#define RTR_SOLICITATION_MAX_INTERVAL	(3600*HZ)	/* 1 hour */
 
 #define MIN_VALID_LIFETIME		(2*3600)	/* 2 hours */
 
@@ -18,6 +19,8 @@
 #define ADDRCONF_TIMER_FUZZ_MINUS	(HZ > 50 ? HZ / 50 : 1)
 #define ADDRCONF_TIMER_FUZZ		(HZ / 4)
 #define ADDRCONF_TIMER_FUZZ_MAX		(HZ)
+
+#define ADDRCONF_NOTIFY_PRIORITY	0
 
 #include <linux/in.h>
 #include <linux/in6.h>
@@ -62,6 +65,9 @@ int addrconf_set_dstaddr(struct net *net, void __user *arg);
 
 int ipv6_chk_addr(struct net *net, const struct in6_addr *addr,
 		  const struct net_device *dev, int strict);
+int ipv6_chk_addr_and_flags(struct net *net, const struct in6_addr *addr,
+			    const struct net_device *dev, int strict,
+			    u32 banned_flags);
 
 #if defined(CONFIG_IPV6_MIP6) || defined(CONFIG_IPV6_MIP6_MODULE)
 int ipv6_chk_home_addr(struct net *net, const struct in6_addr *addr);
@@ -192,6 +198,8 @@ static inline bool ipv6_is_mld(struct sk_buff *skb, int nexthdr, int offset)
 
 void addrconf_prefix_rcv(struct net_device *dev,
 			 u8 *opt, int len, bool sllao);
+
+u32 addrconf_rt_table(const struct net_device *dev, u32 default_table);
 
 /*
  *	anycast prototypes (anycast.c)

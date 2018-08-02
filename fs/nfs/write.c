@@ -1204,6 +1204,9 @@ int nfs_updatepage(struct file *file, struct page *page,
 	dprintk("NFS:       nfs_updatepage(%pD2 %d@%lld)\n",
 		file, count, (long long)(page_file_offset(page) + offset));
 
+	if (!count)
+		goto out;
+
 	if (nfs_can_extend_write(file, page, inode)) {
 		count = max(count + offset, nfs_page_length(page));
 		offset = 0;
@@ -1214,7 +1217,7 @@ int nfs_updatepage(struct file *file, struct page *page,
 		nfs_set_pageerror(page);
 	else
 		__set_page_dirty_nobuffers(page);
-
+out:
 	dprintk("NFS:       nfs_updatepage returns %d (isize %lld)\n",
 			status, (long long)i_size_read(inode));
 	return status;
@@ -1252,6 +1255,7 @@ static void nfs_initiate_write(struct nfs_pgio_header *hdr,
 static void nfs_redirty_request(struct nfs_page *req)
 {
 	nfs_mark_request_dirty(req);
+	set_bit(NFS_CONTEXT_RESEND_WRITES, &req->wb_context->flags);
 	nfs_unlock_request(req);
 	nfs_end_page_writeback(req);
 	nfs_release_request(req);

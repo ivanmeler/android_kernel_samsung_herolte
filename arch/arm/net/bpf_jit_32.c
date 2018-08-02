@@ -161,19 +161,6 @@ static inline int mem_words_used(struct jit_ctx *ctx)
 	return fls(ctx->seen & SEEN_MEM);
 }
 
-static inline bool is_load_to_a(u16 inst)
-{
-	switch (inst) {
-	case BPF_LD | BPF_W | BPF_LEN:
-	case BPF_LD | BPF_W | BPF_ABS:
-	case BPF_LD | BPF_H | BPF_ABS:
-	case BPF_LD | BPF_B | BPF_ABS:
-		return true;
-	default:
-		return false;
-	}
-}
-
 static void jit_fill_hole(void *area, unsigned int size)
 {
 	u32 *ptr;
@@ -185,7 +172,6 @@ static void jit_fill_hole(void *area, unsigned int size)
 static void build_prologue(struct jit_ctx *ctx)
 {
 	u16 reg_set = saved_regs(ctx);
-	u16 first_inst = ctx->skf->insns[0].code;
 	u16 off;
 
 #ifdef CONFIG_FRAME_POINTER
@@ -215,7 +201,7 @@ static void build_prologue(struct jit_ctx *ctx)
 		emit(ARM_MOV_I(r_X, 0), ctx);
 
 	/* do not leak kernel data to userspace */
-	if ((first_inst != (BPF_RET | BPF_K)) && !(is_load_to_a(first_inst)))
+	if (bpf_needs_clear_a(&ctx->skf->insns[0]))
 		emit(ARM_MOV_I(r_A, 0), ctx);
 
 	/* stack space for the BPF_MEM words */
@@ -449,10 +435,21 @@ static inline void emit_udiv(u8 rd, u8 rm, u8 rn, struct jit_ctx *ctx)
 		return;
 	}
 #endif
-	if (rm != ARM_R0)
-		emit(ARM_MOV_R(ARM_R0, rm), ctx);
+
+	/*
+	 * For BPF_ALU | BPF_DIV | BPF_K instructions, rm is ARM_R4
+	 * (r_A) and rn is ARM_R0 (r_scratch) so load rn first into
+	 * ARM_R1 to avoid accidentally overwriting ARM_R0 with rm
+	 * before using it as a source for ARM_R1.
+	 *
+	 * For BPF_ALU | BPF_DIV | BPF_X rm is ARM_R4 (r_A) and rn is
+	 * ARM_R5 (r_X) so there is no particular register overlap
+	 * issues.
+	 */
 	if (rn != ARM_R1)
 		emit(ARM_MOV_R(ARM_R1, rn), ctx);
+	if (rm != ARM_R0)
+		emit(ARM_MOV_R(ARM_R0, rm), ctx);
 
 	ctx->seen |= SEEN_CALL;
 	emit_mov_i(ARM_R3, (u32)jit_udiv, ctx);

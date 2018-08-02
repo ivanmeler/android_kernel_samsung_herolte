@@ -1074,7 +1074,6 @@ void __init mem_init(void)
 	mem_init_print_info(NULL);
 }
 
-#ifdef CONFIG_DEBUG_RODATA
 const int rodata_test_data = 0xC3;
 EXPORT_SYMBOL_GPL(rodata_test_data);
 
@@ -1144,7 +1143,7 @@ void mark_rodata_ro(void)
 	 * has been zapped already via cleanup_highmem().
 	 */
 	all_end = roundup((unsigned long)_brk_end, PMD_SIZE);
-	set_memory_nx(rodata_start, (all_end - rodata_start) >> PAGE_SHIFT);
+	set_memory_nx(text_end, (all_end - text_end) >> PAGE_SHIFT);
 
 	rodata_test();
 
@@ -1163,8 +1162,6 @@ void mark_rodata_ro(void)
 			(unsigned long) __va(__pa_symbol(rodata_end)),
 			(unsigned long) __va(__pa_symbol(_sdata)));
 }
-
-#endif
 
 int kern_addr_valid(unsigned long addr)
 {

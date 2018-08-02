@@ -1,0 +1,53 @@
+/*
+ * SAMSUNG UNIVERSAL8890 board device tree source
+ *
+ * Copyright (c) 2015 Samsung Electronics Co., Ltd.
+ *		http://www.samsung.com
+ *
+ * This program is free software; you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License version 2 as
+ * published by the Free Software Foundation.
+*/
+
+/ {
+	rgb {
+		led_device_type = <1>;
+		rgb-name = "led_w", "led_r", "led_g", "led_b";
+
+		normal_powermode_current = <10>;
+		low_powermode_current = <2>;
+		br_ratio_r = <100>;
+		br_ratio_g = <40>;
+		br_ratio_b = <210>;
+
+		normal_powermode_current_bk = <10>;
+		low_powermode_current_bk = <2>;
+		br_ratio_r_bk = <210>;
+		br_ratio_g_bk = <70>;
+		br_ratio_b_bk = <370>;
+
+		normal_powermode_current_wh = <10>;
+		low_powermode_current_wh = <2>;
+		br_ratio_r_wh = <260>;
+		br_ratio_g_wh = <100>;
+		br_ratio_b_wh = <1100>;
+
+		normal_powermode_current_gd = <10>;
+		low_powermode_current_gd = <2>;
+		br_ratio_r_gd = <220>;
+		br_ratio_g_gd = <90>;
+		br_ratio_b_gd = <680>;
+
+		normal_powermode_current_sv = <10>;
+		low_powermode_current_sv = <2>;
+		br_ratio_r_sv = <320>;
+		br_ratio_g_sv = <120>;
+		br_ratio_b_sv = <340>;
+
+		normal_powermode_current_pg = <10>;
+		low_powermode_current_pg = <2>;
+		br_ratio_r_pg = <250>;
+		br_ratio_g_pg = <120>;
+		br_ratio_b_pg = <500>;
+	};
+};

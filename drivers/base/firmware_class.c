@@ -545,10 +545,8 @@ static void fw_dev_release(struct device *dev)
 	kfree(fw_priv);
 }
 
-static int firmware_uevent(struct device *dev, struct kobj_uevent_env *env)
+static int do_firmware_uevent(struct firmware_priv *fw_priv, struct kobj_uevent_env *env)
 {
-	struct firmware_priv *fw_priv = to_firmware_priv(dev);
-
 	if (add_uevent_var(env, "FIRMWARE=%s", fw_priv->buf->fw_id))
 		return -ENOMEM;
 	if (add_uevent_var(env, "TIMEOUT=%i", loading_timeout))
@@ -557,6 +555,18 @@ static int firmware_uevent(struct device *dev, struct kobj_uevent_env *env)
 		return -ENOMEM;
 
 	return 0;
+}
+
+static int firmware_uevent(struct device *dev, struct kobj_uevent_env *env)
+{
+	struct firmware_priv *fw_priv = to_firmware_priv(dev);
+	int err = 0;
+
+	mutex_lock(&fw_lock);
+	if (fw_priv->buf)
+		err = do_firmware_uevent(fw_priv, env);
+	mutex_unlock(&fw_lock);
+	return err;
 }
 
 static struct class firmware_class = {
@@ -1134,11 +1144,11 @@ _request_firmware(const struct firmware **firmware_p, const char *name,
 	ret = fw_get_filesystem_firmware(device, fw->priv);
 	if (ret) {
 		if (!(opt_flags & FW_OPT_NO_WARN))
-			dev_warn(device,
+			dev_dbg(device,
 				 "Direct firmware load for %s failed with error %d\n",
 				 name, ret);
 		if (opt_flags & FW_OPT_USERHELPER) {
-			dev_warn(device, "Falling back to user helper\n");
+			dev_dbg(device, "Falling back to user helper\n");
 			ret = fw_load_from_user_helper(fw, name, device,
 						       opt_flags, timeout);
 		}
@@ -1538,7 +1548,7 @@ static void __device_uncache_fw_images(void)
  * then the device driver can load its firmwares easily at
  * time when system is not ready to complete loading firmware.
  */
-static void device_cache_fw_images(void)
+static void device_cache_fw_images(unsigned int suspend_flag)
 {
 	struct firmware_cache *fwc = &fw_cache;
 	int old_timeout;
@@ -1549,26 +1559,28 @@ static void device_cache_fw_images(void)
 	/* cancel uncache work */
 	cancel_delayed_work_sync(&fwc->work);
 
-	/*
-	 * use small loading timeout for caching devices' firmware
-	 * because all these firmware images have been loaded
-	 * successfully at lease once, also system is ready for
-	 * completing firmware loading now. The maximum size of
-	 * firmware in current distributions is about 2M bytes,
-	 * so 10 secs should be enough.
-	 */
-	old_timeout = loading_timeout;
-	loading_timeout = 10;
+	if (suspend_flag) {
+		/*
+		 * use small loading timeout for caching devices' firmware
+		 * because all these firmware images have been loaded
+		 * successfully at lease once, also system is ready for
+		 * completing firmware loading now. The maximum size of
+		 * firmware in current distributions is about 2M bytes,
+		 * so 10 secs should be enough.
+		 */
+		old_timeout = loading_timeout;
+		loading_timeout = 10;
 
-	mutex_lock(&fw_lock);
-	fwc->state = FW_LOADER_START_CACHE;
-	dpm_for_each_dev(NULL, dev_cache_fw_image);
-	mutex_unlock(&fw_lock);
+		mutex_lock(&fw_lock);
+		fwc->state = FW_LOADER_START_CACHE;
+		dpm_for_each_dev(NULL, dev_cache_fw_image);
+		mutex_unlock(&fw_lock);
 
-	/* wait for completion of caching firmware for all devices */
-	async_synchronize_full_domain(&fw_cache_domain);
+		/* wait for completion of caching firmware for all devices */
+		async_synchronize_full_domain(&fw_cache_domain);
 
-	loading_timeout = old_timeout;
+		loading_timeout = old_timeout;
+	}
 }
 
 /**
@@ -1604,12 +1616,14 @@ static void device_uncache_fw_images_delay(unsigned long delay)
 static int fw_pm_notify(struct notifier_block *notify_block,
 			unsigned long mode, void *unused)
 {
+	unsigned int suspend = 0;
+
 	switch (mode) {
 	case PM_HIBERNATION_PREPARE:
 	case PM_SUSPEND_PREPARE:
 	case PM_RESTORE_PREPARE:
 		kill_requests_without_uevent();
-		device_cache_fw_images();
+		device_cache_fw_images(suspend);
 		break;
 
 	case PM_POST_SUSPEND:

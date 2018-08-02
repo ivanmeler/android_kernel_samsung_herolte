@@ -1,0 +1,154 @@
+#
+# sensor drivers configuration
+#
+config SENSORS_SYSFS
+	tristate "Sensors sysfs"
+	help
+	  Support sysfs for sensors.
+          If you say yes here you get sysfs support for
+	  sensor factory test.
+	  To compile this driver as a module, choose M here: the
+	  module will be called sensors_core.
+
+config SENSORS_SSP
+	tristate "Sensors ssp"
+	default n
+	depends on I2C
+	help
+	  ssp driver for sensor hub.
+          If you say yes here you get ssp support for
+	  sensor hub.
+	  To compile this driver as a module, choose M here: the
+	  module will be called ssp.
+
+config SENSORS_SSP_ATMEL
+	tristate "Sensors ssp ATMEL"
+	default n
+	depends on SPI
+	help
+	  ssp driver for sensor hub.
+          If you say yes here you get ssp support for
+	  sensor hub.
+	  To compile this driver as a module, choose M here: the
+	  module will be called ssp.
+
+config SENSORS_SSP_AK8963C
+	tristate "Sensors ssp ak8963c"
+	default n
+	depends on I2C
+	help
+	  ak8963c file for factory test in ssp driver.
+          If you say yes here you get ak8963c support for
+	  factory test.
+	  To compile this driver as a module, choose M here: the
+	  module will be called ssp.
+
+config SENSORS_SSP_YAS532
+	tristate "Sensors ssp yas532"
+	default n
+	depends on I2C
+	help
+	  yas532 file for factory test in ssp driver.
+          If you say yes here you get yas532 support for
+	  factory test.
+	  To compile this driver as a module, choose M here: the
+	  module will be called ssp.
+
+config SENSORS_SSP_ACCELEROMETER_POSITION
+	int "Accelerometer Sensor Mounting Position on Board"
+	depends on SENSORS_SSP
+	default "0"
+	help
+	  X Y Z axis position.
+	    0:  X, Y, Z
+	    1:  Y,-X, Z
+	    2: -X,-Y, Z
+	    3: -Y, X, Z
+	    4: -X, Y,-Z
+	    5:  Y, X,-Z
+	    6:  X,-Y,-Z
+	    7: -Y,-X,-Z
+
+config SENSORS_SSP_GYROSCOPE_POSITION
+	int "Gyroscope Sensor Mounting Position on Board"
+	depends on SENSORS_SSP
+	default "0"
+	help
+	  X Y Z axis position.
+	    0:  X, Y, Z
+	    1:  Y,-X, Z
+	    2: -X,-Y, Z
+	    3: -Y, X, Z
+	    4: -X, Y,-Z
+	    5:  Y, X,-Z
+	    6:  X,-Y,-Z
+	    7: -Y,-X,-Z
+
+config SENSORS_SSP_MAGNETOMETER_POSITION
+	int "Geomagnetic Sensor Mounting Position on Board"
+	depends on SENSORS_SSP
+	default "0"
+	help
+	  X Y Z axis position.
+	    0:  X, Y, Z
+	    1:  Y,-X, Z
+	    2: -X,-Y, Z
+	    3: -Y, X, Z
+	    4: -X, Y,-Z
+	    5:  Y, X,-Z
+	    6:  X,-Y,-Z
+	    7: -Y,-X,-Z
+
+config SENSORS_SSP_SENSORHUB
+	tristate "Sensors ssp sensorhub"
+	default n
+	depends on I2C
+	help
+	  ssp sensor hub driver for sensor hub.
+          If you say yes here you get ssp support for
+	  sensor hub.
+	  To compile this driver as a module, choose M here: the
+	  module will be called ssp.
+
+config SENSORS_SSP_FACTORY
+	tristate "ssp factory"
+	depends on SENSORS_SSP
+	default n
+	help
+	  ssp sensor hub driver for factory test.
+          If you say yes here you can enable fatory drvier for
+	  factory test.
+	  To compile this driver as a module, choose M here: the
+	  module will be called ssp.
+
+config SENSORS_SSP_C12SD
+	tristate "Sensors ssp C12SD"
+	default n
+	depends on SENSORS_SSP
+	help
+	  This is for GUVA_C12SD UV Sensor
+	  device driver.
+	  GUVA_C12SD is made by Genicom.
+          If you say yes here you get c12sd support.
+	  If you say no here c12sd will not be supported.
+
+config SENSORS_SSP_BOUNCE_FIRMWARE
+	tristate "Sensors ssp BOUNCE_FIRMWARE"
+	default n
+	depends on SENSORS_SSP_STM
+	help
+	  This is for Bounce firmware support.
+          If you say yes here you get bounce firmware support.
+	  If you say no here bounce firmware will not be supported.
+
+config SENSORS_MAX86900
+	tristate "MAXIM MAX86900 HRM Sensor"
+	default n
+	depends on I2C
+	help
+	  If you say yes here you get support for the MAX86900
+	  HRM sensor.
+	  This driver can also be built as a module.  If so, the module
+	  will be called max86900.
+
+source "drivers/sensorhub/atmel/factory/Kconfig"

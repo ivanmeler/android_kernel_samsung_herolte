@@ -40,6 +40,8 @@
 #include "blk-cgroup.h"
 #include "blk-mq.h"
 
+#include <linux/math64.h>
+
 EXPORT_TRACEPOINT_SYMBOL_GPL(block_bio_remap);
 EXPORT_TRACEPOINT_SYMBOL_GPL(block_rq_remap);
 EXPORT_TRACEPOINT_SYMBOL_GPL(block_bio_complete);
@@ -194,7 +196,7 @@ EXPORT_SYMBOL(blk_delay_queue);
  **/
 void blk_start_queue(struct request_queue *q)
 {
-	WARN_ON(!irqs_disabled());
+	WARN_ON(!in_interrupt() && !irqs_disabled());
 
 	queue_flag_clear(QUEUE_FLAG_STOPPED, q);
 	__blk_run_queue(q);
@@ -351,7 +353,7 @@ EXPORT_SYMBOL(blk_put_queue);
  * If not, only ELVPRIV requests are drained.  The caller is responsible
  * for ensuring that no new requests which need to be drained are queued.
  */
-static void __blk_drain_queue(struct request_queue *q, bool drain_all)
+void __blk_drain_queue(struct request_queue *q, bool drain_all)
 	__releases(q->queue_lock)
 	__acquires(q->queue_lock)
 {
@@ -1538,6 +1540,11 @@ void init_request_from_bio(struct request *req, struct bio *bio)
 	if (bio->bi_rw & REQ_RAHEAD)
 		req->cmd_flags |= REQ_FAILFAST_MASK;
 
+#ifdef CONFIG_JOURNAL_DATA_TAG
+       if (bio_flagged(bio, BIO_JMETA) || bio_flagged(bio, BIO_JOURNAL))
+               req->cmd_flags |= REQ_META;
+#endif
+
 	req->errors = 0;
 	req->__sector = bio->bi_iter.bi_sector;
 	req->ioprio = bio_prio(bio);
@@ -2107,6 +2114,8 @@ void blk_account_io_completion(struct request *req, unsigned int bytes)
 		cpu = part_stat_lock();
 		part = req->part;
 		part_stat_add(cpu, part, sectors[rw], bytes >> 9);
+		if (req->cmd_flags & REQ_DISCARD)
+			part_stat_add(cpu, part, discard_sectors, bytes >> 9);
 		part_stat_unlock();
 	}
 }
@@ -2131,10 +2140,17 @@ void blk_account_io_done(struct request *req)
 		part_stat_add(cpu, part, ticks[rw], duration);
 		part_round_stats(cpu, part);
 		part_dec_in_flight(part, rw);
+		if (req->cmd_flags & REQ_DISCARD)
+			part_stat_inc(cpu, part, discard_ios);
+		if (!(req->cmd_flags & REQ_STARTED))
+			part_stat_inc(cpu, part, flush_ios);
 
 		hd_struct_put(part);
 		part_stat_unlock();
 	}
+
+	if (req->cmd_flags & REQ_FLUSH_SEQ)
+		req->q->flush_ios++;
 }
 
 #ifdef CONFIG_PM_RUNTIME
@@ -2315,6 +2331,8 @@ void blk_dequeue_request(struct request *rq)
 	 * the driver side.
 	 */
 	if (blk_account_rq(rq)) {
+		if (!queue_in_flight(q))
+			q->in_flight_stamp = ktime_get();
 		q->in_flight[rq_is_sync(rq)]++;
 		set_io_start_time_ns(rq);
 	}
@@ -3324,3 +3342,85 @@ int __init blk_dev_init(void)
 
 	return 0;
 }
+
+/*
+ * Blk IO latency support. We want this to be as cheap as possible, so doing
+ * this lockless (and avoiding atomics), a few off by a few errors in this
+ * code is not harmful, and we don't want to do anything that is
+ * perf-impactful.
+ * TODO : If necessary, we can make the histograms per-cpu and aggregate
+ * them when printing them out.
+ */
+void
+blk_zero_latency_hist(struct io_latency_state *s)
+{
+	memset(s->latency_y_axis_read, 0,
+	       sizeof(s->latency_y_axis_read));
+	memset(s->latency_y_axis_write, 0,
+	       sizeof(s->latency_y_axis_write));
+	s->latency_reads_elems = 0;
+	s->latency_writes_elems = 0;
+}
+EXPORT_SYMBOL(blk_zero_latency_hist);
+
+ssize_t
+blk_latency_hist_show(struct io_latency_state *s, char *buf)
+{
+	int i;
+	int bytes_written = 0;
+	u_int64_t num_elem, elem;
+	int pct;
+
+	num_elem = s->latency_reads_elems;
+	if (num_elem > 0) {
+		bytes_written += scnprintf(buf + bytes_written,
+			   PAGE_SIZE - bytes_written,
+			   "IO svc_time Read Latency Histogram (n = %llu):\n",
+			   num_elem);
+		for (i = 0;
+		     i < ARRAY_SIZE(latency_x_axis_us);
+		     i++) {
+			elem = s->latency_y_axis_read[i];
+			pct = div64_u64(elem * 100, num_elem);
+			bytes_written += scnprintf(buf + bytes_written,
+						   PAGE_SIZE - bytes_written,
+						   "\t< %5lluus%15llu%15d%%\n",
+						   latency_x_axis_us[i],
+						   elem, pct);
+		}
+		/* Last element in y-axis table is overflow */
+		elem = s->latency_y_axis_read[i];
+		pct = div64_u64(elem * 100, num_elem);
+		bytes_written += scnprintf(buf + bytes_written,
+					   PAGE_SIZE - bytes_written,
+					   "\t> %5dms%15llu%15d%%\n", 10,
+					   elem, pct);
+	}
+	num_elem = s->latency_writes_elems;
+	if (num_elem > 0) {
+		bytes_written += scnprintf(buf + bytes_written,
+			   PAGE_SIZE - bytes_written,
+			   "IO svc_time Write Latency Histogram (n = %llu):\n",
+			   num_elem);
+		for (i = 0;
+		     i < ARRAY_SIZE(latency_x_axis_us);
+		     i++) {
+			elem = s->latency_y_axis_write[i];
+			pct = div64_u64(elem * 100, num_elem);
+			bytes_written += scnprintf(buf + bytes_written,
+						   PAGE_SIZE - bytes_written,
+						   "\t< %5lluus%15llu%15d%%\n",
+						   latency_x_axis_us[i],
+						   elem, pct);
+		}
+		/* Last element in y-axis table is overflow */
+		elem = s->latency_y_axis_write[i];
+		pct = div64_u64(elem * 100, num_elem);
+		bytes_written += scnprintf(buf + bytes_written,
+					   PAGE_SIZE - bytes_written,
+					   "\t> %5dms%15llu%15d%%\n", 10,
+					   elem, pct);
+	}
+	return bytes_written;
+}
+EXPORT_SYMBOL(blk_latency_hist_show);

@@ -9307,7 +9307,8 @@ unload_error:
 	 * function stop ramrod is sent, since as part of this ramrod FW access
 	 * PTP registers.
 	 */
-	bnx2x_stop_ptp(bp);
+	if (bp->flags & PTP_SUPPORTED)
+		bnx2x_stop_ptp(bp);
 
 	/* Disable HW interrupts, NAPI */
 	bnx2x_netif_stop(bp, 1);
@@ -14606,7 +14607,7 @@ static void bnx2x_init_cyclecounter(struct bnx2x *bp)
 {
 	memset(&bp->cyclecounter, 0, sizeof(bp->cyclecounter));
 	bp->cyclecounter.read = bnx2x_cyclecounter_read;
-	bp->cyclecounter.mask = CLOCKSOURCE_MASK(64);
+	bp->cyclecounter.mask = CYCLECOUNTER_MASK(64);
 	bp->cyclecounter.shift = 1;
 	bp->cyclecounter.mult = 1;
 }

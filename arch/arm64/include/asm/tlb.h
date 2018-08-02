@@ -37,12 +37,21 @@ static inline void __tlb_remove_table(void *_table)
 
 static inline void tlb_flush(struct mmu_gather *tlb)
 {
-	if (tlb->fullmm) {
-		flush_tlb_mm(tlb->mm);
-	} else {
-		struct vm_area_struct vma = { .vm_mm = tlb->mm, };
-		flush_tlb_range(&vma, tlb->start, tlb->end);
-	}
+	struct vm_area_struct vma = { .vm_mm = tlb->mm, };
+
+	/*
+	 * The ASID allocator will either invalidate the ASID or mark
+	 * it as used.
+	 */
+	if (tlb->fullmm)
+		return;
+
+	/*
+	 * The intermediate page table levels are already handled by
+	 * the __(pte|pmd|pud)_free_tlb() functions, so last level
+	 * TLBI is sufficient here.
+	 */
+	__flush_tlb_range(&vma, tlb->start, tlb->end, true);
 }
 
 static inline void __pte_free_tlb(struct mmu_gather *tlb, pgtable_t pte,
@@ -53,22 +62,52 @@ static inline void __pte_free_tlb(struct mmu_gather *tlb, pgtable_t pte,
 	tlb_remove_entry(tlb, pte);
 }
 
-#if CONFIG_ARM64_PGTABLE_LEVELS > 2
+#if CONFIG_PGTABLE_LEVELS > 2
+#ifndef CONFIG_TIMA_RKP
 static inline void __pmd_free_tlb(struct mmu_gather *tlb, pmd_t *pmdp,
 				  unsigned long addr)
 {
 	__flush_tlb_pgtable(tlb->mm, addr);
 	tlb_remove_entry(tlb, virt_to_page(pmdp));
 }
+#else
+static inline void __pmd_free_tlb(struct mmu_gather *tlb, pmd_t *pmdp,
+				  unsigned long addr)
+{
+	if (is_rkp_ro_page((unsigned long)pmdp)) {
+		__flush_tlb_pgtable(tlb->mm, addr);
+		rkp_ro_free((void*)pmdp);
+	}
+	else {
+		__flush_tlb_pgtable(tlb->mm, addr);
+		tlb_remove_entry(tlb, virt_to_page(pmdp));
+	}
+}
+#endif
 #endif
 
-#if CONFIG_ARM64_PGTABLE_LEVELS > 3
+#if CONFIG_PGTABLE_LEVELS > 3
+#ifndef CONFIG_TIMA_RKP
 static inline void __pud_free_tlb(struct mmu_gather *tlb, pud_t *pudp,
 				  unsigned long addr)
 {
 	__flush_tlb_pgtable(tlb->mm, addr);
 	tlb_remove_entry(tlb, virt_to_page(pudp));
 }
+#else
+static inline void __pud_free_tlb(struct mmu_gather *tlb, pud_t *pudp,
+				  unsigned long addr)
+{
+	if (is_rkp_ro_page((unsigned long)pudp)) {
+		__flush_tlb_pgtable(tlb->mm, addr);
+		rkp_ro_free((void*)pudp);
+	}
+	else {
+		__flush_tlb_pgtable(tlb->mm, addr);
+		tlb_remove_entry(tlb, virt_to_page(pudp));
+	}
+}
+#endif
 #endif
 
 #endif

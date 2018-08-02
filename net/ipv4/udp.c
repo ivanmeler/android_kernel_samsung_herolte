@@ -90,6 +90,7 @@
 #include <linux/socket.h>
 #include <linux/sockios.h>
 #include <linux/igmp.h>
+#include <linux/inetdevice.h>
 #include <linux/in.h>
 #include <linux/errno.h>
 #include <linux/timer.h>
@@ -803,7 +804,7 @@ static int udp_send_skb(struct sk_buff *skb, struct flowi4 *fl4)
 	if (is_udplite)  				 /*     UDP-Lite      */
 		csum = udplite_csum(skb);
 
-	else if (sk->sk_no_check_tx) {   /* UDP csum disabled */
+	else if (sk->sk_no_check_tx && !skb_is_gso(skb)) {   /* UDP csum off */
 
 		skb->ip_summed = CHECKSUM_NONE;
 		goto send;
@@ -1006,7 +1007,8 @@ int udp_sendmsg(struct kiocb *iocb, struct sock *sk, struct msghdr *msg,
 		flowi4_init_output(fl4, ipc.oif, sk->sk_mark, tos,
 				   RT_SCOPE_UNIVERSE, sk->sk_protocol,
 				   inet_sk_flowi_flags(sk),
-				   faddr, saddr, dport, inet->inet_sport);
+				   faddr, saddr, dport, inet->inet_sport,
+				   sk->sk_uid);
 
 		security_sk_classify_flow(sk, flowi4_to_flowi(fl4));
 		rt = ip_route_output_flow(net, fl4, sk);
@@ -1251,6 +1253,7 @@ int udp_recvmsg(struct kiocb *iocb, struct sock *sk, struct msghdr *msg,
 	int peeked, off = 0;
 	int err;
 	int is_udplite = IS_UDPLITE(sk);
+	bool checksum_valid = false;
 	bool slow;
 
 	if (flags & MSG_ERRQUEUE)
@@ -1276,17 +1279,18 @@ try_again:
 	 */
 
 	if (copied < ulen || UDP_SKB_CB(skb)->partial_cov) {
-		if (udp_lib_checksum_complete(skb))
+		checksum_valid = !udp_lib_checksum_complete(skb);
+		if (!checksum_valid)
 			goto csum_copy_err;
 	}
 
-	if (skb_csum_unnecessary(skb))
+	if (checksum_valid || skb_csum_unnecessary(skb))
 		err = skb_copy_datagram_iovec(skb, sizeof(struct udphdr),
 					      msg->msg_iov, copied);
 	else {
 		err = skb_copy_and_csum_datagram_iovec(skb,
 						       sizeof(struct udphdr),
-						       msg->msg_iov);
+						       msg->msg_iov, copied);
 
 		if (err == -EINVAL)
 			goto csum_copy_err;
@@ -1336,10 +1340,8 @@ csum_copy_err:
 	}
 	unlock_sock_fast(sk, slow);
 
-	if (noblock)
-		return -EAGAIN;
-
-	/* starting over for a new packet */
+	/* starting over for a new packet, but check if we need to yield */
+	cond_resched();
 	msg->msg_flags &= ~MSG_TRUNC;
 	goto try_again;
 }
@@ -1950,6 +1952,7 @@ void udp_v4_early_demux(struct sk_buff *skb)
 	struct sock *sk;
 	struct dst_entry *dst;
 	int dif = skb->dev->ifindex;
+	int ours;
 
 	/* validate the packet */
 	if (!pskb_may_pull(skb, skb_transport_offset(skb) + sizeof(struct udphdr)))
@@ -1959,26 +1962,47 @@ void udp_v4_early_demux(struct sk_buff *skb)
 	uh = udp_hdr(skb);
 
 	if (skb->pkt_type == PACKET_BROADCAST ||
-	    skb->pkt_type == PACKET_MULTICAST)
+	    skb->pkt_type == PACKET_MULTICAST) {
+		struct in_device *in_dev = __in_dev_get_rcu(skb->dev);
+
+		if (!in_dev)
+			return;
+
+		/* we are supposed to accept bcast packets */
+		if (skb->pkt_type == PACKET_MULTICAST) {
+			ours = ip_check_mc_rcu(in_dev, iph->daddr, iph->saddr,
+					       iph->protocol);
+			if (!ours)
+				return;
+		}
+
 		sk = __udp4_lib_mcast_demux_lookup(net, uh->dest, iph->daddr,
 						   uh->source, iph->saddr, dif);
-	else if (skb->pkt_type == PACKET_HOST)
+	} else if (skb->pkt_type == PACKET_HOST) {
 		sk = __udp4_lib_demux_lookup(net, uh->dest, iph->daddr,
 					     uh->source, iph->saddr, dif);
-	else
+	} else {
 		return;
+	}
 
 	if (!sk)
 		return;
 
 	skb->sk = sk;
 	skb->destructor = sock_efree;
-	dst = sk->sk_rx_dst;
+	dst = READ_ONCE(sk->sk_rx_dst);
 
 	if (dst)
 		dst = dst_check(dst, 0);
-	if (dst)
-		skb_dst_set_noref(skb, dst);
+	if (dst) {
+		/* DST_NOCACHE can not be used without taking a reference */
+		if (dst->flags & DST_NOCACHE) {
+			if (likely(atomic_inc_not_zero(&dst->__refcnt)))
+				skb_dst_set(skb, dst);
+		} else {
+			skb_dst_set_noref(skb, dst);
+		}
+	}
 }
 
 int udp_rcv(struct sk_buff *skb)
@@ -2216,6 +2240,20 @@ unsigned int udp_poll(struct file *file, struct socket *sock, poll_table *wait)
 }
 EXPORT_SYMBOL(udp_poll);
 
+int udp_abort(struct sock *sk, int err)
+{
+	lock_sock(sk);
+
+	sk->sk_err = err;
+	sk->sk_error_report(sk);
+	udp_disconnect(sk, 0);
+
+	release_sock(sk);
+
+	return 0;
+}
+EXPORT_SYMBOL_GPL(udp_abort);
+
 struct proto udp_prot = {
 	.name		   = "UDP",
 	.owner		   = THIS_MODULE,
@@ -2247,6 +2285,7 @@ struct proto udp_prot = {
 	.compat_getsockopt = compat_udp_getsockopt,
 #endif
 	.clear_sk	   = sk_prot_clear_portaddr_nulls,
+	.diag_destroy	   = udp_abort,
 };
 EXPORT_SYMBOL(udp_prot);
 

@@ -77,6 +77,8 @@
 
 struct kmem_cache *skbuff_head_cache __read_mostly;
 static struct kmem_cache *skbuff_fclone_cache __read_mostly;
+int sysctl_max_skb_frags __read_mostly = MAX_SKB_FRAGS;
+EXPORT_SYMBOL(sysctl_max_skb_frags);
 
 /**
  *	skb_panic - private function for out-of-line support
@@ -502,7 +504,10 @@ static inline void skb_drop_fraglist(struct sk_buff *skb)
 	skb_drop_list(&skb_shinfo(skb)->frag_list);
 }
 
-static void skb_clone_fraglist(struct sk_buff *skb)
+#ifndef CONFIG_MPTCP
+static 
+#endif
+void skb_clone_fraglist(struct sk_buff *skb)
 {
 	struct sk_buff *list;
 
@@ -930,7 +935,10 @@ static void skb_headers_offset_update(struct sk_buff *skb, int off)
 	skb->inner_mac_header += off;
 }
 
-static void copy_skb_header(struct sk_buff *new, const struct sk_buff *old)
+#ifndef CONFIG_MPTCP
+static 
+#endif
+void copy_skb_header(struct sk_buff *new, const struct sk_buff *old)
 {
 	__copy_skb_header(new, old);
 
@@ -2881,11 +2889,12 @@ EXPORT_SYMBOL(skb_append_datato_frags);
  */
 unsigned char *skb_pull_rcsum(struct sk_buff *skb, unsigned int len)
 {
+	unsigned char *data = skb->data;
+
 	BUG_ON(len > skb->len);
-	skb->len -= len;
-	BUG_ON(skb->len < skb->data_len);
-	skb_postpull_rcsum(skb, skb->data, len);
-	return skb->data += len;
+	__skb_pull(skb, len);
+	skb_postpull_rcsum(skb, data, len);
+	return skb->data;
 }
 EXPORT_SYMBOL_GPL(skb_pull_rcsum);
 
@@ -3598,7 +3607,8 @@ static void __skb_complete_tx_timestamp(struct sk_buff *skb,
 	serr->ee.ee_info = tstype;
 	if (sk->sk_tsflags & SOF_TIMESTAMPING_OPT_ID) {
 		serr->ee.ee_data = skb_shinfo(skb)->tskey;
-		if (sk->sk_protocol == IPPROTO_TCP)
+		if (sk->sk_protocol == IPPROTO_TCP &&
+		    sk->sk_type == SOCK_STREAM)
 			serr->ee.ee_data -= sk->sk_tskey;
 	}
 
@@ -3613,13 +3623,14 @@ void skb_complete_tx_timestamp(struct sk_buff *skb,
 {
 	struct sock *sk = skb->sk;
 
-	/* take a reference to prevent skb_orphan() from freeing the socket */
-	sock_hold(sk);
-
-	*skb_hwtstamps(skb) = *hwtstamps;
-	__skb_complete_tx_timestamp(skb, sk, SCM_TSTAMP_SND);
-
-	sock_put(sk);
+	/* Take a reference to prevent skb_orphan() from freeing the socket,
+	 * but only if the socket refcount is not zero.
+	 */
+	if (likely(atomic_inc_not_zero(&sk->sk_refcnt))) {
+		*skb_hwtstamps(skb) = *hwtstamps;
+		__skb_complete_tx_timestamp(skb, sk, SCM_TSTAMP_SND);
+		sock_put(sk);
+	}
 }
 EXPORT_SYMBOL_GPL(skb_complete_tx_timestamp);
 
@@ -3657,7 +3668,7 @@ void skb_complete_wifi_ack(struct sk_buff *skb, bool acked)
 {
 	struct sock *sk = skb->sk;
 	struct sock_exterr_skb *serr;
-	int err;
+	int err = 1;
 
 	skb->wifi_acked_valid = 1;
 	skb->wifi_acked = acked;
@@ -3667,14 +3678,15 @@ void skb_complete_wifi_ack(struct sk_buff *skb, bool acked)
 	serr->ee.ee_errno = ENOMSG;
 	serr->ee.ee_origin = SO_EE_ORIGIN_TXSTATUS;
 
-	/* take a reference to prevent skb_orphan() from freeing the socket */
-	sock_hold(sk);
-
-	err = sock_queue_err_skb(sk, skb);
+	/* Take a reference to prevent skb_orphan() from freeing the socket,
+	 * but only if the socket refcount is not zero.
+	 */
+	if (likely(atomic_inc_not_zero(&sk->sk_refcnt))) {
+		err = sock_queue_err_skb(sk, skb);
+		sock_put(sk);
+	}
 	if (err)
 		kfree_skb(skb);
-
-	sock_put(sk);
 }
 EXPORT_SYMBOL_GPL(skb_complete_wifi_ack);
 
@@ -4063,6 +4075,7 @@ void skb_scrub_packet(struct sk_buff *skb, bool xnet)
 	if (!xnet)
 		return;
 
+	ipvs_reset(skb);
 	skb_orphan(skb);
 	skb->mark = 0;
 }
@@ -4107,7 +4120,8 @@ static struct sk_buff *skb_reorder_vlan_header(struct sk_buff *skb)
 		return NULL;
 	}
 
-	memmove(skb->data - ETH_HLEN, skb->data - VLAN_ETH_HLEN, 2 * ETH_ALEN);
+	memmove(skb->data - ETH_HLEN, skb->data - skb->mac_len - VLAN_HLEN,
+		2 * ETH_ALEN);
 	skb->mac_header += VLAN_HLEN;
 	return skb;
 }
@@ -4199,7 +4213,7 @@ struct sk_buff *alloc_skb_with_frags(unsigned long header_len,
 
 		while (order) {
 			if (npages >= 1 << order) {
-				page = alloc_pages(gfp_mask |
+				page = alloc_pages((gfp_mask & ~__GFP_WAIT) |
 						   __GFP_COMP |
 						   __GFP_NOWARN |
 						   __GFP_NORETRY,

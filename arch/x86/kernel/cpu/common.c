@@ -19,6 +19,7 @@
 #include <asm/archrandom.h>
 #include <asm/hypervisor.h>
 #include <asm/processor.h>
+#include <asm/tlbflush.h>
 #include <asm/debugreg.h>
 #include <asm/sections.h>
 #include <asm/vsyscall.h>
@@ -278,7 +279,7 @@ __setup("nosmep", setup_disable_smep);
 static __always_inline void setup_smep(struct cpuinfo_x86 *c)
 {
 	if (cpu_has(c, X86_FEATURE_SMEP))
-		set_in_cr4(X86_CR4_SMEP);
+		cr4_set_bits(X86_CR4_SMEP);
 }
 
 static __init int setup_disable_smap(char *arg)
@@ -290,17 +291,16 @@ __setup("nosmap", setup_disable_smap);
 
 static __always_inline void setup_smap(struct cpuinfo_x86 *c)
 {
-	unsigned long eflags;
+	unsigned long eflags = native_save_fl();
 
 	/* This should have been cleared long ago */
-	raw_local_save_flags(eflags);
 	BUG_ON(eflags & X86_EFLAGS_AC);
 
 	if (cpu_has(c, X86_FEATURE_SMAP)) {
 #ifdef CONFIG_X86_SMAP
-		set_in_cr4(X86_CR4_SMAP);
+		cr4_set_bits(X86_CR4_SMAP);
 #else
-		clear_in_cr4(X86_CR4_SMAP);
+		cr4_clear_bits(X86_CR4_SMAP);
 #endif
 	}
 }
@@ -1304,6 +1304,12 @@ void cpu_init(void)
 	wait_for_master_cpu(cpu);
 
 	/*
+	 * Initialize the CR4 shadow before doing anything that could
+	 * try to read it.
+	 */
+	cr4_init_shadow();
+
+	/*
 	 * Load microcode on this cpu if a valid microcode is available.
 	 * This is early microcode loading procedure.
 	 */
@@ -1322,7 +1328,7 @@ void cpu_init(void)
 
 	pr_debug("Initializing CPU#%d\n", cpu);
 
-	clear_in_cr4(X86_CR4_VME|X86_CR4_PVI|X86_CR4_TSD|X86_CR4_DE);
+	cr4_clear_bits(X86_CR4_VME|X86_CR4_PVI|X86_CR4_TSD|X86_CR4_DE);
 
 	/*
 	 * Initialize the per-CPU GDT with the boot GDT,
@@ -1376,7 +1382,7 @@ void cpu_init(void)
 	load_sp0(t, &current->thread);
 	set_tss_desc(cpu, t);
 	load_TR_desc();
-	load_LDT(&init_mm.context);
+	load_mm_ldt(&init_mm);
 
 	clear_all_debug_regs();
 	dbg_restore_debug_regs();
@@ -1398,12 +1404,18 @@ void cpu_init(void)
 
 	wait_for_master_cpu(cpu);
 
+	/*
+	 * Initialize the CR4 shadow before doing anything that could
+	 * try to read it.
+	 */
+	cr4_init_shadow();
+
 	show_ucode_info_early();
 
 	printk(KERN_INFO "Initializing CPU#%d\n", cpu);
 
 	if (cpu_feature_enabled(X86_FEATURE_VME) || cpu_has_tsc || cpu_has_de)
-		clear_in_cr4(X86_CR4_VME|X86_CR4_PVI|X86_CR4_TSD|X86_CR4_DE);
+		cr4_clear_bits(X86_CR4_VME|X86_CR4_PVI|X86_CR4_TSD|X86_CR4_DE);
 
 	load_current_idt();
 	switch_to_new_gdt(cpu);
@@ -1419,7 +1431,7 @@ void cpu_init(void)
 	load_sp0(t, thread);
 	set_tss_desc(cpu, t);
 	load_TR_desc();
-	load_LDT(&init_mm.context);
+	load_mm_ldt(&init_mm);
 
 	t->x86_tss.io_bitmap_base = offsetof(struct tss_struct, io_bitmap);
 

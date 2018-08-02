@@ -61,7 +61,7 @@ asmlinkage void secondary_start_kernel(void);
 struct secondary_data {
 	union {
 		unsigned long mpu_rgn_szr;
-		unsigned long pgdir;
+		u64 pgdir;
 	};
 	unsigned long swapper_pg_dir;
 	void *stack;
@@ -80,6 +80,8 @@ extern void arch_send_call_function_ipi_mask(const struct cpumask *mask);
 extern void arch_send_wakeup_ipi_mask(const struct cpumask *mask);
 
 extern int register_ipi_completion(struct completion *completion, int cpu);
+
+extern void smp_send_all_cpu_backtrace(void);
 
 struct smp_operations {
 #ifdef CONFIG_SMP

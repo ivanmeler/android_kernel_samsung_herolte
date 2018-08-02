@@ -112,9 +112,6 @@ static struct dentry *proc_mount(struct file_system_type *fs_type,
 		ns = task_active_pid_ns(current);
 		options = data;
 
-		if (!capable(CAP_SYS_ADMIN) && !fs_fully_visible(fs_type))
-			return ERR_PTR(-EPERM);
-
 		/* Does the mounter have privilege over the pid namespace? */
 		if (!ns_capable(ns->user_ns, CAP_SYS_ADMIN))
 			return ERR_PTR(-EPERM);
@@ -123,6 +120,13 @@ static struct dentry *proc_mount(struct file_system_type *fs_type,
 	sb = sget(fs_type, proc_test_super, proc_set_super, flags, ns);
 	if (IS_ERR(sb))
 		return ERR_CAST(sb);
+
+	/*
+	 * procfs isn't actually a stacking filesystem; however, there is
+	 * too much magic going on inside it to permit stacking things on
+	 * top of it
+	 */
+	sb->s_stack_depth = FILESYSTEM_MAX_STACK_DEPTH;
 
 	if (!proc_parse_options(options, ns)) {
 		deactivate_locked_super(sb);
@@ -159,7 +163,7 @@ static struct file_system_type proc_fs_type = {
 	.name		= "proc",
 	.mount		= proc_mount,
 	.kill_sb	= proc_kill_sb,
-	.fs_flags	= FS_USERNS_MOUNT,
+	.fs_flags	= FS_USERNS_VISIBLE | FS_USERNS_MOUNT,
 };
 
 void __init proc_root_init(void)
@@ -172,6 +176,7 @@ void __init proc_root_init(void)
 		return;
 
 	proc_self_init();
+
 	proc_thread_self_init();
 	proc_symlink("mounts", NULL, "self/mounts");
 

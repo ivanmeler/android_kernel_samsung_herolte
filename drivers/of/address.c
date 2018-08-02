@@ -260,7 +260,7 @@ struct of_pci_range *of_pci_range_parser_one(struct of_pci_range_parser *parser,
 	if (!parser->range || parser->range + parser->np > parser->end)
 		return NULL;
 
-	range->pci_space = parser->range[0];
+	range->pci_space = be32_to_cpup(parser->range);
 	range->flags = of_bus_pci_get_flags(parser->range);
 	range->pci_addr = of_read_number(parser->range + 1, ns);
 	range->cpu_addr = of_translate_address(parser->node,
@@ -712,7 +712,7 @@ int __weak pci_register_io_range(phys_addr_t addr, resource_size_t size)
 	}
 
 	/* add the range to the list */
-	range = kzalloc(sizeof(*range), GFP_KERNEL);
+	range = kzalloc(sizeof(*range), GFP_ATOMIC);
 	if (!range) {
 		err = -ENOMEM;
 		goto end_register;
@@ -765,7 +765,7 @@ unsigned long __weak pci_address_to_pio(phys_addr_t address)
 	spin_lock(&io_range_lock);
 	list_for_each_entry(res, &io_range_list, list) {
 		if (address >= res->start && address < res->start + res->size) {
-			addr = res->start - address + offset;
+			addr = address - res->start + offset;
 			break;
 		}
 		offset += res->size;
@@ -845,10 +845,10 @@ struct device_node *of_find_matching_node_by_address(struct device_node *from,
 	struct resource res;
 
 	while (dn) {
-		if (of_address_to_resource(dn, 0, &res))
-			continue;
-		if (res.start == base_address)
+		if (!of_address_to_resource(dn, 0, &res) &&
+		    res.start == base_address)
 			return dn;
+
 		dn = of_find_matching_node(dn, matches);
 	}
 

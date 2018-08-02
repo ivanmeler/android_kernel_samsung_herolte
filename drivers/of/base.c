@@ -88,7 +88,7 @@ EXPORT_SYMBOL(of_n_size_cells);
 #ifdef CONFIG_NUMA
 int __weak of_node_to_nid(struct device_node *np)
 {
-	return numa_node_id();
+	return NUMA_NO_NODE;
 }
 #endif
 
@@ -111,6 +111,7 @@ static ssize_t of_node_property_read(struct file *filp, struct kobject *kobj,
 	return memory_read_from_buffer(buf, count, &offset, pp->value, pp->length);
 }
 
+/* always return newly allocated name, caller must free after use */
 static const char *safe_name(struct kobject *kobj, const char *orig_name)
 {
 	const char *name = orig_name;
@@ -125,9 +126,12 @@ static const char *safe_name(struct kobject *kobj, const char *orig_name)
 		name = kasprintf(GFP_KERNEL, "%s#%i", orig_name, ++i);
 	}
 
-	if (name != orig_name)
+	if (name == orig_name) {
+		name = kstrdup(orig_name, GFP_KERNEL);
+	} else {
 		pr_warn("device-tree: Duplicate name in %s, renamed to \"%s\"\n",
 			kobject_name(kobj), name);
+	}
 	return name;
 }
 
@@ -158,6 +162,7 @@ int __of_add_property_sysfs(struct device_node *np, struct property *pp)
 int __of_attach_node_sysfs(struct device_node *np)
 {
 	const char *name;
+	struct kobject *parent;
 	struct property *pp;
 	int rc;
 
@@ -170,15 +175,16 @@ int __of_attach_node_sysfs(struct device_node *np)
 	np->kobj.kset = of_kset;
 	if (!np->parent) {
 		/* Nodes without parents are new top level trees */
-		rc = kobject_add(&np->kobj, NULL, "%s",
-				 safe_name(&of_kset->kobj, "base"));
+		name = safe_name(&of_kset->kobj, "base");
+		parent = NULL;
 	} else {
 		name = safe_name(&np->parent->kobj, kbasename(np->full_name));
-		if (!name || !name[0])
-			return -EINVAL;
-
-		rc = kobject_add(&np->kobj, &np->parent->kobj, "%s", name);
+		parent = &np->parent->kobj;
 	}
+	if (!name)
+		return -ENOMEM;
+	rc = kobject_add(&np->kobj, parent, "%s", name);
+	kfree(name);
 	if (rc)
 		return rc;
 
@@ -1250,6 +1256,39 @@ int of_property_read_u64(const struct device_node *np, const char *propname,
 EXPORT_SYMBOL_GPL(of_property_read_u64);
 
 /**
+ * of_property_read_u64_array - Find and read an array of 64 bit integers
+ * from a property.
+ *
+ * @np:		device node from which the property value is to be read.
+ * @propname:	name of the property to be searched.
+ * @out_values:	pointer to return value, modified only if return value is 0.
+ * @sz:		number of array elements to read
+ *
+ * Search for a property in a device node and read 64-bit value(s) from
+ * it. Returns 0 on success, -EINVAL if the property does not exist,
+ * -ENODATA if property does not have a value, and -EOVERFLOW if the
+ * property data isn't large enough.
+ *
+ * The out_values is modified only if a valid u64 value can be decoded.
+ */
+int of_property_read_u64_array(const struct device_node *np,
+			       const char *propname, u64 *out_values,
+			       size_t sz)
+{
+	const __be32 *val = of_find_property_value_of_size(np, propname,
+						(sz * sizeof(*out_values)));
+
+	if (IS_ERR(val))
+		return PTR_ERR(val);
+
+	while (sz--) {
+		*out_values++ = of_read_number(val, 2);
+		val += 2;
+	}
+	return 0;
+}
+
+/**
  * of_property_read_string - Find and read a string from a property
  * @np:		device node from which the property value is to be read.
  * @propname:	name of the property to be searched.
@@ -1676,6 +1715,12 @@ int __of_remove_property(struct device_node *np, struct property *prop)
 	return 0;
 }
 
+void __of_sysfs_remove_bin_file(struct device_node *np, struct property *prop)
+{
+	sysfs_remove_bin_file(&np->kobj, &prop->attr);
+	kfree(prop->attr.attr.name);
+}
+
 void __of_remove_property_sysfs(struct device_node *np, struct property *prop)
 {
 	if (!IS_ENABLED(CONFIG_SYSFS))
@@ -1683,7 +1728,7 @@ void __of_remove_property_sysfs(struct device_node *np, struct property *prop)
 
 	/* at early boot, bail here and defer setup to of_init() */
 	if (of_kset && of_node_is_attached(np))
-		sysfs_remove_bin_file(&np->kobj, &prop->attr);
+		__of_sysfs_remove_bin_file(np, prop);
 }
 
 /**
@@ -1753,7 +1798,7 @@ void __of_update_property_sysfs(struct device_node *np, struct property *newprop
 		return;
 
 	if (oldprop)
-		sysfs_remove_bin_file(&np->kobj, &oldprop->attr);
+		__of_sysfs_remove_bin_file(np, oldprop);
 	__of_add_property_sysfs(np, newprop);
 }
 

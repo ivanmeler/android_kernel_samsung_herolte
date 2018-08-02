@@ -42,9 +42,15 @@
  */
 static DEFINE_PER_CPU(unsigned long, cpu_scale);
 
-unsigned long arch_scale_cpu_capacity(struct sched_domain *sd, int cpu)
+unsigned long scale_cpu_capacity(struct sched_domain *sd, int cpu)
 {
+#ifdef CONFIG_CPU_FREQ
+	unsigned long max_freq_scale = cpufreq_scale_max_freq_capacity(cpu);
+
+	return per_cpu(cpu_scale, cpu) * max_freq_scale >> SCHED_CAPACITY_SHIFT;
+#else
 	return per_cpu(cpu_scale, cpu);
+#endif
 }
 
 static void set_capacity_scale(unsigned int cpu, unsigned long capacity)
@@ -153,6 +159,8 @@ static void __init parse_dt_topology(void)
 
 }
 
+static const struct sched_group_energy * const cpu_core_energy(int cpu);
+
 /*
  * Look for a customed capacity of a CPU in the cpu_capacity table during the
  * boot. The update of all CPUs is in O(n^2) for heteregeneous system but the
@@ -160,10 +168,14 @@ static void __init parse_dt_topology(void)
  */
 static void update_cpu_capacity(unsigned int cpu)
 {
-	if (!cpu_capacity(cpu))
-		return;
+	unsigned long capacity = SCHED_CAPACITY_SCALE;
 
-	set_capacity_scale(cpu, cpu_capacity(cpu) / middle_capacity);
+	if (cpu_core_energy(cpu)) {
+		int max_cap_idx = cpu_core_energy(cpu)->nr_cap_states - 1;
+		capacity = cpu_core_energy(cpu)->cap_states[max_cap_idx].cap;
+	}
+
+	set_capacity_scale(cpu, capacity);
 
 	printk(KERN_INFO "CPU%u: update cpu_capacity %lu\n",
 		cpu, arch_scale_cpu_capacity(NULL, cpu));
@@ -275,19 +287,255 @@ void store_cpu_topology(unsigned int cpuid)
 		cpu_topology[cpuid].socket_id, mpidr);
 }
 
+/*
+ * ARM TC2 specific energy cost model data. There are no unit requirements for
+ * the data. Data can be normalized to any reference point, but the
+ * normalization must be consistent. That is, one bogo-joule/watt must be the
+ * same quantity for all data, but we don't care what it is.
+ */
+static struct idle_state idle_states_cluster_a7[] = {
+	 { .power = 25 }, /* arch_cpu_idle() (active idle) = WFI */
+	 { .power = 25 }, /* WFI */
+	 { .power = 10 }, /* cluster-sleep-l */
+	};
+
+static struct idle_state idle_states_cluster_a15[] = {
+	 { .power = 70 }, /* arch_cpu_idle() (active idle) = WFI */
+	 { .power = 70 }, /* WFI */
+	 { .power = 25 }, /* cluster-sleep-b */
+	};
+
+static struct capacity_state cap_states_cluster_a7[] = {
+	/* Cluster only power */
+	 { .cap =  150, .power = 2967, }, /*  350 MHz */
+	 { .cap =  172, .power = 2792, }, /*  400 MHz */
+	 { .cap =  215, .power = 2810, }, /*  500 MHz */
+	 { .cap =  258, .power = 2815, }, /*  600 MHz */
+	 { .cap =  301, .power = 2919, }, /*  700 MHz */
+	 { .cap =  344, .power = 2847, }, /*  800 MHz */
+	 { .cap =  387, .power = 3917, }, /*  900 MHz */
+	 { .cap =  430, .power = 4905, }, /* 1000 MHz */
+	};
+
+static struct capacity_state cap_states_cluster_a15[] = {
+	/* Cluster only power */
+	 { .cap =  426, .power =  7920, }, /*  500 MHz */
+	 { .cap =  512, .power =  8165, }, /*  600 MHz */
+	 { .cap =  597, .power =  8172, }, /*  700 MHz */
+	 { .cap =  682, .power =  8195, }, /*  800 MHz */
+	 { .cap =  768, .power =  8265, }, /*  900 MHz */
+	 { .cap =  853, .power =  8446, }, /* 1000 MHz */
+	 { .cap =  938, .power = 11426, }, /* 1100 MHz */
+	 { .cap = 1024, .power = 15200, }, /* 1200 MHz */
+	};
+
+static struct sched_group_energy energy_cluster_a7 = {
+	  .nr_idle_states = ARRAY_SIZE(idle_states_cluster_a7),
+	  .idle_states    = idle_states_cluster_a7,
+	  .nr_cap_states  = ARRAY_SIZE(cap_states_cluster_a7),
+	  .cap_states     = cap_states_cluster_a7,
+};
+
+static struct sched_group_energy energy_cluster_a15 = {
+	  .nr_idle_states = ARRAY_SIZE(idle_states_cluster_a15),
+	  .idle_states    = idle_states_cluster_a15,
+	  .nr_cap_states  = ARRAY_SIZE(cap_states_cluster_a15),
+	  .cap_states     = cap_states_cluster_a15,
+};
+
+static struct idle_state idle_states_core_a7[] = {
+	 { .power = 0 }, /* arch_cpu_idle (active idle) = WFI */
+	 { .power = 0 }, /* WFI */
+	 { .power = 0 }, /* cluster-sleep-l */
+	};
+
+static struct idle_state idle_states_core_a15[] = {
+	 { .power = 0 }, /* arch_cpu_idle (active idle) = WFI */
+	 { .power = 0 }, /* WFI */
+	 { .power = 0 }, /* cluster-sleep-b */
+	};
+
+static struct capacity_state cap_states_core_a7[] = {
+	/* Power per cpu */
+	 { .cap =  150, .power =  187, }, /*  350 MHz */
+	 { .cap =  172, .power =  275, }, /*  400 MHz */
+	 { .cap =  215, .power =  334, }, /*  500 MHz */
+	 { .cap =  258, .power =  407, }, /*  600 MHz */
+	 { .cap =  301, .power =  447, }, /*  700 MHz */
+	 { .cap =  344, .power =  549, }, /*  800 MHz */
+	 { .cap =  387, .power =  761, }, /*  900 MHz */
+	 { .cap =  430, .power = 1024, }, /* 1000 MHz */
+	};
+
+static struct capacity_state cap_states_core_a15[] = {
+	/* Power per cpu */
+	 { .cap =  426, .power = 2021, }, /*  500 MHz */
+	 { .cap =  512, .power = 2312, }, /*  600 MHz */
+	 { .cap =  597, .power = 2756, }, /*  700 MHz */
+	 { .cap =  682, .power = 3125, }, /*  800 MHz */
+	 { .cap =  768, .power = 3524, }, /*  900 MHz */
+	 { .cap =  853, .power = 3846, }, /* 1000 MHz */
+	 { .cap =  938, .power = 5177, }, /* 1100 MHz */
+	 { .cap = 1024, .power = 6997, }, /* 1200 MHz */
+	};
+
+static struct sched_group_energy energy_core_a7 = {
+	  .nr_idle_states = ARRAY_SIZE(idle_states_core_a7),
+	  .idle_states    = idle_states_core_a7,
+	  .nr_cap_states  = ARRAY_SIZE(cap_states_core_a7),
+	  .cap_states     = cap_states_core_a7,
+};
+
+static struct sched_group_energy energy_core_a15 = {
+	  .nr_idle_states = ARRAY_SIZE(idle_states_core_a15),
+	  .idle_states    = idle_states_core_a15,
+	  .nr_cap_states  = ARRAY_SIZE(cap_states_core_a15),
+	  .cap_states     = cap_states_core_a15,
+};
+
+/* sd energy functions */
+static inline
+const struct sched_group_energy * const cpu_cluster_energy(int cpu)
+{
+	return cpu_topology[cpu].socket_id ? &energy_cluster_a7 :
+			&energy_cluster_a15;
+}
+
+static inline
+const struct sched_group_energy * const cpu_core_energy(int cpu)
+{
+	return cpu_topology[cpu].socket_id ? &energy_core_a7 :
+			&energy_core_a15;
+}
+
 static inline int cpu_corepower_flags(void)
 {
-	return SD_SHARE_PKG_RESOURCES  | SD_SHARE_POWERDOMAIN;
+	return SD_SHARE_PKG_RESOURCES  | SD_SHARE_POWERDOMAIN | \
+	       SD_SHARE_CAP_STATES;
 }
 
 static struct sched_domain_topology_level arm_topology[] = {
 #ifdef CONFIG_SCHED_MC
-	{ cpu_corepower_mask, cpu_corepower_flags, SD_INIT_NAME(GMC) },
-	{ cpu_coregroup_mask, cpu_core_flags, SD_INIT_NAME(MC) },
+	{ cpu_coregroup_mask, cpu_corepower_flags, cpu_core_energy, SD_INIT_NAME(MC) },
 #endif
-	{ cpu_cpu_mask, SD_INIT_NAME(DIE) },
+	{ cpu_cpu_mask, NULL, cpu_cluster_energy, SD_INIT_NAME(DIE) },
 	{ NULL, },
 };
+void __init arch_get_fast_and_slow_cpus(struct cpumask *fast,
+					struct cpumask *slow)
+{
+	struct device_node *cn = NULL;
+	int cpu;
+
+	cpumask_clear(fast);
+	cpumask_clear(slow);
+
+	/*
+	 * Use the config options if they are given. This helps testing
+	 * HMP scheduling on systems without a big.LITTLE architecture.
+	 */
+	if (strlen(CONFIG_HMP_FAST_CPU_MASK) && strlen(CONFIG_HMP_SLOW_CPU_MASK)) {
+		if (cpulist_parse(CONFIG_HMP_FAST_CPU_MASK, fast))
+			WARN(1, "Failed to parse HMP fast cpu mask!\n");
+		if (cpulist_parse(CONFIG_HMP_SLOW_CPU_MASK, slow))
+			WARN(1, "Failed to parse HMP slow cpu mask!\n");
+		return;
+	}
+
+	/*
+	 * Else, parse device tree for little cores.
+	 */
+	while ((cn = of_find_node_by_type(cn, "cpu"))) {
+
+		const u32 *mpidr;
+		int len;
+
+		mpidr = of_get_property(cn, "reg", &len);
+		if (!mpidr || len != 4) {
+			pr_err("* %s missing reg property\n", cn->full_name);
+			continue;
+		}
+
+		cpu = get_logical_index(be32_to_cpup(mpidr));
+		if (cpu == -EINVAL) {
+			pr_err("couldn't get logical index for mpidr %x\n",
+							be32_to_cpup(mpidr));
+			break;
+		}
+
+		if (is_little_cpu(cn))
+			cpumask_set_cpu(cpu, slow);
+		else
+			cpumask_set_cpu(cpu, fast);
+	}
+
+	if (!cpumask_empty(fast) && !cpumask_empty(slow))
+		return;
+
+	/*
+	 * We didn't find both big and little cores so let's call all cores
+	 * fast as this will keep the system running, with all cores being
+	 * treated equal.
+	 */
+	cpumask_setall(fast);
+	cpumask_clear(slow);
+}
+
+void __init arch_get_hmp_domains(struct list_head *hmp_domains_list)
+{
+	struct cpumask hmp_fast_cpu_mask;
+	struct cpumask hmp_slow_cpu_mask;
+	struct hmp_domain *domain;
+
+	arch_get_fast_and_slow_cpus(&hmp_fast_cpu_mask, &hmp_slow_cpu_mask);
+
+	/*
+	 * Initialize hmp_domains
+	 * Must be ordered with respect to compute capacity.
+	 * Fastest domain at head of list.
+	 */
+	if(!cpumask_empty(&hmp_slow_cpu_mask)) {
+		domain = (struct hmp_domain *)
+			kmalloc(sizeof(struct hmp_domain), GFP_KERNEL);
+		cpumask_copy(&domain->possible_cpus, &hmp_slow_cpu_mask);
+		cpumask_and(&domain->cpus, cpu_online_mask, &domain->possible_cpus);
+		list_add(&domain->hmp_domains, hmp_domains_list);
+	}
+	domain = (struct hmp_domain *)
+		kmalloc(sizeof(struct hmp_domain), GFP_KERNEL);
+	cpumask_copy(&domain->possible_cpus, &hmp_fast_cpu_mask);
+	cpumask_and(&domain->cpus, cpu_online_mask, &domain->possible_cpus);
+	list_add(&domain->hmp_domains, hmp_domains_list);
+}
+#endif /* CONFIG_SCHED_HMP */
+
+
+/*
+ * cluster_to_logical_mask - return cpu logical mask of CPUs in a cluster
+ * @socket_id:		cluster HW identifier
+ * @cluster_mask:	the cpumask location to be initialized, modified by the
+ *			function only if return value == 0
+ *
+ * Return:
+ *
+ * 0 on success
+ * -EINVAL if cluster_mask is NULL or there is no record matching socket_id
+ */
+int cluster_to_logical_mask(unsigned int socket_id, cpumask_t *cluster_mask)
+{
+	int cpu;
+
+	if (!cluster_mask)
+		return -EINVAL;
+
+	for_each_online_cpu(cpu)
+		if (socket_id == topology_physical_package_id(cpu)) {
+			cpumask_copy(cluster_mask, topology_core_cpumask(cpu));
+			return 0;
+		}
+
+	return -EINVAL;
+}
 
 /*
  * init_cpu_topology is called at boot when only one cpu is running

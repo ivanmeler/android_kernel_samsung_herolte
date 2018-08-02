@@ -2175,9 +2175,16 @@ __kmem_cache_create (struct kmem_cache *cachep, unsigned long flags)
 			size += BYTES_PER_WORD;
 	}
 #if FORCED_DEBUG && defined(CONFIG_DEBUG_PAGEALLOC)
-	if (size >= kmalloc_size(INDEX_NODE + 1)
-	    && cachep->object_size > cache_line_size()
-	    && ALIGN(size, cachep->align) < PAGE_SIZE) {
+	/*
+	 * To activate debug pagealloc, off-slab management is necessary
+	 * requirement. In early phase of initialization, small sized slab
+	 * doesn't get initialized so it would not be possible. So, we need
+	 * to check size >= 256. It guarantees that all necessary small
+	 * sized slab is initialized in current slab initialization sequence.
+	 */
+	if (!slab_early_init && size >= kmalloc_size(INDEX_NODE) &&
+		size >= 256 && cachep->object_size > cache_line_size() &&
+		ALIGN(size, cachep->align) < PAGE_SIZE) {
 		cachep->obj_offset += PAGE_SIZE - ALIGN(size, cachep->align);
 		size = PAGE_SIZE;
 	}
@@ -4206,6 +4213,36 @@ static int __init slab_proc_init(void)
 }
 module_init(slab_proc_init);
 #endif
+
+#ifdef CONFIG_HARDENED_USERCOPY
+/*
+ * Rejects objects that are incorrectly sized.
+ *
+ * Returns NULL if check passes, otherwise const char * to name of cache
+ * to indicate an error.
+ */
+const char *__check_heap_object(const void *ptr, unsigned long n,
+				struct page *page)
+{
+	struct kmem_cache *cachep;
+	unsigned int objnr;
+	unsigned long offset;
+
+	/* Find and validate object. */
+	cachep = page->slab_cache;
+	objnr = obj_to_index(cachep, page, (void *)ptr);
+	BUG_ON(objnr >= cachep->num);
+
+	/* Find offset within object. */
+	offset = ptr - index_to_obj(cachep, page, objnr) - obj_offset(cachep);
+
+	/* Allow address range falling entirely within object size. */
+	if (offset <= cachep->object_size && n <= cachep->object_size - offset)
+		return NULL;
+
+	return cachep->name;
+}
+#endif /* CONFIG_HARDENED_USERCOPY */
 
 /**
  * ksize - get the actual amount of memory allocated for a given object

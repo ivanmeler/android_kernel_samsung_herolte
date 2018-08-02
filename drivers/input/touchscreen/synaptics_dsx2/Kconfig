@@ -1,0 +1,9 @@
+#
+# SYNAPTICS TOUCH driver configuration
+#
+
+config TOUCHSCREEN_SYNAPTICS_I2C_DSX2
+	tristate "Synaptics DSX2 i2c touchscreen base on bootloader Ver7"
+	depends on I2C
+	help
+	  This enables support for Synaptics DSX2 over I2C based touchscreens.

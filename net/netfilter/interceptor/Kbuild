@@ -1,0 +1,20 @@
+obj-$(CONFIG_VPNCLIENT_SECURITY) := vpnclient.o
+
+vpnclient-y := \
+	ip_selector_db.o \
+	ip_selector_match.o \
+	kernelspd_main.o \
+	kernelspd_hooks.o \
+	kernelspd_procfs.o \
+	ipsec_boundary.o \
+	debug_filter.o \
+	debug_strf.o \
+	debug_linux.o \
+	debug_strbuf_stack.o \
+
+ifeq ($(DEBUG), 1)
+override EXTRA_CFLAGS += \
+         -DDEBUG_LIGHT
+endif
+
+override EXTRA_CFLAGS += ${EXTERNAL_CFLAGS}

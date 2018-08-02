@@ -33,7 +33,7 @@
 static __initdata char chosen_lsm[SECURITY_NAME_MAX + 1] =
 	CONFIG_DEFAULT_SECURITY;
 
-static struct security_operations *security_ops;
+RKP_RO_AREA static struct security_operations *security_ops;
 static struct security_operations default_security_ops = {
 	.name	= "default",
 };
@@ -134,6 +134,26 @@ int __init register_security(struct security_operations *ops)
 }
 
 /* Security operations */
+
+int security_binder_set_context_mgr(struct task_struct *mgr)
+{
+	return security_ops->binder_set_context_mgr(mgr);
+}
+
+int security_binder_transaction(struct task_struct *from, struct task_struct *to)
+{
+	return security_ops->binder_transaction(from, to);
+}
+
+int security_binder_transfer_binder(struct task_struct *from, struct task_struct *to)
+{
+	return security_ops->binder_transfer_binder(from, to);
+}
+
+int security_binder_transfer_file(struct task_struct *from, struct task_struct *to, struct file *file)
+{
+	return security_ops->binder_transfer_file(from, to, file);
+}
 
 int security_ptrace_access_check(struct task_struct *child, unsigned int mode)
 {
@@ -472,6 +492,7 @@ int security_path_chown(struct path *path, kuid_t uid, kgid_t gid)
 		return 0;
 	return security_ops->path_chown(path, uid, gid);
 }
+EXPORT_SYMBOL(security_path_chown);
 
 int security_path_chroot(struct path *path)
 {

@@ -1,0 +1,6 @@
+config FIMC_IS_V3_11_0
+	bool "Use fimc-is v3.11.0"
+	depends on EXYNOS_FIMC_IS
+	default n
+	help
+	  fimc-is version 3.11.0

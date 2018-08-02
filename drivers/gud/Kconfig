@@ -1,0 +1,18 @@
+#
+# Mobicore Configuration
+#
+
+config SOC_EXYNOS8890_KINIBI311
+        bool "Enable kinibi311"
+        default n
+
+
+if SOC_EXYNOS8890 && SOC_EXYNOS8890_KINIBI311
+source "drivers/gud/gud-exynos8890_kinibi311/Kconfig"
+source "drivers/gud/TlcTui/Kconfig"
+endif
+
+if SOC_EXYNOS8890 && !SOC_EXYNOS8890_KINIBI311
+source "drivers/gud/gud-exynos8890/Kconfig"
+source "drivers/gud/TlcTui/Kconfig"
+endif

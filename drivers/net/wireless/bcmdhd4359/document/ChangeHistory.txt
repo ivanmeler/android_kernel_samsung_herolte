@@ -1,0 +1,686 @@
+BCM4361 DHD 1.77.65 for Android Great/Dream/Hero & BCM4345X & BCM4343X Project
+(Notes: 1.77.x is twigged off from 1.579.235.9)
+
+DHD 1.77.65 - 2018.03.16
+Others
+ - CS4384009(By bang haejung) Fixed wrong configurations at MIRACAST
+ - CS4456720(By Cho Seong Ji) Added MAX_CNTL_TX_TIMEOUT in memdump condition if TX control timeout
+ - CS4539141(By Cho Seong Ji) Added additional string ('_plus') at nvram file name for 4359C0 (B90S module/GraceR projects)
+ - CS4596042(By Kwak Hogil) Changed EXCESS_PM_WAKE_EVENT interval time on suspend mode
+ - CS4611122(By Kim Gwang Min) CS4617024(By Cho Seong Ji) Added CLM multiple/single regrev blob checking logic
+ - CS4678265(By Anh Tran Tuan) Fixed Single Nvram define on BCM4343X for Android O-OS
+
+
+DHD 1.77.64 - 2018.03.05
+New Feature
+ - CS2472363(By Seo Jung Kuk Seo) Supported STA+SoftAP concurrent mode for non-RSDB chip(BCM43456)
+   SoftAP and STA interfaces simultaneously using single firmware in the Single Channel Concurrency (same channel operation)
+   (It should be sync up with FW version BIS5718B120RC8_REL_7_84_9)
+
+Security Patch
+ - CVE-2017-13292 V2018010201 Fixed buffer overflow in wl_get_assoc_ies() during assoc_info iovar results handling
+
+Others
+ - CS4429886(By Junsu Choi) Fixed to get proper VTS feature capabilities
+ - CS4474435(By Cho Seong Ji) Fixed AP scan results corrupted issue by wrong IE channel information in beacon
+ - CS4523209(By Jeong Min Cheol) Added VENDOR path ahead CLM blob path
+ - CS4539141(By Cho Seong Ji) Added function which conditionally add vendor name string (murata/wisol) at nvram file name for 4359C0 (B90S module)
+ - CS4593020(By Jeong Min Cheol) Moved memdump path to common feature list in Makefile
+ - Added Single Nvram define on BCM4343X for Android O-OS
+
+
+DHD 1.77.63 - 2018.02.02
+Security Patch
+ - CS4417295(By Jeong Min Cheol) Fixed for wl/cfg driver vulnerability by buffer overflow
+
+Others
+ - CS2864574(By Kim Tae-Yong) Fixed PCIE LINK DOWN issue by changing PCIE RC API
+ - CS3420505(By Huang Junming) Fixed wrong nvram loading issue from W2018 project
+ - CS3846389(By Kwak Hogil) Limit the number of dump files that DHD can store to local file system
+ - CS4324680(By Cho Seong Ji) Changed API from dev_alloc_skb(GFP_ATOMIC) to __dev_alloc_skb(GFP_KERNEL) in dhd_init_wlan_mem()
+ - CS4392874(By Gu Ja Heon) IRQ Affinity set to Big core and blocking CPU migration to Big Core
+ - Update correct STA channel for the Auto channel selection in case of STA/SoftAP concurrent mode
+
+Merged 1.363.59 to 1.77 for BCM4359C0 Projects only
+ - CS1914112(By Jeong Min Cheol) Added WIFI HANG operation when happen "scan timeout"
+ - CS2350019 Added Kernel log for RSDB mode switch status
+ - Added a firmware and nvram path (_plus) for Samsung GraceR project
+ - Added CLMINFO_PARSER feature
+   (For GraceR project, It should be sync up with FW DIN975T155RC47_REL_9_96_8 or higher version.
+    The FW file path should add "_blob" at the end of filename extension. ex)bcmdhd_sta.bin_c0_plus_blob )
+ - Added exception handling for LOGTRACE feature
+ - Added KEEP_KR_REGREV feature for replacing the regrev via NVRAM when Country code is KR
+ - Added private command for set CAC
+ - Modify virtual interface creation routines
+ - Replaced the ccode/regrev in translate_custom_table
+   (It should be sync up FW version with DIN975T155RC47_REL_9_96_3 or higher version for HERO project)
+ - Synced Makefile/Kconfig
+
+
+DHD 1.77.61 - 2018.01.24
+Others
+ - CS4094253(Byunghun Ahn) Fixed to support SR on 43569
+ - CS4115086(By Kwak Hogil) Added android private command to change pkt logging size
+ - CS4129114(By Choi Junsu) Added Single Nvram define on BCM43456 when Android O-OS
+ - CS4233933(By Kwak Hogil) Print mask and pattern values for pktlog filter separately
+ - CS4261039(By Min SungBin) Fixed to use proper locally_generated value on cfg80211_disconnect() when upper layer request disconnection
+ - CS4307298(By Jeong Min Cheol) Added to miss merged for WLAN_5GDISABLE in Kconfig
+ - CS4318264(By Anh Tran Tuan) Added to miss merged for WLAN_VHTDISABLE in Kconfig
+ - Changed debug log level in ISR routine which caused throughput regression on reference platform
+ - Changed MAC OUI format for Bigdata
+
+
+DHD 1.77.59 - 2017.12.22
+Others
+ - CS4139777(By Kwak Hogil) Fixed call mute issue during LCD Off(Changed Packet filter ID 107)
+ - CS4163743(By Kwak Hogil) Fixed code defect for wl_pattern_atoh() with invalid return value
+ - Changed MAC masking pattern and masking position to sync up with Firmware masking pattern
+ - Enhanced SoftAP/P2PGO keep alive to avoid unexpected keep alive disconnection
+ - Fixed a possible memory leak in dhdpcie_bus_write_vars
+ - Fixed missed SSID/MAC filtering in log for security reason
+ - Fixed parsing issue on wl_parse_ssid_list_tlv() for PNO setup
+
+
+DHD 1.77.58 - 2017.12.18
+Major Issue
+ - CS4083402(By Jeong Min Cheol) Added to define DHD_2G_ONLY_SUPPORT
+     * Issue summary
+       To support for 2.4G band only model requirement
+     * Analysis / Root cause
+       In order to support 2.4G band, it needs to block 5G band setting.
+     * Solution
+       In order to enable this feature, it needs to define CONFIG_WLAN_5GDISABLE in kernel config
+
+ - Added to define DHD_DISABLE_VHTMODE
+     * Issue summary
+       To support for 802.11ac disable model requirement
+     * Analysis / Root cause
+       In order to support 802.11ac disable, it needs to disable vhtmode
+     * Solution
+       In order to enable this feature, it needs to define CONFIG_WLAN_VHTDISABLE in kernel config
+
+Kernel Panic
+ - CS3959621(By Kim Gwang Min) Added debug log in ISR for debugging dpc un-scheduling issue
+ - CS3959621(By Kim Gwang Min) Fixed watchdog reset due to deadlock path from PM handler
+
+Others
+ - CS3898979(By Yoon Jae Ho) Fixed unintended hang issue by invalid deauth reason code from specific AP
+ - Enabled an Android private command for setting ADPS on BCM43456
+ - Fixed connection fail if BDC is enabled in DHD and CAC is enabled in both STA and AP (SDIO only)
+
+
+DHD 1.77.56.1 - 2017.11.30
+Others
+ - Fixed link down by null BSSID during roaming
+
+
+DHD 1.77.56 - 2017.11.30
+Major Issue
+ - CS3928981 Fixed to allocate 64KB for WLAN_DHD_WLFC_BUF_SIZE on 32bit platform also
+     * Issue summary
+       A8/43455/NOS, couldn't operate screen mirroring over WFD only under the VSDB/MCC       
+     * Analysis / Root cause
+       For a smooth VSDB/TX operation, PROP_TXSTATUS(WLFC) feature is being used
+       However, not enough pre-allocated memory for WLFC was allocated on 32bit platform
+       So VSDB/TX regression issue happened due to low pre-allocated memory size (16KB)        
+     * Solution
+       For WLFC_BUF_SIZE, pre-allocates 64KB for 32bit platform also
+
+ - CS4011220 Block ADPS enable private command at RF test mode
+     * Issue summary
+       Have a trouble to measure RF performance at RF test mode by ADPS
+     * Analysis / Root cause
+       During RF test mode, PM 0 is set to disable WiFi dongle PM operation including ADPS,
+       but “ADPS enable“ private command was called after setting PM 0 so ADPS was run again
+       This issue happened after enabling ADPS by default
+     * Solution
+       Block “ADPS enable” private command when PM 0 is set for RF test mode
+
+ - CS4034777 Enabled ARGOS notification callback for DHD TCP ACK suppress
+     * Issue summary
+       Low TPUT issue occurred in TCP long RTT environment
+     * Analysis / Root cause
+       The reason is that DHD TCP ACK suppress was always enabled because ARGOS feature was removed in DHD
+     * Solution
+       Turn off DHD TCP ACK suppress by default and enable ARGOS notification callback to control DHD TCP ACK suppress by current TPUT
+
+ - Configure 64bit DMA mask for MSM8998 (Default enabled: it can be controlled by the SET_DMA_MASK_64BIT  definition in the Makefile)
+     * Issue summary
+       Kernel allocated the memory in swiotlb region for DMA mapping since the default DMA mask is set to 32bit
+     * Analysis / Root cause
+       It's configured to 64bit mask for DMA mapping to check if  kernel allocates the memory for DMA mapping to different region and TPUT is improved
+     * Solution
+       Based on the kernel DMA mapping guidance, DHD configure DMA mask to 64bit
+
+Security Patch
+ - CVE-2017-13161 V2017092501 Fixed buffer overrun issue in wl_parse_ssid_list_tlv()
+ - CVE-2017-13213 V2017081501 Fixed buffer overrun issue in wl_cfgvendor_set_bssid_blacklist()
+ - V2017081701 Fixed buffer overrun issue in wl_cfgvendor_set_ssid_whitelist()
+ - V2017082201 Fixed buffer overrun issue in wl_cfgvendor_set_rand_mac_oui()
+ - V2017082202 Fixed buffer overrun issue in wl_cfgvendor_set_bssid_pref()
+
+Others
+ - CS3742062 Added STP / XID packet filter
+ - CS3863852 Added log to detect abnormal skb operation
+ - CS3914585 Fixed RCC channel missing issue when scan result is more than 100
+ - CS3927468 Added Bring-up patch for BCM43569
+ - CS3976846 Clear the bus state related flags for recovery during turning on Wi-Fi
+ - Block processing the rest of ring buffers once PCIe bus enters low power state
+ - Enabled feature for the Dongle memory loopback test and the PCIE Non DMA M2M loopback test when CONFIG_SEC_FACTORY enabled case
+   (It should be sync up FW version with IGU35RC65_REL_13_38_45(GREAT), IGU3565T38RC13_REL_13_41_13(DREAM) or higher version)
+ - Fixed memory leak in PNO stop command
+
+
+DHD 1.77.55.1 - 2017.11.10
+Others
+ - Disabled FW corruption test and PCIE Non DMA M2M loopback test in Makefile
+   (For enabling it, please modify Makefile and sync up FW version with IGU35RC65_REL_13_38_45(GREAT), IGU3565T38RC13_REL_13_41_13(DREAM) or higher version)
+
+
+DHD 1.77.55 - 2017.11.10
+Others
+ - CS3750290 Fixed mis-merged Makefile for BCM43456 Bring-up patch
+ - CS3962099 Fixed lockup corner case of Non-DMA M2M loopback test
+
+
+DHD 1.77.54 - 2017.11.03
+New Feature
+ - CS3688359 Added PCIe M2M non DMA loopback test in MFG mode
+
+Kernel Panic
+ - CS3830411 Fixed cpu lock up during de-init tcpack suppress module
+
+Security Patch
+ - CS3621122 Fixed vulnerability issue by dhd_parse_logstrs_file() which contains problematic code
+
+Others
+ - CS3509434 Changed beacon receive timeout
+ - CS3558828 Added NDO_CONFIG_SUPPORT
+ - CS3661384 Disabled WLAN_REASON_UNSPECIFIED reason code used as hang event code
+ - CS3685473 TPUT enhancement for A8 project (Exynos 5433 + BCM43455)
+ - CS3724694 Cancel roaming process when BSS was not matched
+ - CS3750290 Added BCM43456 Bring-up patch
+ - CS3799104 Added lock to protect vndr_oui_list
+ - CS3863852 Added log to detect abnormal skb operation
+ - Cleaned up the memory allocation logic of DHD_FW_MEM_CORRUPTION feature
+
+
+DHD 1.77.48 - 2017.09.21
+Kernel Panic
+ - CS3275366 Fixed kernel panic issue when returning invalid dongle ram size
+ - CS3341471 Fixed kernel panic from ASSERT during driver initialization
+ - Fixed kernel panic during connection test on debugging mode
+
+Others
+ - CS3274682 Fixed low performance of NAS download due to CPU migration
+ - CS3291870 Fixed the current consumption issue on SoftAP due to the wl_wdwake wakelock (Available for SDIO projects)
+ - CS3409811 Supported private command of clearing pktlogging data for security
+ - CS3483269 Extended dongle_isolation for all customer platform using PCIe bus
+ - CS3508335 Limited some security information in debug_dump
+ - CS3509434 Added WLC_E_SET_SSID fail custom reason code
+ - CS3558874 Added Assoc Reject - WLC_E_STATUS_NO_NETWORKS status code for Assoc Reject Bigdata
+ - CS3585868 Integrated GREAT Android N OS features into DREAM/GREAT Android O OS project
+ - CS3591398 Enabled TCP ACK suppress enable/disable log message
+ - Support RSSI summation report feature (Available for Android O or later version)
+
+
+DHD 1.77.44 - 2017.08.24
+Others
+ - CS3088602 Reduced value length of WSR counters variable
+ - CS3247015 Fixed disconnection during roaming on CISCO hidden networks
+ - CS3396150 Enabled legacy SCAN wakelock for SDIO Project
+ - CS3429070 Fixed SDIO init CLK issue for Exynos 7580 platform
+ - CS3455796 Changed path of wifi dump-files for DREAM/STAR
+
+
+DHD 1.77.43 - 2017.08.11
+Security Patch
+ - V2017063001 Removed not required IOVAR for SDIO
+ - V2017063002 Added length check in event log handler
+
+Others
+ - CS3088602 Minimized Wifi Statistics Report for host buffer size limitation
+ - CS3247009 Changed FW/NVRAM/BLOB location following ANDROID PLATFORM VERSION
+ - CS3351562 Changed MAC address encoding due to security issue
+
+
+DHD 1.77.37.3 - 2017.07.27
+Others
+ - CS3088602 Add missed 4 values while report to Framework
+ - CS3203998 Fixed to support big data of 11kv
+ - CS3215091 Fixed build error of detect consecutive hang event
+ - CS3255825 Changed path of wifi dump-files only if GREAT
+
+
+DHD 1.77.37.2 - 2017.07.19
+Kernel Panic
+ - CS3203896 Fixed kernel panic caused by referred NULL Pointer in dhd_pktlog_pkts_write_file
+ - CS3204538 Fixed Kernel panic when D3_ACK timeout is occurred
+
+Others
+ - CS3215091 Detect consecutive hang event from dongle on factory binary
+ - CS3221222 Fixed wrong 11kv default setting
+ - CS3265424 CS3160208 Fixed to update correct DHD connection status on AUTO_ROAM operation
+ - CS3265424 CS3214374 Fixed Roaming event drop issue when roaming to same BSSID case
+
+
+DHD 1.77.37 - 2017.07.04
+New Feature
+ - CS2955162 Supported RSSI Logging 
+   (This implementation should be sync up with FW 13.38.30 or higher version)
+ - CS3088602 Introduced Wifi Statistics Report for Big data logging
+
+Kernel Panic
+ - CS1812549 Fixed kernel panic for GETSTAINFO command
+ - CS3114183 Fixed kernel panic that filp_close() referred NULL Pointer in dhd_pktlog_write_file()
+ - CS3179018 Changed log level of scan warn event log to prevent scan time out
+
+Security Patch
+ - CVE-2017-0705 Added boundary check in wl_cfgvendor_significant_change_cfg()
+ - CVE-2017-0706 Added boundary check in wl_cfg80211_mgmt_tx()
+ - V2017053101 Added boundary check in dhd_process_full_gscan_result()
+ - V2017053102 Fixed Heap overflow in dhd_handle_swc_evt()
+ - V2017053103 Added boundary check in dhd_handle_hotlist_scan_evt()
+ - V2017053104 Added boundary check in dhd_pno_process_epno_result()
+ - V2017060101 Added boundary check in wl_escan_handler()
+ - Fixed overflow issue in wl_android_set_ibss_beacon_ouidata()
+ 
+Others
+ - CS1760272 Added BCM43430 FW/NVRAM dual operation
+ - CS2459522 Re-enabled GEN_SOFTAP_INFO_FILE feature
+ - CS2554190 Enhanced Packet Logging feature - Used Pre-allocated buffer pool & Added private command & Added packet failure reason into pcap
+ - CS2901316 Fixed to send up common error code for Android-O VTS
+ - CS2901316 Fixed to use proper chipset number when parsing link stats
+ - CS3057710 Added spin lock for Packet Monitoring and Debugability feature - Avoid packet fetching on invalid states
+ - CS3057710 Disabled Android Packet Monitoring
+ - CS3059107 Fixed build error on BCM43455 A8 platform
+ - CS3092630 Added to HEX dump for host wake packet
+ - CS3093675 Fixed prevent issue in dhd_pktlog.c file
+ - CS3121464 Added to check invalid hang reason
+ - Added log for packet monitor entry functions
+
+
+DHD 1.77.27.12 - 2017.06.20
+New Feature
+ - CS2554190 Enabled Packet Logging feature for Great Project
+
+Kernel Panic
+ - CS2931791 Fixed kernel panic when flushing packet in Tx queue for SDIO interface
+ - CS3024217 Fixed the Kernel panic when Kernel calls the CPU hotplug notification function during driver initialization
+ 
+Security Patch
+ - Enhanced event length check in is_wlc_event_frame()
+ - V2017052301 Added event length check in dhd_rtt_event_handler()
+ - V2017052302 Added event length check in wl_notify_rx_mgmt_frame()
+
+Others
+ - CS2934714 Fixed MFG firmware loading failure with single nvram file
+ - CS3018308 Fixed repetitive connection drops of clients with Mobile Hotspot
+ - Added log for scan timeout issue
+ - Disabled Preempt when scan results sent to host - avoid scan timeout issue
+ - Provide roaming reason when WLC_E_ROAM_PREP event has occurred
+   (This patch should be sync up with FW 13.38.30 or higher version)
+ - Sync up Makefile/Kconfig with Samsung requirement
+
+
+DHD 1.77.24 - 2017.06.02
+Kernel Panic
+ - Fixed Kernel Panic in wl_event_handler() while doing STA+P2P stress test
+
+Security Patch
+ - Supported Heap ASLR(Address Space Layout Randomization) in dongle. Heap ASLR will be enabled when firmware supports it
+
+Others
+ - Fixed incorrect nvram path modification routines to support Murata module
+
+
+DHD 1.77.22 - 2017.05.25
+Kernel Panic
+ - CS2714944 Fixed the Kernel Panic during dynamic TCP ACK suppress mode change in SDIO platform
+
+Others
+ - CS2595140 Added an Android private command for setting ADPS
+ - CS2675989 Fixed reverse-order of EAP-Failure and deauth packet
+ - 11kv - Fixed BTM capability check
+ - Unified one DHD for Dream & Great Project with CONFIG_WLAN_GREAT define
+
+
+DHD 1.77.21 - 2017.05.19
+New Feature
+ - CS2459522 Disabled GEN_SOFTAP_INFO_FILE feature in Makefile
+ - Comment out ADPS define at Makefile
+
+Kernel Panic
+ - CS2472525 Avoid to trigger Kernel panic on abnormal devices during device initialization
+ - CS2716890 Fixed Scan timeout issue with blocking suspend during P2P scan
+
+Security Patch
+ - CVE-2017-0633 V2017022301 Enhanced wrong buffer usage in IOCTL path
+
+Others
+ - CS2454032 Changed to implement wake stat support
+ - CS2460373 Added WIFI_LOGGER feature in Makefile
+ - CS2472434 Fixed roam failure on PMF required APs
+ - CS2475910 Print last roaming event log when link down is happened
+ - CS2642368 Fixed type casting issue in wl_android_send_action_frame()
+ - CS2761292 Added dhd rxq sdlock operation
+ - CS2769153 Fixed compile error on exymos5433 sdio model
+ - CS2791743 Fixed duplicated tx_error counter summation
+ - CS2793328 Relocated WLAN onoff delay on dhd_wlan_init_gpio()
+ - Added max payload length check in dhd_dbg_msgtrace_log_parser() function
+ - Changed the nvram file name to nvram.txt to support single nvram file
+ - Fixed assoc state sync issue between wpa_supplicant & DHD driver
+ - Fixed SoftAP interface delete issue observed while running APSTA stability test
+ - Fixed the spinlock related problem in the DHD_WAKE_STATUS feature
+
+
+DHD 1.77.16 - 2017.05.01
+New Feature
+ - CS2459522 Created .softap.info file when boot-up time for SoftAP information
+
+Kernel Panic
+ - CS2471281 Fixed null pointer reference exception during interface down
+ - CS2472873 Fixed to prevent accessing  CPU hotplug call back before initialization
+ - CS2477559 Implement exception handling routines if DMA mapping error for TX data packet is happened
+
+Security Patch
+ - CVE-2017-0568 V2017051814 Fixed buffer overrun in wl_run_escan()
+ - CVE-2017-0570 V2017051815 Removed unused file (wl_iw.c/wl_iw.h)
+ - CVE-2017-0574 V2017051817 Fixed vulnerability issues
+ - CVE-2017-0740 V2017030901 Fixed length overflow issue in dhd_wl_ioctl() function
+
+Others
+ - CS2456626 Enabled SETBAND API
+ - CS2470635 Enabled frameburst on SDIO platform
+ - CS2471300 Fixed Buffer overflow issue
+ - CS2473469 Added force disconnect when continuously update DPM event
+ - CS2474767 Fixed compile error for Dream project
+ - CS2476640 Added to control tcpack_suppress as throughput on BCM43455
+ - CS2555123 Fixed page fault issue in dhd_wl_ioctl()
+ - Enabled CAC by default and modified CAC dynamically based on the interface
+ - Enabled Random MAC address scan by default for all WIFI chip
+ - Fixed wrong event message print log issue
+
+
+DHD 1.77.12.1 - 2017.03.27
+Others
+ - CSP:1138026 Fixed compile error for Dream project
+
+
+DHD 1.77.12 - 2017.03.22
+Others
+ - CSP:1122174 Fixed to clean up dongle arp table when using arp request host offloading option
+ - CSP:1136579 Removed gtk_key_info set fail error log
+ - Fixed memory buffer overrun with interworking IE
+
+
+DHD 1.77.11 - 2017.03.17
+Others
+ - Removed unnecessary country code list in translate_custom_table
+ - Supported A3 project for BCM43438
+
+
+DHD 1.77.9.1 - 2017.03.28
+Kernel Panic
+ - CSP:1139481 Fixed null pointer reference exception during interface down
+
+
+DHD 1.77.9 - 2017.03.14
+Kernel Panic
+ - CSP:1133051 Fixed livelock issue from unterminated tasklet
+ - CSP:1133633 Disabled Host PCIe IRQ to avoid continuous IRQ handling
+
+Others
+ - CSP:1128803 Removed checking NULL BSSID in dhd profile
+ - CSP:1129196 Changed SDIO Max Tx Glom Size and Fixed sg list entries limit exceed issue
+ - CSP:1129696 Added "P2P" label for argos  to schedule PCIe interrupt on CPU core 5
+ - Prevent BSSID mismatch issue between driver and dongle
+
+
+DHD 1.77.7 - 2017.02.20
+Kernel Panic
+ - CSP:1128508 Skip dumping core registers in EP side if PCIe link is down
+
+Others
+ - CSP:1122486 Enhanced validate code for CID tuple parsing
+ - CSP:1125601 Invalidate PCI configuration saved state in order to reduce PCI resume latency
+ - CSP:1128080 Fixed data traffic can't reachable issue after suspend state for SDIO project
+ - CSP:1128215 Fixed nvram loading issue for murata module
+ - CSP:1128493 Added wakelock during get BSSID from dongle on wl_cfg80211_get_station() function
+ - CSP:1128803 Set timer to check null BSSID status of profile was continued
+ - Changed NAPI & PCIe IRQ CPU core number for Max TPUT (MSM 8998 Platform)
+
+
+DHD 1.77.6 - 2017.02.13
+Others
+ - CSP:1126094 Block private command SETBAND
+ - CSP:1127636 Fixed WAPI connection failure
+ - Added exception case of CLM Blob file checking logic about MFG mode
+
+
+DHD 1.77.5 - 2017.02.12
+Kernel Panic
+ - CSP:1126904 Block SOCRAM dump request if bus status is in suspend or suspend in progress
+ - Avoid kernel panic due to wrong ifidx during if create
+
+Others
+ - CSP:1126670 Removed Hard coded number from ARGOS_CPU_SCHDULER
+ - CSP:1126945 Blocking SSSR dump when memdump option is 0
+ - CSP:1127862 Changing TXFL wake lock to timeout wake lock
+
+
+DHD 1.77.4 - 2017.02.10
+Others
+ - CSP:1126670 Removed Hard coded number of PCIe IRQ for affinity set on MSM8998
+ - Refactoring Blob download feature for runtime checking Blob/Non-Blob FW
+
+
+DHD 1.77.3 - 2017.02.06
+Others
+ - CSP:1096716 Fixed long BT deactivation time
+ - CSP:1124360 Sync up about support chip revision for BCM4345X
+ - CSP:1124967 Avoid dongle trap by multiple interface creation request
+ - CSP:1125141 Enhance the PKTID error handler
+ - CSP:1125601 Invalidate PCI configuration saved state in order to reduce PCI resume latency
+ - CSP:1126094 Fixed to set roam trigger when 11kv was off
+
+
+DHD 1.77.2 - 2017.01.30
+Kernel Panic
+ - CSP:1124968 Block accessing EP's core register if host fails PCIe bus linkup
+
+Others
+ - CSP:1118705 Link Status HAL API support for 32bit platfom on 64bit kernel
+ - CSP:1121807 Adding more debug logs for resumed on timeout issue debugging
+ - CSP:1124007 Changed ram_dump file path
+ - CSP:1124363 Fix idlecount update missing of RuntimePM
+ - CSP:1124608 Fixed the turn on failure in SoftAP only mode
+ - CSP:1121807 Adding more debug logs for resumed on timeout issue debugging
+ - Change ARGOS IRQ number (162) for Exynos 8895 platform
+
+Note: 1.77.x is twigged off from 1.579.235.9
+
+
+DHD 1.579.235.9 - 2017.01.24
+New Feature
+ - Added to Enable/Disable ADPS mode from ".adps.info" file
+
+Kernel Panic
+ - Fixed Kernel Panic during STA-GO connection test case
+
+11kv
+ - Fixed to send BTM query in dongle
+ - Override WNM Max Idle period to keep alive period
+ - Update RCC with channels in neighbor report response
+
+Others
+ - CSP:1104911 Added to get hostapd_cli STA_INFO command
+ - CSP:1111618 Disabled WLADPS_SEAK_AP_WAR feature
+ - CSP:1114400 Added private command for getting SNR
+ - CSP:1115484 Fixed vulnerability issues
+ - CSP:1120070 Added recovery method when reading shared memory is failed
+ - CSP:1122141 Changed GFP flags usage in osl_alloc_skb()
+ - CSP:1122486 Fixed potential buffer overflow issue in concate_revision_bcm4361()
+ - CSP:1122535 Recovery PCIe bus if host fails to read shared memory
+ - CSP:1122888 Implement the logtrace packet flush handler to fix the scan timeout issue
+ - Added Private command for LQCM
+ - Added to control scan suppress during RF test mode
+ - Enhanced more for nested connection case handling
+
+
+DHD 1.579.235.7 - 2017.01.19
+Kernel Panic
+ - CSP:1119451 Block transmitting packets while host is in suspend state
+
+Others
+ - CSP:1089681 Fixed build error on dhd_custom_exynos.c file
+ - CSP:1089681 Fixed L1ss doesn't work issue on Exynos8895 platform
+ - CSP:1110320 HANG event recovery simulation
+ - CSP:1117906 Changed log level for rxglom on SDIO platform
+ - CSP:1118380 Added file sync routine during socram file dump
+ - CSP:1118451 Prevent to duplicate connection request without disconnection
+ - CSP:1118705 Fixed miss match struct wifi_interface_info between DHD and HAL library
+ - CSP:1118926 Fixed for memory leakage in dhd_preinit_ioctls
+ - CSP:1122174 Disabled ARP host auto reply option
+ - 11kv - Enabled BSS Max Idle Period
+ - Disabled Packet monitoring and debug ability
+ - Enabled "SUPPORT_TRIGGER_HANG_EVENT" for hang test
+ - Enhance nested connection case handling
+ - Fixed D3 ACK timeout HANG send up issue
+ - Fixed missing mutex unlock in wl_cfg80211_tdls_config
+ - Fixed vulnerability issues
+ - Re-factorize MSM CFG function selection
+ - Removed unused file list
+
+
+DHD 1.579.233 - 2017.01.05
+Kernel Panic
+ - CSP:1115833 Fixed kernel freeze issue due to tasklet count mismatch
+
+Others
+ - CSP:1109459 Supported split ARGOS table
+ - CSP:1117264, 1114969 Modified IRQ affinity code to support Exynos & Qcom platform
+ - CSP:1117291 Enabled Dongle memdump operation for BCM43455
+ - CSP:1118062 Added PCI config space restore check log during resume device
+ - CSP:1118325 Disabled Rx temperature feature
+ - 11kv - Added Android private command for BTM delta and disassociation timer threshold
+ - 11kv - Send BTM query after join/roam if AP doesnt support neighbor report
+ - Changed debug log level in dhd_find_sta function for performance degradation
+ - Changed hang reason code - PCIe link down
+ - Enabled MACEVENT logs by default
+ - Fixed ADPS issue for RF test
+ - Fixed for erroneous return code in set radio power save function
+ - Changed include file location
+
+
+DHD 1.579.231 - 2016.12.23
+Kernel Panic
+ - CSP:1113202 Fixed race condition between runtime suspend and socram dump
+ - CSP:1114716 Increased P2P Provision Discovery Response dwell time
+ - Fixed CPU stall in smp_call_function_single on TX Load Balancing
+
+Others
+ - CSP:1089681 Fixed PCIe link down issue with changing L1ss sequence during WiFi on
+ - CSP:1100087 Added get_valid_channel by HAL command on SoftAP
+ - CSP:1109793 Fixed compile error for BCM4345X project
+ - CSP:1109793 Fixed connection fail with specific AP
+ - CSP:1110795 Added check reason of file_open error
+ - CSP:1111136 Added TDLS LOCK/UNLOCK to protect tdls peer list
+ - CSP:1111618 Added WAR for avoid data stuck issue in D-Link825 AP
+ - CSP:1112125 Added MSM8998 architecture define to deferred init call
+ - CSP:1113518 Fixed WiFi turn on failure issue due to d3 ack failure handling
+ - CSP:1115484 Fixed vulnerability issues
+ - CSP:1115750 Fixed disconnect issue during country code setting time
+ - 11kv - Changed WBTEXT policy as real product case
+ - 11kv - Send neighbor report request after join
+ - Disabled OCL feature during RF test mode
+ - Enabled COUNTRY_SINGLE_REGREV feature for BCM43455 Project
+   (This patch should be sync up with FW 7.120.1 or higher version)
+
+
+DHD 1.579.216 - 2016.12.07
+New Feature
+ - Enabled CLM SINGLE REGREV feature
+   (This patch should be sync up with FW 13.35.42 or higher version)
+
+Kernel Panic
+ - CSP:1104692 Fixed pktid audit failure issue with adding memory barrier
+
+Others
+ - CSP:1099699 Fixed DUT reset for link stats on framework
+ - CSP:1104452 Fixed for P2P connection failure due to M1 packet goes up with wrong interface
+ - CSP:1104795 Disabled ADPS when turn on RF TEST mode
+ - CSP:1106625 Fixed blob download malloc buffer size calculation code
+ - CSP:1108217 Changed mem allocation flag to GFP_ATOMIC in NAPI histogram dump
+ - 11kv - Fixed Makefile dependency
+ - Activated TSQ_MULTIPLIER to solve poor TCP/TX throughput
+ - Disabled RA filter when APF was supported
+ - Modified radio power save API along with the firmware change which enabled per-band radio power save setting 
+   (This patch should be sync up with FW 13.35.42 or higher version)
+ - Re-factorize MSM CFG function selection
+
+
+DHD 1.579.195 - 2016.11.16
+Others
+ - CSP:1091903 Fixed dialog token error in BTM query
+ - CSP:1097948 DHD info file path changed above android 7.0 version
+ - CSP:1099452 Fixed checking WBTEXT support on dongle
+ - CSP:1100087 Added to set Country code by HAL
+ - CSP:1100314 Added exception handling codes to debug PKTID AUDIT failure
+ - CSP:1100314 Enhanced read/write offset calculation for debug ring to fix the memory corruption problems
+ - CSP:1102277 Fixed get feature by HAL
+ - CSP:1102660 Removed SMMU hardware cache coherency related configuration code for MSM8998 platform
+ - 11kv - Send BTM query after join
+ - Added ICMP dump log
+ - Fixed to read cid info from module tuple
+ - Fixed to use same nvram file for Murata ES 3.0 and 3.1
+ - Increased static pool size from 64 to 128 for Scan timeout issue
+ - Supported nvram file name extension for Murata module
+ - Use the pre-allocated buffer pool for INFO ring to avoid memory fragmentation
+
+
+DHD 1.579.184 - 2016.10.26
+New Feature
+ - Enabled ADPS(Advanced Dynamic Power Save) Feature
+
+Kernel Panic
+ - CSP:1094253 Fixed Kernel Panic by registering Invalid netdev interface
+ - CSP:1096852 Changed kmalloc flags depending on interrupt state
+ - CSP:1098885 Enhance event log processing to avoid the possibility of buffer overflow
+
+Others
+ - CSP:1095855 Improved DHD_LOG_DUMP feature in order to logging for throttle log
+ - CSP:1096927 Fixed Prevent defect issue - NULL Referencing
+ - CSP:1097702 Fixed SSID length check on cfg80211_get_bss()
+ - CSP:1100314 Fixed the calculation of read/write offset for debug ring to avoid the possibility of buffer overflow
+ - CSP:1101214 Changed default CID info for BCM4361B0 chip
+ - Temporarily Disabled Android DEBUGABILITY feature
+ - Added to disable APF in suspend mode when HOSTAP mode
+ - Enhanced the functionality of dongle register dump
+ - Fix not turning RPM on SoftAP
+ - Fixed the D3_ACK timeout issue
+ - Updated BCM4361 module information
+
+
+DHD 1.579.167 - 2016.10.07
+Kernel Panic
+ - CSP:1092776 Replace API for file writing to prevent kernel panic
+ - CSP:1093684 Fixed kernel panic issue by curbssid null status in wl_cfg80211_is_event_from_connected_bssid()
+
+Others
+ - CSP:1070541 Added Private driver commands for high rate beacon transmission in softAP mode
+ - CSP:1070541 Added Private driver commands for radio power save in softAP mode
+ - CSP:1070553 Supported Private DRIVER commands to grab the RSSI of associated STAs in virtual interface softAP
+ - CSP:1093614 Fixed host memory leak issue by missing cfg80211_put_bss()
+ - CSP:1093614 Fixed Prevent warning issues
+ - CSP:1093851 Changed DHD information file path for N OS
+ - CSP:1094025 Fixed DHCP failure on WiFi-Sharing mode
+ - Block deauth packet for WPS disorder issue
+ - Disable running memdump by default regardless of '.memdump.info'
+ - Fixed legacy connection failure
+
+
+DHD 1.579.152 - 2016.09.22
+- Initial Release for BCM4361 Dream Project
+
+

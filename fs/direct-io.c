@@ -395,11 +395,13 @@ static inline void dio_bio_submit(struct dio *dio, struct dio_submit *sdio)
 	if (dio->is_async && dio->rw == READ)
 		bio_set_pages_dirty(bio);
 
+	dio->rw = (dio->rw == READ) ? KERNEL_READ : KERNEL_WRITE;
 	if (sdio->submit_io)
 		sdio->submit_io(dio->rw, bio, dio->inode,
 			       sdio->logical_offset_in_bio);
 	else
 		submit_bio(dio->rw, bio);
+	dio->rw = (dio->rw == KERNEL_READ) ? READ : WRITE;
 
 	sdio->bio = NULL;
 	sdio->boundary = 0;
@@ -812,7 +814,8 @@ out:
 	 */
 	if (sdio->boundary) {
 		ret = dio_send_cur_page(dio, sdio, map_bh);
-		dio_bio_submit(dio, sdio);
+		if (sdio->bio)
+			dio_bio_submit(dio, sdio);
 		page_cache_release(sdio->cur_page);
 		sdio->cur_page = NULL;
 	}

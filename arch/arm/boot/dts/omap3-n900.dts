@@ -445,6 +445,8 @@
 		DRVDD-supply = <&vmmc2>;
 		IOVDD-supply = <&vio>;
 		DVDD-supply = <&vio>;
+
+		ai3x-micbias-vg = <1>;
 	};
 
 	tlv320aic3x_aux: tlv320aic3x@19 {
@@ -456,6 +458,8 @@
 		DRVDD-supply = <&vmmc2>;
 		IOVDD-supply = <&vio>;
 		DVDD-supply = <&vio>;
+
+		ai3x-micbias-vg = <2>;
 	};
 
 	tsl2563: tsl2563@29 {
@@ -578,6 +582,8 @@
 	vmmc_aux-supply = <&vsim>;
 	bus-width = <8>;
 	non-removable;
+	no-sdio;
+	no-sd;
 };
 
 &mmc3 {

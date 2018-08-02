@@ -1,0 +1,9 @@
+config VIDEO_EXYNOS_SMFC
+	bool "Exynos Still MFC(H/W JPEG CODEC) Driver"
+	depends on VIDEO_EXYNOS
+	select V4L2_MEM2MEM_DEV
+	select VIDEOBUF2_ION
+	default n
+	help
+	  Still MFC(Multi Format Codec) V4L2 Driver for Exynos SoCs.
+	  The driver supports for mem2mem V4L2 device.

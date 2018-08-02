@@ -172,8 +172,10 @@ config TEGRA_IOMMU_SMMU
 	  space through the SMMU (System Memory Management Unit)
 	  hardware included on Tegra SoCs.
 
+# EXYNOS IOMMU support
 config EXYNOS_IOMMU
-	bool "Exynos IOMMU Support"
+	bool "IOMMU for Exynos"
+	default y
 	depends on ARCH_EXYNOS
 	select IOMMU_API
 	select ARM_DMA_USE_IOMMU
@@ -183,7 +185,20 @@ config EXYNOS_IOMMU
 	  non-linear physical memory chunks as linear memory in their
 	  address space.
 
-	  If unsure, say N here.
+config EXYNOS_IOVMM
+	bool "IO Virtual Memory Manager for Exynos IOMMU"
+	depends on EXYNOS_IOMMU
+	default y
+	help
+	  Supporting the users of Exynos IOMMU for allocating and mapping
+	  an IO virtual memory region with a physical memory region
+	  and managing the allocated virtual memory regions.
+	  This config supports SYSMMU V6 version.
+
+config EXYNOS_IOMMU_EVENT_LOG
+	bool "Logging System MMU events in private uncached buffer"
+	depends on EXYNOS_IOMMU
+	default y
 
 config EXYNOS_IOMMU_DEBUG
 	bool "Debugging log for Exynos IOMMU"

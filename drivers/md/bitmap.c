@@ -564,6 +564,8 @@ static int bitmap_read_sb(struct bitmap *bitmap)
 	if (err)
 		return err;
 
+	err = -EINVAL;
+
 	sb = kmap_atomic(sb_page);
 
 	chunksize = le32_to_cpu(sb->chunksize);
@@ -1799,6 +1801,11 @@ int bitmap_resize(struct bitmap *bitmap, sector_t blocks,
 	int ret = 0;
 	long pages;
 	struct bitmap_page *new_bp;
+
+	if (bitmap->storage.file && !init) {
+		pr_info("md: cannot resize file-based bitmap\n");
+		return -EINVAL;
+	}
 
 	if (chunksize == 0) {
 		/* If there is enough space, leave the chunk size unchanged,

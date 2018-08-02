@@ -28,7 +28,11 @@ static void stub_free_priv_and_urb(struct stub_priv *priv)
 	struct urb *urb = priv->urb;
 
 	kfree(urb->setup_packet);
+	urb->setup_packet = NULL;
+
 	kfree(urb->transfer_buffer);
+	urb->transfer_buffer = NULL;
+
 	list_del(&priv->list);
 	kmem_cache_free(stub_priv_cache, priv);
 	usb_free_urb(urb);
@@ -173,6 +177,13 @@ static int stub_send_ret_submit(struct stub_device *sdev)
 		txsize = 0;
 		memset(&pdu_header, 0, sizeof(pdu_header));
 		memset(&msg, 0, sizeof(msg));
+
+		if (urb->actual_length > 0 && !urb->transfer_buffer) {
+			dev_err(&sdev->udev->dev,
+				"urb: actual_length %d transfer_buffer null\n",
+				urb->actual_length);
+			return -1;
+		}
 
 		if (usb_pipetype(urb->pipe) == PIPE_ISOCHRONOUS)
 			iovnum = 2 + urb->number_of_packets;

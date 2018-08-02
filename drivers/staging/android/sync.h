@@ -154,7 +154,10 @@ struct sync_fence_cb {
 struct sync_fence {
 	struct file		*file;
 	struct kref		kref;
-	char			name[32];
+	union {
+		char			name[32];
+		struct llist_node	rmnode;
+	};
 #ifdef CONFIG_DEBUG_FS
 	struct list_head	sync_fence_list;
 #endif

@@ -32,6 +32,9 @@
 #include <asm/suspend.h>
 #include <asm/system_misc.h>
 
+#ifdef CONFIG_RKP_CFP_FIX_SMC_BUG
+#include <linux/rkp_cfp.h>
+#endif
 #define PSCI_POWER_STATE_TYPE_STANDBY		0
 #define PSCI_POWER_STATE_TYPE_POWER_DOWN	1
 
@@ -56,6 +59,9 @@ static struct psci_operations psci_ops;
 
 static int (*invoke_psci_fn)(u64, u64, u64, u64);
 typedef int (*psci_initcall_t)(const struct device_node *);
+
+asmlinkage int __invoke_psci_fn_hvc(u64, u64, u64, u64);
+asmlinkage int __invoke_psci_fn_smc(u64, u64, u64, u64);
 
 enum psci_function {
 	PSCI_FN_CPU_SUSPEND,
@@ -107,40 +113,6 @@ static void psci_power_state_unpack(u32 power_state,
 	state->affinity_level =
 			(power_state & PSCI_0_2_POWER_STATE_AFFL_MASK) >>
 			PSCI_0_2_POWER_STATE_AFFL_SHIFT;
-}
-
-/*
- * The following two functions are invoked via the invoke_psci_fn pointer
- * and will not be inlined, allowing us to piggyback on the AAPCS.
- */
-static noinline int __invoke_psci_fn_hvc(u64 function_id, u64 arg0, u64 arg1,
-					 u64 arg2)
-{
-	asm volatile(
-			__asmeq("%0", "x0")
-			__asmeq("%1", "x1")
-			__asmeq("%2", "x2")
-			__asmeq("%3", "x3")
-			"hvc	#0\n"
-		: "+r" (function_id)
-		: "r" (arg0), "r" (arg1), "r" (arg2));
-
-	return function_id;
-}
-
-static noinline int __invoke_psci_fn_smc(u64 function_id, u64 arg0, u64 arg1,
-					 u64 arg2)
-{
-	asm volatile(
-			__asmeq("%0", "x0")
-			__asmeq("%1", "x1")
-			__asmeq("%2", "x2")
-			__asmeq("%3", "x3")
-			"smc	#0\n"
-		: "+r" (function_id)
-		: "r" (arg0), "r" (arg1), "r" (arg2));
-
-	return function_id;
 }
 
 static int psci_get_version(void)
@@ -427,8 +399,6 @@ int __init psci_init(void)
 	return init_fn(np);
 }
 
-#ifdef CONFIG_SMP
-
 static int __init cpu_psci_cpu_init(struct device_node *dn, unsigned int cpu)
 {
 	return 0;
@@ -507,7 +477,6 @@ static int cpu_psci_cpu_kill(unsigned int cpu)
 	return 0;
 }
 #endif
-#endif
 
 static int psci_suspend_finisher(unsigned long index)
 {
@@ -517,16 +486,58 @@ static int psci_suspend_finisher(unsigned long index)
 				    virt_to_phys(cpu_resume));
 }
 
+/**
+ * Ideally, we hope that PSCI framework cover the all power states, but it
+ * is not correspond on some platforms. Below function supports extra power
+ * state that PSCI cannot be handled.
+ */
+static int psci_suspend_customized_finisher(unsigned long index)
+{
+	struct psci_power_state state = {
+			.id = 0,
+			.type = 0,
+			.affinity_level = 0,
+	};
+
+	switch (index) {
+	case PSCI_CLUSTER_SLEEP:
+		state.affinity_level = 1;
+		break;
+	case PSCI_SYSTEM_IDLE:
+		state.id = 1;
+		break;
+	case PSCI_SYSTEM_IDLE_AUDIO:
+		state.id = 2;
+		break;
+	case PSCI_SYSTEM_IDLE_CLUSTER_SLEEP:
+		state.id = 1;
+		state.affinity_level = 1;
+		break;
+	case PSCI_SYSTEM_SLEEP:
+		state.affinity_level = 3;
+		break;
+	default:
+		panic("Unsupported psci state, index = %ld\n", index);
+		break;
+	};
+
+	return psci_ops.cpu_suspend(state, virt_to_phys(cpu_resume));
+}
+
 static int __maybe_unused cpu_psci_cpu_suspend(unsigned long index)
 {
 	int ret;
 	struct psci_power_state *state = __get_cpu_var(psci_power_state);
+
 	/*
 	 * idle state index 0 corresponds to wfi, should never be called
 	 * from the cpu_suspend operations
 	 */
 	if (WARN_ON_ONCE(!index))
 		return -EINVAL;
+
+	if (unlikely(index >= PSCI_UNUSED_INDEX))
+		return __cpu_suspend(index, psci_suspend_customized_finisher);
 
 	if (state[index - 1].type == PSCI_POWER_STATE_TYPE_STANDBY)
 		ret = psci_ops.cpu_suspend(state[index - 1], 0);
@@ -542,7 +553,6 @@ const struct cpu_operations cpu_psci_ops = {
 	.cpu_init_idle	= cpu_psci_cpu_init_idle,
 	.cpu_suspend	= cpu_psci_cpu_suspend,
 #endif
-#ifdef CONFIG_SMP
 	.cpu_init	= cpu_psci_cpu_init,
 	.cpu_prepare	= cpu_psci_cpu_prepare,
 	.cpu_boot	= cpu_psci_cpu_boot,
@@ -550,7 +560,6 @@ const struct cpu_operations cpu_psci_ops = {
 	.cpu_disable	= cpu_psci_cpu_disable,
 	.cpu_die	= cpu_psci_cpu_die,
 	.cpu_kill	= cpu_psci_cpu_kill,
-#endif
 #endif
 };
 

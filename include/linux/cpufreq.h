@@ -18,6 +18,8 @@
 #include <linux/notifier.h>
 #include <linux/spinlock.h>
 #include <linux/sysfs.h>
+#include <asm/cputime.h>
+
 
 /*********************************************************************
  *                        CPUFREQ INTERFACE                          *
@@ -83,6 +85,8 @@ struct cpufreq_policy {
 	void			*governor_data;
 	bool			governor_enabled; /* governor start/stop flag */
 
+	unsigned int		hcpus_count; /* number of core to be offed */
+
 	struct work_struct	update; /* if update_policy() needs to be
 					 * called, but you're in IRQ context */
 
@@ -145,6 +149,8 @@ int cpufreq_get_global_kobject(void);
 void cpufreq_put_global_kobject(void);
 int cpufreq_sysfs_create_file(const struct attribute *attr);
 void cpufreq_sysfs_remove_file(const struct attribute *attr);
+int cpufreq_sysfs_create_group(const struct attribute_group *attr_grp);
+void cpufreq_sysfs_remove_group(const struct attribute_group *attr_grp);
 
 #ifdef CONFIG_CPU_FREQ
 unsigned int cpufreq_get(unsigned int cpu);
@@ -467,6 +473,9 @@ void cpufreq_unregister_governor(struct cpufreq_governor *governor);
 #ifdef CONFIG_CPU_FREQ_GOV_PERFORMANCE
 extern struct cpufreq_governor cpufreq_gov_performance;
 #endif
+#ifdef CONFIG_CPU_FREQ_GOV_INTERACTIVE
+extern unsigned int cpufreq_interactive_get_hispeed_freq(int cpu);
+#endif
 #ifdef CONFIG_CPU_FREQ_DEFAULT_GOV_PERFORMANCE
 #define CPUFREQ_DEFAULT_GOVERNOR	(&cpufreq_gov_performance)
 #elif defined(CONFIG_CPU_FREQ_DEFAULT_GOV_POWERSAVE)
@@ -481,6 +490,9 @@ extern struct cpufreq_governor cpufreq_gov_ondemand;
 #elif defined(CONFIG_CPU_FREQ_DEFAULT_GOV_CONSERVATIVE)
 extern struct cpufreq_governor cpufreq_gov_conservative;
 #define CPUFREQ_DEFAULT_GOVERNOR	(&cpufreq_gov_conservative)
+#elif defined(CONFIG_CPU_FREQ_DEFAULT_GOV_INTERACTIVE)
+extern struct cpufreq_governor cpufreq_gov_interactive;
+#define CPUFREQ_DEFAULT_GOVERNOR	(&cpufreq_gov_interactive)
 #endif
 
 /*********************************************************************
@@ -586,6 +598,7 @@ static inline int cpufreq_boost_enabled(void)
 #endif
 /* the following funtion is for cpufreq core use only */
 struct cpufreq_frequency_table *cpufreq_frequency_get_table(unsigned int cpu);
+struct cpufreq_frequency_table *cpufreq_get_info_table(unsigned int cpu);
 
 /* the following are really really optional */
 extern struct freq_attr cpufreq_freq_attr_scaling_available_freqs;
@@ -597,4 +610,11 @@ unsigned int cpufreq_generic_get(unsigned int cpu);
 int cpufreq_generic_init(struct cpufreq_policy *policy,
 		struct cpufreq_frequency_table *table,
 		unsigned int transition_latency);
+
+/*********************************************************************
+ *                         CPUFREQ STATS                             *
+ *********************************************************************/
+
+void acct_update_power(struct task_struct *p, cputime_t cputime);
+
 #endif /* _LINUX_CPUFREQ_H */

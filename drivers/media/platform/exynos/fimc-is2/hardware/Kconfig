@@ -1,0 +1,30 @@
+config USE_DIRECT_IS_CONTROL
+	bool "Use IS hardware directly"
+	depends on VIDEO_EXYNOS_FIMC_IS2
+	default n
+	help
+	  Enable HW direct control.
+
+config EXYNOS_FIMC_IS_HARDWARE
+        bool "Use FIMC-IS HARDWARE"
+        depends on VIDEO_EXYNOS_FIMC_IS2
+        depends on !USE_DIRECT_IS_CONTROL
+        default y
+        help
+          fimc-is hardware
+
+config CAMERA_FIMC_SCALER_USE
+        bool "Use FIMC-SCALER"
+        depends on USE_DIRECT_IS_CONTROL
+        default n
+        help
+          use fimc-scaler
+
+config CAMERA_MC_SCALER_USE
+        bool "Use MC-SCALER"
+        depends on USE_DIRECT_IS_CONTROL
+        default n
+        help
+          use mc-scaler
+
+source "drivers/media/platform/exynos/fimc-is2/hardware/api/Kconfig"

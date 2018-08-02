@@ -162,7 +162,7 @@ static const struct file_operations proc_iomem_operations = {
 static int __init ioresources_init(void)
 {
 	proc_create("ioports", 0, NULL, &proc_ioports_operations);
-	proc_create("iomem", 0, NULL, &proc_iomem_operations);
+	proc_create("iomem", S_IRUSR, NULL, &proc_iomem_operations);
 	return 0;
 }
 __initcall(ioresources_init);
@@ -1073,9 +1073,10 @@ struct resource * __request_region(struct resource *parent,
 		if (!conflict)
 			break;
 		if (conflict != parent) {
-			parent = conflict;
-			if (!(conflict->flags & IORESOURCE_BUSY))
+			if (!(conflict->flags & IORESOURCE_BUSY)) {
+				parent = conflict;
 				continue;
+			}
 		}
 		if (conflict->flags & flags & IORESOURCE_MUXED) {
 			add_wait_queue(&muxed_resource_wait, &wait);

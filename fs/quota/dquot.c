@@ -411,6 +411,8 @@ int dquot_acquire(struct dquot *dquot)
 		ret = dqopt->ops[dquot->dq_id.type]->read_dqblk(dquot);
 	if (ret < 0)
 		goto out_iolock;
+	/* Make sure flags update is visible after dquot has been filled */
+	smp_mb__before_atomic();
 	set_bit(DQ_READ_B, &dquot->dq_flags);
 	/* Instantiate dquot if needed */
 	if (!test_bit(DQ_ACTIVE_B, &dquot->dq_flags) && !dquot->dq_off) {
@@ -427,6 +429,11 @@ int dquot_acquire(struct dquot *dquot)
 			goto out_iolock;
 		}
 	}
+	/*
+	 * Make sure flags update is visible after on-disk struct has been
+	 * allocated. Paired with smp_rmb() in dqget().
+	 */
+	smp_mb__before_atomic();
 	set_bit(DQ_ACTIVE_B, &dquot->dq_flags);
 out_iolock:
 	mutex_unlock(&dqopt->dqio_mutex);
@@ -882,6 +889,11 @@ we_slept:
 		dquot = NULL;
 		goto out;
 	}
+	/*
+	 * Make sure following reads see filled structure - paired with
+	 * smp_mb__before_atomic() in dquot_acquire().
+	 */
+	smp_rmb();
 #ifdef CONFIG_QUOTA_DEBUG
 	BUG_ON(!dquot->dq_sb);	/* Has somebody invalidated entry under us? */
 #endif
@@ -1384,7 +1396,7 @@ static int dquot_active(const struct inode *inode)
 static void __dquot_initialize(struct inode *inode, int type)
 {
 	int cnt, init_needed = 0;
-	struct dquot *got[MAXQUOTAS];
+	struct dquot *got[MAXQUOTAS] = {};
 	struct super_block *sb = inode->i_sb;
 	qsize_t rsv;
 
@@ -1394,7 +1406,6 @@ static void __dquot_initialize(struct inode *inode, int type)
 	/* First get references to structures we might need. */
 	for (cnt = 0; cnt < MAXQUOTAS; cnt++) {
 		struct kqid qid;
-		got[cnt] = NULL;
 		if (type != -1 && cnt != type)
 			continue;
 		/*
@@ -1960,6 +1971,30 @@ int dquot_commit_info(struct super_block *sb, int type)
 }
 EXPORT_SYMBOL(dquot_commit_info);
 
+int dquot_get_next_id(struct super_block *sb, struct kqid *qid)
+{
+	struct quota_info *dqopt = sb_dqopt(sb);
+	int err;
+
+	mutex_lock(&dqopt->dqonoff_mutex);
+	if (!sb_has_quota_active(sb, qid->type)) {
+		err = -ESRCH;
+		goto out;
+	}
+	if (!dqopt->ops[qid->type]->get_next_id) {
+		err = -ENOSYS;
+		goto out;
+	}
+	mutex_lock(&dqopt->dqio_mutex);
+	err = dqopt->ops[qid->type]->get_next_id(sb, qid);
+	mutex_unlock(&dqopt->dqio_mutex);
+out:
+	mutex_unlock(&dqopt->dqonoff_mutex);
+
+	return err;
+}
+EXPORT_SYMBOL(dquot_get_next_id);
+
 /*
  * Definitions of diskquota operations.
  */
@@ -1971,6 +2006,7 @@ const struct dquot_operations dquot_operations = {
 	.write_info	= dquot_commit_info,
 	.alloc_dquot	= dquot_alloc,
 	.destroy_dquot	= dquot_destroy,
+	.get_next_id	= dquot_get_next_id,
 };
 EXPORT_SYMBOL(dquot_operations);
 
@@ -2413,6 +2449,27 @@ int dquot_get_dqblk(struct super_block *sb, struct kqid qid,
 }
 EXPORT_SYMBOL(dquot_get_dqblk);
 
+int dquot_get_next_dqblk(struct super_block *sb, struct kqid *qid,
+			 struct qc_dqblk *di)
+{
+	struct dquot *dquot;
+	int err;
+
+	if (!sb->dq_op->get_next_id)
+		return -ENOSYS;
+	err = sb->dq_op->get_next_id(sb, qid);
+	if (err < 0)
+		return err;
+	dquot = dqget(sb, *qid);
+	if (IS_ERR(dquot))
+		return PTR_ERR(dquot);
+	do_get_dqblk(dquot, di);
+	dqput(dquot);
+
+	return 0;
+}
+EXPORT_SYMBOL(dquot_get_next_dqblk);
+
 #define VFS_QC_MASK \
 	(QC_SPACE | QC_SPC_SOFT | QC_SPC_HARD | \
 	 QC_INO_COUNT | QC_INO_SOFT | QC_INO_HARD | \
@@ -2587,6 +2644,7 @@ const struct quotactl_ops dquot_quotactl_ops = {
 	.get_info	= dquot_get_dqinfo,
 	.set_info	= dquot_set_dqinfo,
 	.get_dqblk	= dquot_get_dqblk,
+	.get_nextdqblk	= dquot_get_next_dqblk,
 	.set_dqblk	= dquot_set_dqblk
 };
 EXPORT_SYMBOL(dquot_quotactl_ops);

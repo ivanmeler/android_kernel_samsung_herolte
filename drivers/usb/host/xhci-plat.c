@@ -17,6 +17,8 @@
 #include <linux/of.h>
 #include <linux/platform_device.h>
 #include <linux/slab.h>
+#include <linux/phy/phy.h>
+#include <linux/usb/phy.h>
 #include <linux/usb/xhci_pdriver.h>
 
 #include "xhci.h"
@@ -48,7 +50,16 @@ static int xhci_plat_setup(struct usb_hcd *hcd)
 			return ret;
 	}
 
-	return xhci_gen_setup(hcd, xhci_plat_quirks);
+	ret = xhci_gen_setup(hcd, xhci_plat_quirks);
+
+	/*
+	 * DWC3 WORKAROUND: xhci reset clears PHY CR port settings,
+	 * so USB3.0 PHY should be tuned again.
+	 */
+	if (hcd->phy)
+		phy_tune(hcd->phy, OTG_STATE_A_HOST);
+
+	return ret;
 }
 
 static int xhci_plat_start(struct usb_hcd *hcd)
@@ -64,6 +75,7 @@ static int xhci_plat_start(struct usb_hcd *hcd)
 
 static int xhci_plat_probe(struct platform_device *pdev)
 {
+	struct device		*parent = pdev->dev.parent;
 	struct device_node	*node = pdev->dev.of_node;
 	struct usb_xhci_pdata	*pdata = dev_get_platdata(&pdev->dev);
 	const struct hc_driver	*driver;
@@ -81,20 +93,20 @@ static int xhci_plat_probe(struct platform_device *pdev)
 
 	irq = platform_get_irq(pdev, 0);
 	if (irq < 0)
-		return -ENODEV;
+		return irq;
 
 	res = platform_get_resource(pdev, IORESOURCE_MEM, 0);
 	if (!res)
 		return -ENODEV;
 
 	/* Initialize dma_mask and coherent_dma_mask to 32-bits */
-	ret = dma_set_coherent_mask(&pdev->dev, DMA_BIT_MASK(32));
+	ret = dma_set_coherent_mask(&pdev->dev, DMA_BIT_MASK(36));
 	if (ret)
 		return ret;
 	if (!pdev->dev.dma_mask)
 		pdev->dev.dma_mask = &pdev->dev.coherent_dma_mask;
 	else
-		dma_set_mask(&pdev->dev, DMA_BIT_MASK(32));
+		dma_set_mask(&pdev->dev, DMA_BIT_MASK(36));
 
 	hcd = usb_create_hcd(driver, &pdev->dev, dev_name(&pdev->dev));
 	if (!hcd)
@@ -109,6 +121,16 @@ static int xhci_plat_probe(struct platform_device *pdev)
 		goto put_hcd;
 	}
 
+	/* Get USB3.0 PHY to tune the PHY */
+	if (parent) {
+		hcd->phy = devm_phy_get(parent, "usb3-phy");
+		if (IS_ERR_OR_NULL(hcd->phy)) {
+			hcd->phy = NULL;
+			dev_err(&pdev->dev,
+				"%s: failed to get phy\n", __func__);
+		}
+	}
+
 	/*
 	 * Not all platforms have a clk so it is not an error if the
 	 * clock does not exists.
@@ -118,6 +140,18 @@ static int xhci_plat_probe(struct platform_device *pdev)
 		ret = clk_prepare_enable(clk);
 		if (ret)
 			goto put_hcd;
+	} else if (PTR_ERR(clk) == -EPROBE_DEFER) {
+		ret = -EPROBE_DEFER;
+		goto put_hcd;
+	}
+
+	if (of_device_is_compatible(pdev->dev.of_node,
+				    "marvell,armada-375-xhci") ||
+	    of_device_is_compatible(pdev->dev.of_node,
+				    "marvell,armada-380-xhci")) {
+		ret = xhci_mvebu_mbus_init_quirk(pdev);
+		if (ret)
+			goto disable_clk;
 	}
 
 	if (of_device_is_compatible(pdev->dev.of_node,
@@ -149,6 +183,9 @@ static int xhci_plat_probe(struct platform_device *pdev)
 	if ((node && of_property_read_bool(node, "usb3-lpm-capable")) ||
 			(pdata && pdata->usb3_lpm_capable))
 		xhci->quirks |= XHCI_LPM_SUPPORT;
+#ifdef CONFIG_USB_HOST_L1_SUPPORT
+	xhci->quirks |= XHCI_LPM_L1_SUPPORT;
+#endif
 	/*
 	 * Set the xHCI pointer before xhci_plat_setup() (aka hcd_driver.reset)
 	 * is called by usb_add_hcd().
@@ -182,12 +219,36 @@ put_hcd:
 
 static int xhci_plat_remove(struct platform_device *dev)
 {
+	struct device	*parent = dev->dev.parent;
 	struct usb_hcd	*hcd = platform_get_drvdata(dev);
 	struct xhci_hcd	*xhci = hcd_to_xhci(hcd);
 	struct clk *clk = xhci->clk;
 
+#if defined(CONFIG_USB_HOST_SAMSUNG_FEATURE)
+	pr_info("%s \n", __func__);
+	/* In order to prevent kernel panic */
+	if(!pm_runtime_suspended(&xhci->shared_hcd->self.root_hub->dev)) {
+		pr_info("%s, shared_hcd pm_runtime_forbid\n", __func__);
+		pm_runtime_forbid(&xhci->shared_hcd->self.root_hub->dev);
+	}
+	if(!pm_runtime_suspended(&xhci->main_hcd->self.root_hub->dev)) {
+		pr_info("%s, main_hcd pm_runtime_forbid\n", __func__);
+		pm_runtime_forbid(&xhci->main_hcd->self.root_hub->dev);
+	}
+#endif
+	xhci->xhc_state |= XHCI_STATE_REMOVING;
+
 	usb_remove_hcd(xhci->shared_hcd);
 	usb_put_hcd(xhci->shared_hcd);
+
+	/*
+	 * In usb_remove_hcd, phy_exit is called if phy is not NULL.
+	 * However, in the case that PHY was turn on or off as runtime PM,
+	 * PHY sould not exit at this time. So, to prevent the PHY exit,
+	 * PHY pointer have to be NULL.
+	 */
+	if (parent && hcd->phy)
+		hcd->phy = NULL;
 
 	usb_remove_hcd(hcd);
 	if (!IS_ERR(clk))
@@ -247,6 +308,7 @@ MODULE_DEVICE_TABLE(of, usb_xhci_of_match);
 static struct platform_driver usb_xhci_driver = {
 	.probe	= xhci_plat_probe,
 	.remove	= xhci_plat_remove,
+	.shutdown	= usb_hcd_platform_shutdown,
 	.driver	= {
 		.name = "xhci-hcd",
 		.pm = DEV_PM_OPS,

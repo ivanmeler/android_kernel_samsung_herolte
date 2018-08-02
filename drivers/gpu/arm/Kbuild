@@ -1,0 +1,33 @@
+#
+# (C) COPYRIGHT 2012 ARM Limited. All rights reserved.
+#
+# This program is free software and is provided to you under the terms of the GNU General Public License version 2
+# as published by the Free Software Foundation, and any use by you of this program is subject to the terms of such GNU licence.
+#
+# A copy of the licence is included with the program, and can also be obtained from Free Software
+# Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+#
+#
+
+
+ifeq ($(CONFIG_MALI_T8XX),y)
+	ifeq ($(CONFIG_MALI_R5P0_REL),y)
+		obj-y += t8xx/r5p0/
+	endif
+    ifeq ($(CONFIG_MALI_R7P0),y)
+        obj-y += t8xx/r7p0/
+    endif
+    ifeq ($(CONFIG_MALI_R9P0),y)
+        obj-y += t8xx/r9p0/
+    endif
+    ifeq ($(CONFIG_MALI_R12P0),y)
+    	obj-y += t8xx/r12p0_m/
+    endif
+    ifeq ($(CONFIG_MALI_R15P0),y)
+    	obj-y += t8xx/r15p0/
+    endif
+    ifeq ($(CONFIG_MALI_R22P0),y)
+    	obj-y += t8xx/r22p0/
+    endif
+endif
+

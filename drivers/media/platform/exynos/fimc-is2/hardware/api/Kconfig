@@ -1,0 +1,6 @@
+config USE_HW_API_COMMON
+	bool "Use HW API Common library"
+	depends on EXYNOS_FIMC_IS_HARDWARE
+	default y
+	help
+	  Enalbe HW API Common library.

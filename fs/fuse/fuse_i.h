@@ -157,6 +157,10 @@ struct fuse_file {
 
 	/** Has flock been performed on this file? */
 	bool flock:1;
+
+	/* the read write file */
+	struct file *rw_lower_file;
+	bool shortcircuit_enabled;
 };
 
 /** One input argument of a request */
@@ -351,6 +355,9 @@ struct fuse_req {
 	/** Inode used in the request or NULL */
 	struct inode *inode;
 
+	/** Path used for completing d_canonical_path */
+	struct path *canonical_path;
+
 	/** AIO control block */
 	struct fuse_io_priv *io;
 
@@ -362,6 +369,9 @@ struct fuse_req {
 
 	/** Request is stolen from fuse_file->reserved_req */
 	struct file *stolen_file;
+
+	/** fuse shortcircuit file  */
+	struct file *private_lower_rw_file;
 };
 
 /**
@@ -394,6 +404,9 @@ struct fuse_conn {
 
 	/** Maximum write size */
 	unsigned max_write;
+
+	/** Free space reserve size */
+	unsigned reserved_space_mb;
 
 	/** Readers of the connection are waiting on this */
 	wait_queue_head_t waitq;
@@ -482,6 +495,9 @@ struct fuse_conn {
 
 	/** write-back cache policy (default is write-through) */
 	unsigned writeback_cache:1;
+
+	/** Shortcircuited IO. */
+	unsigned shortcircuit_io:1;
 
 	/*
 	 * The following bitfields are only for optimization purposes
@@ -894,7 +910,7 @@ bool fuse_write_update_size(struct inode *inode, loff_t pos);
 int fuse_flush_times(struct inode *inode, struct fuse_file *ff);
 int fuse_write_inode(struct inode *inode, struct writeback_control *wbc);
 
-int fuse_do_setattr(struct inode *inode, struct iattr *attr,
+int fuse_do_setattr(struct dentry *dentry, struct iattr *attr,
 		    struct file *file);
 
 #endif /* _FS_FUSE_I_H */
