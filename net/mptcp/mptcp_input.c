@@ -950,7 +950,7 @@ static int mptcp_queue_skb(struct sock *sk)
 				    tp->mptcp->map_subseq + tp->mptcp->map_data_len))
 				break;
 		}
-		tcp_enter_quickack_mode(sk);
+		tcp_enter_quickack_mode(sk, 1);
 	} else {
 		/* Ready for the meta-rcv-queue */
 		skb_queue_walk_safe(&sk->sk_receive_queue, tmp1, tmp) {

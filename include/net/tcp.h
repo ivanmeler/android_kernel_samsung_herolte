@@ -55,9 +55,9 @@ void tcp_time_wait(struct sock *sk, int state, int timeo);
 #define MAX_TCP_HEADER	(128 + MAX_HEADER)
 #define MAX_TCP_OPTION_SPACE 40
 
-/* 
+/*
  * Never offer a window over 32767 without using window scaling. Some
- * poor stacks do signed 16bit maths! 
+ * poor stacks do signed 16bit maths!
  */
 #define MAX_TCP_WINDOW		32767U
 
@@ -167,7 +167,7 @@ void tcp_time_wait(struct sock *sk, int state, int timeo);
 /*
  *	TCP option
  */
- 
+
 #define TCPOPT_NOP		1	/* Padding */
 #define TCPOPT_EOL		0	/* End of options */
 #define TCPOPT_MSS		2	/* Segment size negotiating */
@@ -378,7 +378,6 @@ struct mptcp_options_received;
 
 void tcp_cleanup_rbuf(struct sock *sk, int copied);
 void tcp_cwnd_validate(struct sock *sk, bool is_cwnd_limited);
-void tcp_enter_quickack_mode(struct sock *sk);
 int tcp_close_state(struct sock *sk);
 void tcp_minshall_update(struct tcp_sock *tp, unsigned int mss_now,
 			 const struct sk_buff *skb);
@@ -498,7 +497,7 @@ ssize_t tcp_splice_read(struct socket *sk, loff_t *ppos,
 			struct pipe_inode_info *pipe, size_t len,
 			unsigned int flags);
 
-void tcp_enter_quickack_mode(struct sock *sk);
+void tcp_enter_quickack_mode(struct sock *sk, unsigned int max_quickacks);
 static inline void tcp_dec_quickack_mode(struct sock *sk,
 					 const unsigned int pkts)
 {
@@ -1286,16 +1285,16 @@ static inline bool mptcp(const struct tcp_sock *tp)
 }
 #endif
 
-/* Note: caller must be prepared to deal with negative returns */ 
+/* Note: caller must be prepared to deal with negative returns */
 static inline int tcp_space(const struct sock *sk)
 {
 	return tcp_win_from_space(sk->sk_rcvbuf -
 				  atomic_read(&sk->sk_rmem_alloc));
-} 
+}
 
 static inline int tcp_full_space(const struct sock *sk)
 {
-	return tcp_win_from_space(sk->sk_rcvbuf); 
+	return tcp_win_from_space(sk->sk_rcvbuf);
 }
 
 static inline void tcp_openreq_init(struct request_sock *req,
