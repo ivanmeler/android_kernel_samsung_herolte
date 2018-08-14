@@ -9249,7 +9249,7 @@ static int move_specific_task(struct lb_env *env, struct task_struct *pm)
 	struct task_struct *p, *n;
 
 	list_for_each_entry_safe(p, n, &env->src_rq->cfs_tasks, se.group_node) {
-	  if (throttled_lb_pair(task_group(p), env->src_rq->cpu,
+		if (throttled_lb_pair(task_group(p), env->src_rq->cpu,
 				env->dst_cpu))
 		continue;
 
