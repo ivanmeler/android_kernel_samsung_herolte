@@ -1,8 +1,5 @@
-dtb-$(CONFIG_WLAN_HERO2) += exynos8890-hero2lte_eur_open_08.dtb
-dtb-$(CONFIG_WLAN_HERO) += \
-	exynos8890-herolte_eur_open_08.dtb \
-	exynos8890-herolte_eur_open_09.dtb \
-	exynos8890-herolte_eur_open_10.dtb
+dtb-$(CONFIG_MODEL_HERO2LTE) += exynos8890-hero2lte_eur_open_04.dtb exynos8890-hero2lte_eur_open_08.dtb
+dtb-$(CONFIG_MODEL_HEROLTE) += exynos8890-herolte_eur_open_04.dtb exynos8890-herolte_eur_open_08.dtb exynos8890-herolte_eur_open_09.dtb
 
 #dtb-$(CONFIG_ARCH_THUNDER) += thunder-88xx.dtb
 #dtb-$(CONFIG_ARCH_VEXPRESS) += rtsm_ve-aemv8a.dtb foundation-v8.dtb
