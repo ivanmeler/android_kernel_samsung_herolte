@@ -1,6 +1,6 @@
 #
 # Automatically generated file; DO NOT EDIT.
-# Linux/arm64 3.18.115 Kernel Configuration
+# Linux/arm64 3.18.121 Kernel Configuration
 #
 CONFIG_ARM64=y
 CONFIG_64BIT=y
@@ -1181,7 +1181,6 @@ CONFIG_UID_STAT=y
 # CONFIG_USB_SWITCH_FSA9480 is not set
 # CONFIG_LATTICE_ECP3_CONFIG is not set
 # CONFIG_SRAM is not set
-# CONFIG_UID_SYS_STATS is not set
 # CONFIG_MEMORY_STATE_TIME is not set
 # CONFIG_C2PORT is not set
 
