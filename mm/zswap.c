@@ -916,6 +916,15 @@ static int zswap_frontswap_store(unsigned type, pgoff_t offset,
 	if (zswap_is_full(ZSWAP_POOL_HIGH)) {
 		zswap_wakeup_writebackd();
 	}
+
+		/* A second zswap_is_full() check after
+		 * zswap_shrink() to make sure it's now
+		 * under the max_pool_percent
+		 */
+		if (zswap_is_full()) {
+			ret = -ENOMEM;
+			goto reject;
+		}
 #endif
 
 	if (zswap_is_full(ZSWAP_POOL_MAX)) {
