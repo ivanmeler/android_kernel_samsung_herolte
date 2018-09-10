@@ -25,7 +25,6 @@
 #include <linux/module.h>
 #include <linux/random.h>
 #include <linux/delay.h>
-#include <linux/freezer.h>
 
 #include "public/mc_user.h"
 #include "public/mc_admin.h"
@@ -77,67 +76,7 @@ static struct mc_admin_driver_request {
 	struct completion server_complete;
 	void *buffer;			/* Reception buffer (pre-allocated) */
 	size_t size;			/* Size of the reception buffer */
-	bool lock_channel_during_freeze;/* Is freezing ongoing ? */
 } g_request;
-
-/* The mutex around the channel communication has to be wrapped in order
- * to handle this use case :
- * client 1 calls request_send()
- *	    wait on wait_for_completion_interruptible (with channel mutex taken)
- * client 2 calls request_send()
- *	    waits on mutex_lock(channel mutex)
- * kernel starts freezing tasks (suspend or reboot ongoing)
- * if we do nothing, then the freezing will be aborted because client 1
- * and 2 have to enter the refrigerator by themselves.
- * Note : mutex cannot be held during freezing, so client 1 has release it
- * => step 1 : client 1 sets a bool that says that the channel is still in use
- * => step 2 : client 1 release the lock and enter the refrigerator
- * => now any client trying to use the channel will face the bool preventing
- * to use the channel. They also have to enter the refrigerator.
- *
- * These 3 functions handle this
- */
-static void check_freezing_ongoing(void)
-{
-	/* We don't want to let the channel be used. Let everyone know
-	 * that we're using it
-	 */
-	g_request.lock_channel_during_freeze = 1;
-	/* Now we can safely release the lock */
-	mutex_unlock(&g_request.mutex);
-	/* Let's try to freeze */
-	try_to_freeze();
-	/* Either freezing happened or was canceled.
-	 * In both cases, reclaim the lock
-	 */
-	mutex_lock(&g_request.mutex);
-	g_request.lock_channel_during_freeze = 0;
-}
-
-static void channel_lock(void)
-{
-	while (1) {
-		mutex_lock(&g_request.mutex);
-		/* We took the lock, but is there any freezing ongoing? */
-		if (g_request.lock_channel_during_freeze == 0)
-			break;
-
-		/* yes, so let's freeze */
-		mutex_unlock(&g_request.mutex);
-		try_to_freeze();
-		/* Either freezing succeeded or was canceled.
-		 * In both case, try again to get the lock.
-		 * Give some CPU time to let the contender
-		 * finish his channel operation
-		 */
-		msleep(500);
-	};
-}
-
-static void channel_unlock(void)
-{
-	mutex_unlock(&g_request.mutex);
-}
 
 static struct tee_object *tee_object_alloc(bool is_sp_trustlet, size_t length)
 {
@@ -219,6 +158,8 @@ static int request_send(u32 command, const struct mc_uuid_t *uuid, bool is_gp,
 {
 	int counter = 10;
 	int ret = 0;
+	/* ExySp */
+	unsigned long timeout = msecs_to_jiffies(10 * 1000); /* 10 seconds */
 
 	/* Prepare request */
 	mutex_lock(&g_request.states_mutex);
@@ -266,19 +207,13 @@ static int request_send(u32 command, const struct mc_uuid_t *uuid, bool is_gp,
 	complete(&g_request.client_complete);
 	mc_dev_devel("request sent");
 
-	/* Wait for header */
-	do {
-		ret = wait_for_completion_interruptible(
-						&g_request.server_complete);
-		if (!ret)
-			break;
-		/* we may have to freeze now */
-		check_freezing_ongoing();
-		/* freezing happened or was canceled,
-		 * let's sleep and try again
-		 */
-		msleep(500);
-	} while (1);
+	/* Wait for header (could be interruptible, but then needs more work) */
+	/* ExySp */
+	if (wait_for_completion_timeout(&g_request.server_complete, timeout) == 0) {
+		mc_dev_err("daemon is not responding\n");
+		ret = -EPIPE;
+		goto end;
+	}
 	mc_dev_devel("response received");
 
 	/* Server should be waiting with some data for us */
@@ -344,21 +279,8 @@ static int request_receive(void *address, u32 size)
 	/* Unlock write of data */
 	complete(&g_request.client_complete);
 
-	/* Wait for data */
-	do {
-		int ret = 0;
-
-		ret = wait_for_completion_interruptible(
-					     &g_request.server_complete);
-		if (!ret)
-			break;
-		/* We may have to freeze now */
-		check_freezing_ongoing();
-		/* freezing happened or was canceled,
-		 * let's sleep and try again
-		 */
-		msleep(500);
-	} while (1);
+	/* Wait for data (far too late to be interruptible) */
+	wait_for_completion(&g_request.server_complete);
 
 	/* Reset reception buffer */
 	g_request.buffer = NULL;
@@ -387,7 +309,7 @@ static int admin_get_root_container(void *address)
 	int ret = 0;
 
 	/* Lock communication channel */
-	channel_lock();
+	mutex_lock(&g_request.mutex);
 
 	/* Send request and wait for header */
 	ret = request_send(MC_DRV_GET_ROOT_CONTAINER, NULL, 0, 0);
@@ -408,7 +330,7 @@ static int admin_get_root_container(void *address)
 		ret = g_request.response.length;
 
 end:
-	channel_unlock();
+	mutex_unlock(&g_request.mutex);
 	return ret;
 }
 
@@ -417,7 +339,7 @@ static int admin_get_sp_container(void *address, u32 spid)
 	int ret = 0;
 
 	/* Lock communication channel */
-	channel_lock();
+	mutex_lock(&g_request.mutex);
 
 	/* Send request and wait for header */
 	ret = request_send(MC_DRV_GET_SP_CONTAINER, NULL, 0, spid);
@@ -438,7 +360,7 @@ static int admin_get_sp_container(void *address, u32 spid)
 		ret = g_request.response.length;
 
 end:
-	channel_unlock();
+	mutex_unlock(&g_request.mutex);
 	return ret;
 }
 
@@ -448,7 +370,7 @@ static int admin_get_trustlet_container(void *address,
 	int ret = 0;
 
 	/* Lock communication channel */
-	channel_lock();
+	mutex_lock(&g_request.mutex);
 
 	/* Send request and wait for header */
 	ret = request_send(MC_DRV_GET_TRUSTLET_CONTAINER, uuid, 0, spid);
@@ -469,7 +391,7 @@ static int admin_get_trustlet_container(void *address,
 		ret = g_request.response.length;
 
 end:
-	channel_unlock();
+	mutex_unlock(&g_request.mutex);
 	return ret;
 }
 
@@ -481,7 +403,7 @@ static struct tee_object *admin_get_trustlet(const struct mc_uuid_t *uuid,
 	int ret = 0;
 
 	/* Lock communication channel */
-	channel_lock();
+	mutex_lock(&g_request.mutex);
 
 	/* Send request and wait for header */
 	ret = request_send(MC_DRV_GET_TRUSTLET, uuid, is_gp, 0);
@@ -502,7 +424,7 @@ static struct tee_object *admin_get_trustlet(const struct mc_uuid_t *uuid,
 	*spid = g_request.response.spid;
 
 end:
-	channel_unlock();
+	mutex_unlock(&g_request.mutex);
 	if (ret)
 		return ERR_PTR(ret);
 
@@ -514,7 +436,7 @@ static void mc_admin_sendcrashdump(void)
 	int ret = 0;
 
 	/* Lock communication channel */
-	channel_lock();
+	mutex_lock(&g_request.mutex);
 
 	/* Send request and wait for header */
 	ret = request_send(MC_DRV_SIGNAL_CRASH, NULL, false, 0);
@@ -525,7 +447,7 @@ static void mc_admin_sendcrashdump(void)
 	request_cancel();
 
 end:
-	channel_unlock();
+	mutex_unlock(&g_request.mutex);
 }
 
 static int tee_object_make(u32 spid, struct tee_object *obj)

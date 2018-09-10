@@ -2459,7 +2459,7 @@
 
 				video_high_speed_60fps_swvdis_int = <DVFS_INT_L4>;
 				video_high_speed_60fps_swvdis_cam = <DVFS_CAM_L1>;
-				video_high_speed_60fps_swvdis_mif = <DVFS_MIF_L5>;
+				video_high_speed_60fps_swvdis_mif = <DVFS_MIF_L4>;
 				video_high_speed_60fps_swvdis_i2c = <0>;
 				video_high_speed_60fps_swvdis_hpg = <1>;
 

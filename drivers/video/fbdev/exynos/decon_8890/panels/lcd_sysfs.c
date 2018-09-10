@@ -854,9 +854,6 @@ static ssize_t alpm_doze_store(struct device *dev,
 	struct panel_private *priv = dev_get_drvdata(dev);
 	struct decon_device *decon = NULL;
 	struct mutex *output_lock = NULL;
-#ifndef CONFIG_SEC_FACTORY
-	unsigned int prev_alpm_mode = 0;
-#endif
 
 	dsim = container_of(priv, struct dsim_device, priv);
 
@@ -909,55 +906,28 @@ static ssize_t alpm_doze_store(struct device *dev,
 #else
 	switch (value) {
 		case ALPM_ON_2NIT:
-		case ALPM_ON_40NIT:
-			if (output_lock != NULL)
-				mutex_lock(output_lock);
-			dsim_info("%s: %d\n", __func__, priv->alpm_mode);
-			if (value != priv->alpm_mode) {
-				prev_alpm_mode = priv->alpm_mode;
-				priv->alpm_mode = value;
-				if (dsim->dsim_doze == DSIM_DOZE_STATE_DOZE) {
-					call_panel_ops(dsim, enteralpm, dsim);
-					if ((prev_alpm_mode == ALPM_ON_2NIT) ||
-						(prev_alpm_mode == ALPM_ON_40NIT))
-					{
-						usleep_range(17000, 17000);
-						dsim_write_hl_data(dsim, SEQ_DISPLAY_ON, ARRAY_SIZE(SEQ_DISPLAY_ON));
-						dsim_info("%s: alpm displayon\n", __func__);
-					}
-				}
-			}
-			if (output_lock != NULL)
-				mutex_unlock(output_lock);
-			break;
 		case HLPM_ON_2NIT:
+		case ALPM_ON_40NIT:
 		case HLPM_ON_40NIT:
 			if (output_lock != NULL)
 				mutex_lock(output_lock);
+
 			dsim_info("%s: %d\n", __func__, priv->alpm_mode);
 			if (value != priv->alpm_mode) {
-				prev_alpm_mode = priv->alpm_mode;
 				priv->alpm_mode = value;
 				if (dsim->dsim_doze == DSIM_DOZE_STATE_DOZE) {
 					call_panel_ops(dsim, enteralpm, dsim);
-					if ((prev_alpm_mode == HLPM_ON_2NIT) ||
-						(prev_alpm_mode == HLPM_ON_40NIT))
-					{
-						usleep_range(17000, 17000);
-						dsim_write_hl_data(dsim, SEQ_DISPLAY_ON, ARRAY_SIZE(SEQ_DISPLAY_ON));
-						dsim_info("%s: hlpm displayon\n", __func__);
-					}
 				}
 			}
 			if (output_lock != NULL)
 				mutex_unlock(output_lock);
+
 			break;
 		default:
 			dsim_err("ERR:%s:undefined alpm mode : %d\n", __func__, value);
 			break;
 	}
 #endif
-
 	return size;
 }
 
