@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2017 TRUSTONIC LIMITED
+ * Copyright (c) 2013-2015 TRUSTONIC LIMITED
  * All Rights Reserved.
  *
  * This program is free software; you can redistribute it and/or
@@ -23,16 +23,12 @@
 #include <crypto/hash.h>
 #include <linux/scatterlist.h>
 #include <linux/fs.h>
-#include <linux/version.h>
-#if KERNEL_VERSION(4, 11, 0) <= LINUX_VERSION_CODE
-#include <linux/sched/clock.h>	/* local_clock */
-#include <linux/sched/task.h>	/* put_task_struct */
-#endif
 
 #include "public/mc_user.h"
 #include "public/mc_admin.h"
 
-#if KERNEL_VERSION(3, 5, 0) <= LINUX_VERSION_CODE
+#include "platform.h"		/* MC_NO_UIDGIT_H */
+#ifndef MC_NO_UIDGIT_H
 #include <linux/uidgid.h>
 #else
 #define kuid_t uid_t
@@ -144,77 +140,6 @@ static void wsm_free(struct tee_session *session, struct wsm *wsm)
 	atomic_dec(&g_ctx.c_wsms);
 }
 
-#if KERNEL_VERSION(4, 6, 0) <= LINUX_VERSION_CODE
-static int hash_path_and_data(struct task_struct *task, u8 *hash,
-			      const void *data, unsigned int data_len)
-{
-	struct mm_struct *mm = task->mm;
-	struct crypto_shash *tfm;
-	char *buf;
-	char *path;
-	unsigned int path_len;
-	int ret = 0;
-
-	buf = (char *)__get_free_page(GFP_KERNEL);
-	if (!buf)
-		return -ENOMEM;
-
-	down_read(&mm->mmap_sem);
-	if (!mm->exe_file) {
-		ret = -ENOENT;
-		goto end;
-	}
-
-	path = d_path(&mm->exe_file->f_path, buf, PAGE_SIZE);
-	if (IS_ERR(path)) {
-		ret = PTR_ERR(path);
-		goto end;
-	}
-
-	mc_dev_devel("process path =");
-	{
-		char *c;
-
-		for (c = path; *c; c++)
-			mc_dev_devel("%c %d", *c, *c);
-	}
-
-	path_len = (unsigned int)strnlen(path, PAGE_SIZE);
-	mc_dev_devel("path_len = %u", path_len);
-	/* Compute hash of path */
-	tfm = crypto_alloc_shash("sha1", 0, 0);
-	if (IS_ERR(tfm)) {
-		ret = PTR_ERR(tfm);
-		mc_dev_err("cannot allocate shash: %d", ret);
-		goto end;
-	}
-
-	{
-		SHASH_DESC_ON_STACK(desc, tfm);
-
-		desc->tfm = tfm;
-		desc->flags = CRYPTO_TFM_REQ_MAY_SLEEP;
-
-		crypto_shash_init(desc);
-		crypto_shash_update(desc, (u8 *)path, path_len);
-		if (data) {
-			mc_dev_devel("hashing additional data");
-			crypto_shash_update(desc, data, data_len);
-		}
-
-		crypto_shash_final(desc, hash);
-		shash_desc_zero(desc);
-	}
-
-	crypto_free_shash(tfm);
-
-end:
-	up_read(&mm->mmap_sem);
-	free_page((unsigned long)buf);
-
-	return ret;
-}
-#else
 static int hash_path_and_data(struct task_struct *task, u8 *hash,
 			      const void *data, unsigned int data_len)
 {
@@ -252,7 +177,6 @@ static int hash_path_and_data(struct task_struct *task, u8 *hash,
 
 	path_len = (unsigned int)strnlen(path, PAGE_SIZE);
 	mc_dev_devel("path_len = %u\n", path_len);
-	/* Compute hash of path */
 	desc.tfm = crypto_alloc_hash("sha1", 0, CRYPTO_ALG_ASYNC);
 	if (IS_ERR(desc.tfm)) {
 		ret = PTR_ERR(desc.tfm);
@@ -279,11 +203,6 @@ end:
 
 	return ret;
 }
-#endif
-
-#if KERNEL_VERSION(4, 9, 0) <= LINUX_VERSION_CODE
-#define GROUP_AT(gi, i) ((gi)->gid[i])
-#endif
 
 /*
  * groups_search is not EXPORTed so copied from kernel/groups.c
@@ -539,7 +458,7 @@ int session_close(struct tee_session *session)
 	mutex_unlock(&session->client->sessions_lock);
 
 	/* Remove the ref we took on creation */
-	session_put(session);
+		session_put(session);
 	return ret;
 }
 
@@ -655,7 +574,7 @@ int session_wsms_add(struct tee_session *session,
 			mc_dev_err("maps[%d] va=%llx create failed: %d\n",
 				   i, bufs[i].va, ret);
 			goto err;
-		}
+	}
 
 		tee_mmu_buffer(wsms[i]->mmu, &maps[i]);
 		mc_dev_devel("maps[%d] va=%llx: t:%u a:%llx o:%u l:%u\n",
@@ -714,7 +633,7 @@ int session_wsms_add(struct tee_session *session,
 					mc_dev_err("unmap failed: %d\n", ret);
 				else
 					atomic_dec(&g_ctx.c_maps);
-			}
+	}
 
 			goto err;
 		}
@@ -729,9 +648,9 @@ int session_wsms_add(struct tee_session *session,
 		list_add_tail(&wsms[i]->list, &session->wsms);
 		mutex_unlock(&session->wsms_lock);
 		bufs[i].sva = wsms[i]->sva;
-		mc_dev_devel("maps[%d] va=%llx map'd len=%u sva=%llx\n",
+			mc_dev_devel("maps[%d] va=%llx map'd len=%u sva=%llx\n",
 			     i, bufs[i].va, bufs[i].len, bufs[i].sva);
-	}
+		}
 
 	return 0;
 
@@ -741,7 +660,7 @@ err:
 			wsm_free(session, wsms[i]);
 
 	return ret;
-}
+	}
 
 static inline struct wsm *wsm_find(struct tee_session *session, uintptr_t sva)
 {
@@ -825,7 +744,7 @@ int session_wsms_remove(struct tee_session *session,
 		ret = mcp_multiunmap(session->mcp_session.id, maps);
 		if (ret) {
 			mc_dev_err("mcp_multiunmap failed: %d\n", ret);
-		} else {
+	} else {
 			for (i = 0; i < MC_MAP_MAX; i++)
 				if (maps[i].secure_va)
 					atomic_dec(&g_ctx.c_maps);

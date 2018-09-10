@@ -21,7 +21,6 @@
 #include <linux/kthread.h>
 #include <linux/pagemap.h>
 #include <linux/device.h>
-#include <linux/version.h>
 
 #include "public/mc_user.h"
 
@@ -69,54 +68,6 @@
  * this must be exactly one page, we can hold up to 512 entries.
  */
 #define L1_ENTRIES_MAX	512
-
-#if KERNEL_VERSION(4, 6, 0) > LINUX_VERSION_CODE
-static inline long gup_local(struct mm_struct *mm, uintptr_t start,
-			     unsigned long nr_pages, int write,
-			     struct page **pages)
-{
-	return get_user_pages(NULL, mm, start, nr_pages, write, 0, pages, NULL);
-}
-#elif KERNEL_VERSION(4, 9, 0) > LINUX_VERSION_CODE
-static inline long gup_local(struct mm_struct *mm, uintptr_t start,
-			     unsigned long nr_pages, int write,
-			     struct page **pages)
-{
-	unsigned int flags = 0;
-
-	if (write)
-		flags |= FOLL_WRITE;
-
-	return get_user_pages_remote(NULL, mm, start, nr_pages, write, 0, pages,
-				     NULL);
-}
-#elif KERNEL_VERSION(4, 10, 0) > LINUX_VERSION_CODE
-static inline long gup_local(struct mm_struct *mm, uintptr_t start,
-			     unsigned long nr_pages, int write,
-			     struct page **pages)
-{
-	unsigned int flags = 0;
-
-	if (write)
-		flags |= FOLL_WRITE;
-
-	return get_user_pages_remote(NULL, mm, start, nr_pages, flags, pages,
-				     NULL);
-}
-#else
-static inline long gup_local(struct mm_struct *mm, uintptr_t start,
-			     unsigned long nr_pages, int write,
-			     struct page **pages)
-{
-	unsigned int flags = 0;
-
-	if (write)
-		flags |= FOLL_WRITE;
-
-	return get_user_pages_remote(NULL, mm, start, nr_pages, flags, pages,
-				     NULL, NULL);
-}
-#endif
 
 /*
  * Fake L1 MMU table.
@@ -225,7 +176,7 @@ static inline int map_buffer(struct task_struct *task, const void *data,
 	total_pages_nr = PAGE_ALIGN(mmu_table->offset + length) / PAGE_SIZE;
 	if (g_ctx.f_mem_ext)
 		l1_entries_max = L1_ENTRIES_MAX;
-	else
+	 else
 		l1_entries_max = 1;
 
 	if (total_pages_nr > (l1_entries_max * L2_ENTRIES_MAX)) {
@@ -414,38 +365,30 @@ static inline void unmap_buffer(struct tee_mmu *mmu_table)
 
 	/* Release all locked user space pages */
 	for (t = 0; t < (size_t)mmu_table->l2_tables_nr; t++) {
-		u64 *pte64 = mmu_table->l2_tables[t].ptes_64;
-		u32 *pte32 = mmu_table->l2_tables[t].ptes_32;
-		pte_t pte;
-		int i;
+		if (g_ctx.f_lpae) {
+			u64 *pte = mmu_table->l2_tables[t].ptes_64;
+			int i;
 
-		for (i = 0; i < L2_ENTRIES_MAX; i++) {
-#if (KERNEL_VERSION(4, 7, 0) > LINUX_VERSION_CODE) || defined(CONFIG_ARM)
-			{
-				if (g_ctx.f_lpae)
-					pte = *pte64++;
-				else
-					pte = *pte32++;
+			for (i = 0; i < L2_ENTRIES_MAX; i++, pte++) {
+				/* Unused entries are 0 */
+				if (!*pte)
+					break;
+
+				/* pte_page() cannot return NULL */
+				page_cache_release(pte_page(*pte));
 			}
+		} else {
+			u32 *pte = mmu_table->l2_tables[t].ptes_32;
+			int i;
 
-			/* Unused entries are 0 */
-			if (!pte)
-				break;
-#else
-			{
-				if (g_ctx.f_lpae)
-					pte.pte = *pte64++;
-				else
-					pte.pte = *pte32++;
+			for (i = 0; i < L2_ENTRIES_MAX; i++, pte++) {
+				/* Unused entries are 0 */
+				if (!*pte)
+					break;
+
+				/* pte_page() cannot return NULL */
+				page_cache_release(pte_page(*pte));
 			}
-
-			/* Unused entries are 0 */
-			if (!pte.pte)
-				break;
-#endif
-
-			/* pte_page() cannot return NULL */
-			put_page(pte_page(pte));
 		}
 	}
 

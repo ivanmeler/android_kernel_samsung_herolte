@@ -24,25 +24,25 @@
 #define BIT(n)				(1 << (n))
 #endif /* __KERNEL__ */
 
-#define MC_USER_DEVNODE			"mobicore-user"
+#define MC_USER_DEVNODE		"mobicore-user"
 
 /** Maximum length of MobiCore product ID string. */
-#define MC_PRODUCT_ID_LEN		64
+#define MC_PRODUCT_ID_LEN	64
 
 /** Flags for session */
 #define MC_IO_SESSION_REMOTE_BUFFERS	BIT(0)
 #define MC_IO_SESSION_NO_MULTIMAP	BIT(1)
 
 /** Number of buffers that can be mapped at once */
-#define MC_MAP_MAX			4
+#define MC_MAP_MAX		4
 
 /** Max length for buffers */
-#define BUFFER_LENGTH_MAX		0x100000
+#define BUFFER_LENGTH_MAX	0x100000
 
 /** Flags for buffers to map (aligned on GP) */
 #define MC_IO_MAP_INPUT			BIT(0)
 #define MC_IO_MAP_OUTPUT		BIT(1)
-#define MC_IO_MAP_INPUT_OUTPUT		(MC_IO_MAP_INPUT | MC_IO_MAP_OUTPUT)
+#define MC_IO_MAP_INPUT_OUTPUT	(MC_IO_MAP_INPUT | MC_IO_MAP_OUTPUT)
 /** Extra flags for buffers to map (proprietary) */
 #define MC_IO_MAP_PERSISTENT		BIT(20)
 

@@ -95,7 +95,7 @@ int session_put(struct tee_session *session);
 int session_kill(struct tee_session *session);
 int session_map(struct tee_session *session, struct mc_ioctl_buffer *bufs);
 int session_unmap(struct tee_session *session,
-		  const struct mc_ioctl_buffer *bufs);
+			const struct mc_ioctl_buffer *bufs);
 s32 session_exitcode(struct tee_session *session);
 int session_notify_swd(struct tee_session *session);
 int session_waitnotif(struct tee_session *session, s32 timeout,

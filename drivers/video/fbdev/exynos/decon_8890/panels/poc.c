@@ -89,7 +89,7 @@ out_poc_erase:
 	mutex_unlock(&panel->lock);
 	return ret;
 
-}
+}
 
 extern int poc_read_data(struct panel_private *panel, u8 *buf, u32 addr, u32 len)
 {

@@ -225,7 +225,7 @@ static inline int map_buffer(struct task_struct *task, const void *data,
 	total_pages_nr = PAGE_ALIGN(mmu_table->offset + length) / PAGE_SIZE;
 	if (g_ctx.f_mem_ext)
 		l1_entries_max = L1_ENTRIES_MAX;
-	else
+	 else
 		l1_entries_max = 1;
 
 	if (total_pages_nr > (l1_entries_max * L2_ENTRIES_MAX)) {
@@ -417,7 +417,7 @@ static inline void unmap_buffer(struct tee_mmu *mmu_table)
 		u64 *pte64 = mmu_table->l2_tables[t].ptes_64;
 		u32 *pte32 = mmu_table->l2_tables[t].ptes_32;
 		pte_t pte;
-		int i;
+			int i;
 
 		for (i = 0; i < L2_ENTRIES_MAX; i++) {
 #if (KERNEL_VERSION(4, 7, 0) > LINUX_VERSION_CODE) || defined(CONFIG_ARM)
@@ -428,9 +428,9 @@ static inline void unmap_buffer(struct tee_mmu *mmu_table)
 					pte = *pte32++;
 			}
 
-			/* Unused entries are 0 */
+				/* Unused entries are 0 */
 			if (!pte)
-				break;
+					break;
 #else
 			{
 				if (g_ctx.f_lpae)
@@ -439,12 +439,12 @@ static inline void unmap_buffer(struct tee_mmu *mmu_table)
 					pte.pte = *pte32++;
 			}
 
-			/* Unused entries are 0 */
+				/* Unused entries are 0 */
 			if (!pte.pte)
-				break;
+					break;
 #endif
 
-			/* pte_page() cannot return NULL */
+				/* pte_page() cannot return NULL */
 			put_page(pte_page(pte));
 		}
 	}
