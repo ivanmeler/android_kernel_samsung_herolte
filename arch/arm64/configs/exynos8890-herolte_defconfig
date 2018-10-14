@@ -1,6 +1,6 @@
 #
 # Automatically generated file; DO NOT EDIT.
-# Linux/arm64 3.18.121 Kernel Configuration
+# Linux/arm64 3.18.124 Kernel Configuration
 #
 CONFIG_ARM64=y
 CONFIG_64BIT=y
@@ -4819,6 +4819,7 @@ CONFIG_ATOMIC64_SELFTEST=y
 # CONFIG_DMA_API_DEBUG is not set
 # CONFIG_TEST_FIRMWARE is not set
 # CONFIG_TEST_UDELAY is not set
+# CONFIG_BUG_ON_DATA_CORRUPTION is not set
 # CONFIG_SAMPLES is not set
 CONFIG_HAVE_ARCH_KGDB=y
 # CONFIG_KGDB is not set
