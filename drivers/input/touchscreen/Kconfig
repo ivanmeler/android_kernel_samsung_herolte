@@ -993,4 +993,8 @@ source "drivers/input/touchscreen/stm/fts8/Kconfig"
 source "drivers/input/touchscreen/sec_ts/Kconfig"
 source "drivers/input/touchscreen/mxt_t/Kconfig"
 source "drivers/input/touchscreen/g2touch/Kconfig"
+
+config WAKE_GESTURES
+	bool "wake gestures"
+
 endif

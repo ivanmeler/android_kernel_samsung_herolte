@@ -33,6 +33,16 @@
 #include <linux/time.h>
 #include <linux/vmalloc.h>
 
+#ifdef CONFIG_WAKE_GESTURES
+#include <linux/kernel.h>
+#include <linux/wake_gestures.h>
+static bool is_suspended;
+bool scr_suspended(void)
+{
+	return is_suspended;
+}
+#endif
+
 #include "../../../i2c/busses/i2c-exynos5.h"
 #include "sec_ts.h"
 
@@ -817,6 +827,11 @@ static void sec_ts_read_event(struct sec_ts_data *ts)
 							input_mt_report_slot_state(ts->input_dev, MT_TOOL_FINGER, 1);
 							input_report_key(ts->input_dev, BTN_TOUCH, 1);
 							input_report_key(ts->input_dev, BTN_TOOL_FINGER, 1);
+
+#ifdef CONFIG_WAKE_GESTURES
+							if (is_suspended)
+								coordinate.x += 5000;
+#endif
 
 							input_report_abs(ts->input_dev, ABS_MT_POSITION_X, coordinate.x);
 							input_report_abs(ts->input_dev, ABS_MT_POSITION_Y, coordinate.y);
@@ -2241,6 +2256,10 @@ static int sec_ts_input_open(struct input_dev *dev)
 	struct sec_ts_data *ts = input_get_drvdata(dev);
 	int ret;
 
+#ifdef CONFIG_WAKE_GESTURES
+	is_suspended = false;
+#endif
+
 	input_info(true, &ts->client->dev, "%s, wet:%d, dive:%d\n", __func__, ts->wet_mode, ts->dive_mode);
 
 #ifdef CONFIG_TRUSTONIC_TRUSTED_UI
@@ -2264,6 +2283,11 @@ static int sec_ts_input_open(struct input_dev *dev)
 		sec_ts_start_device(ts);
 		ts->lowpower_status = TO_TOUCH_MODE;
 #else
+#ifdef CONFIG_WAKE_GESTURES
+		if (s2w_switch || dt2w_switch)
+			disable_irq_wake(ts->client->irq);
+		else
+#endif
 		sec_ts_set_lowpowermode(ts, TO_TOUCH_MODE);
 #endif
 		if (device_may_wakeup(&ts->client->dev))
@@ -2278,12 +2302,27 @@ static int sec_ts_input_open(struct input_dev *dev)
 	sec_ts_set_grip_type(ts, ONLY_EDGE_HANDLER);	// because edge and dead zone will recover soon
 #endif
 
+#ifdef CONFIG_WAKE_GESTURES
+	if (dt2w_switch_changed) {
+		dt2w_switch = dt2w_switch_temp;
+		dt2w_switch_changed = false;
+	}
+	if (s2w_switch_changed) {
+		s2w_switch = s2w_switch_temp;
+		s2w_switch_changed = false;
+	}
+#endif
+
 	return 0;
 }
 
 static void sec_ts_input_close(struct input_dev *dev)
 {
 	struct sec_ts_data *ts = input_get_drvdata(dev);
+
+#ifdef CONFIG_WAKE_GESTURES
+	is_suspended = true;
+#endif
 
 	input_info(true, &ts->client->dev, "%s, wet:%d, dive:%d\n", __func__, ts->wet_mode, ts->dive_mode);
 
@@ -2303,6 +2342,11 @@ static void sec_ts_input_close(struct input_dev *dev)
 
 	cancel_delayed_work(&ts->reset_work);
 
+#ifdef CONFIG_WAKE_GESTURES
+	if (s2w_switch || dt2w_switch)
+		enable_irq_wake(ts->client->irq);
+	else
+#endif
 	if (ts->lowpower_mode) {
 		sec_ts_set_lowpowermode(ts, TO_LOWPOWER_MODE);
 
