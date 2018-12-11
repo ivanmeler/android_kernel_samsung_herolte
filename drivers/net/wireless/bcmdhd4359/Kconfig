@@ -19,6 +19,13 @@ config BCM4343
 	  This module adds support for wireless adapters based on
 	  Broadcom 4343 chipset.
 
+config BCM43436
+        tristate "Broadcom 43436 wireless cards support"
+        depends on BROADCOM_WIFI
+        ---help---
+          This module adds support for wireless adapters based on
+          Broadcom 43436 chipset.
+
 config BCM4334
 	tristate "Broadcom 4334 wireless cards support"
 	depends on BROADCOM_WIFI

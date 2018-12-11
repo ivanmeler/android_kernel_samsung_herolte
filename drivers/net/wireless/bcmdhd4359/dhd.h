@@ -27,7 +27,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: dhd.h 751393 2018-03-12 07:48:00Z $
+ * $Id: dhd.h 784024 2018-10-10 04:44:24Z $
  */
 
 /****************
@@ -74,6 +74,10 @@ int get_scheduler_policy(struct task_struct *p);
 #include <wdf.h>
 #include <WdfMiniport.h>
 #endif /* (BCMWDF)  */
+
+#ifdef WL_CFGVENDOR_SEND_HANG_EVENT
+#include <rte_ioctl.h>
+#endif /* WL_CFGVENDOR_SEND_HANG_EVENT */
 
 #ifdef DEBUG_DPC_THREAD_WATCHDOG
 #define MAX_RESCHED_CNT 600
@@ -410,10 +414,11 @@ enum dhd_hang_reason {
 	HANG_REASON_D3_ACK_TIMEOUT = 0x8003,
 	HANG_REASON_BUS_DOWN = 0x8004,
 	HANG_REASON_MSGBUF_LIVELOCK = 0x8006,
-	HANG_REASON_IFACE_OP_FAILURE = 0x8007,
+	HANG_REASON_IFACE_DEL_FAILURE = 0x8007,
 	HANG_REASON_HT_AVAIL_ERROR = 0x8008,
 	HANG_REASON_PCIE_RC_LINK_UP_FAIL = 0x8009,
 	HANG_REASON_PCIE_PKTID_ERROR = 0x800A,
+	HANG_REASON_IFACE_ADD_FAILURE = 0x800B,
 	HANG_REASON_PCIE_LINK_DOWN = 0x8805,
 	HANG_REASON_INVALID_EVENT_OR_DATA = 0x8806,
 	HANG_REASON_UNKNOWN = 0x8807,
@@ -439,6 +444,29 @@ enum dhd_eapol_message_type {
 	EAPOL_4WAY_M3,
 	EAPOL_4WAY_M4
 };
+
+#define DEBUG_DUMP_TIME_BUF_LEN (16 + 1)
+
+#ifdef WL_CFGVENDOR_SEND_HANG_EVENT
+#define VENDOR_SEND_HANG_EXT_INFO_LEN (800 + 1)
+#define VENDOR_SEND_HANG_EXT_INFO_VER 20170905
+#define HANG_INFO_TRAP_T_NAME_MAX 6
+#define HANG_INFO_TRAP_T_REASON_IDX 0
+#define HANG_INFO_TRAP_T_SUBTYPE_IDX 2
+#define HANG_INFO_TRAP_T_OFFSET_IDX 3
+#define HANG_INFO_TRAP_T_EPC_IDX 4
+#define HANG_FIELD_STR_MAX_LEN 9
+#define HANG_FIELD_CNT_MAX 69
+#define HANG_FIELD_IF_FAILURE_CNT 10
+#define HANG_FIELD_IOCTL_RESP_TIMEOUT_CNT 8
+#define HANG_FIELD_TRAP_T_STACK_CNT_MAX 16
+#define HANG_FIELD_MISMATCH_CNT 10
+#define HANG_INFO_BIGDATA_KEY_STACK_CNT 4
+
+/* delimiter between values */
+#define HANG_KEY_DEL	' '
+#define HANG_RAW_DEL	'_'
+#endif /* WL_CFGVENDOR_SEND_HANG_EVENT */
 
 /* Packet alignment for most efficient SDIO (can change based on platform) */
 #ifndef DHD_SDALIGN
@@ -609,11 +637,24 @@ extern void dhd_log_dump_write(int type, const char *fmt, ...);
 extern char *dhd_log_dump_get_timestamp(void);
 #endif /* DHD_LOG_DUMP */
 
+#define DHD_LOG_DUMP_TS_MULTIPLIER_VALUE    60
+#define DHD_LOG_DUMP_TS_FMT_YYMMDDHHMMSSMSMS    "%02d%02d%02d%02d%02d%02d%04d"
+
+extern void get_debug_dump_time(char *str);
+extern void clear_debug_dump_time(char *str);
+#if defined(WL_CFGVENDOR_SEND_HANG_EVENT) || defined(DHD_PKT_LOGGING)
+extern void copy_debug_dump_time(char *dest, char *src);
+#endif /* WL_CFGVENDOR_SEND_HANG_EVENT || DHD_PKT_LOGGING */
+
 #define DHD_DEBUG_DUMP_TYPE	"debug_dump_USER"
 
 #if defined(CUSTOMER_HW4)
 #ifndef DHD_COMMON_DUMP_PATH
+#if defined(PLATFORM_SLP)
+#define DHD_COMMON_DUMP_PATH	"/opt/usr/data/network/"
+#else
 #define DHD_COMMON_DUMP_PATH	"/data/media/wifi/log/"
+#endif /* PLATFORM_SLP */
 #endif /* !DHD_COMMON_DUMP_PATH */
 #else
 #define DHD_COMMON_DUMP_PATH	"/installmedia/"
@@ -657,6 +698,8 @@ struct module_metadata {
 	u64 data_addr;	/* address of module data in host */
 };
 #endif
+
+#define MAX_MTU_SZ (1600u)
 
 #ifdef DMAMAP_STATS
 typedef struct dmamap_stats {
@@ -729,7 +772,7 @@ typedef struct dhd_pub {
 	ulong rx_readahead_cnt;	/* Number of packets where header read-ahead was used. */
 	ulong tx_realloc;	/* Number of tx packets we had to realloc for headroom */
 	ulong fc_packets;       /* Number of flow control pkts recvd */
-
+	ulong tx_big_packets;	/* Dropped data packets that are larger than MAX_MTU_SZ */
 #ifdef DMAMAP_STATS
 	/* DMA Mapping statistics */
 	dma_stats_t dma_stats;
@@ -1060,6 +1103,11 @@ typedef struct dhd_pub {
 #ifdef DHD_USE_CLMINFO_PARSER
 	bool is_clm_mult_regrev;	/* Checking for CLM single/multiple regrev */
 #endif /* DHD_USE_CLMINFO_PARSER */
+#ifdef WL_CFGVENDOR_SEND_HANG_EVENT
+	char *hang_info;
+	int hang_info_cnt;
+	char debug_dump_time_hang_str[DEBUG_DUMP_TIME_BUF_LEN];
+#endif /* WL_CFGVENDOR_SEND_HANG_EVENT */
 } dhd_pub_t;
 
 typedef struct {
@@ -1487,6 +1535,7 @@ extern void dhd_txcomplete(dhd_pub_t *dhdp, void *txp, bool success);
 #define WIFI_FEATURE_MKEEP_ALIVE        0x100000    /* WiFi mkeep_alive			*/
 #define WIFI_FEATURE_CONFIG_NDO         0x200000    /* ND offload configure             */
 #define WIFI_FEATURE_TX_TRANSMIT_POWER  0x400000    /* Capture Tx transmit power levels	*/
+#define WIFI_FEATURE_SCAN_RAND          0x2000000	/* Support MAC & Prb SN randomization */
 #define WIFI_FEATURE_INVALID            0xFFFFFFFF  /* Invalid Feature                  */
 
 #define MAX_FEATURE_SET_CONCURRRENT_GROUPS  3
@@ -1619,9 +1668,11 @@ void dhd_schedule_sssr_dump(dhd_pub_t *dhdp);
 #define DHD_IP4BCAST_DROP_FILTER_NUM	7
 #define DHD_CISCO_STP_DROP_FILTER_NUM	8
 #define DHD_CISCO_XID_DROP_FILTER_NUM	9
+#define DHD_UDPNETBIOS_DROP_FILTER_NUM 10
 #define DISCARD_IPV4_MCAST	"102 1 6 IP4_H:16 0xf0 0xe0"
 #define DISCARD_IPV6_MCAST	"103 1 6 IP6_H:24 0xff 0xff"
 #define DISCARD_IPV4_BCAST	"107 1 6 IP4_H:16 0xffffffff 0xffffffff"
+#define DISCARD_UDPNETBIOS	"110 1 6 UDP_H:2 0xffff 0x0089"
 extern int dhd_os_enable_packet_filter(dhd_pub_t *dhdp, int val);
 extern void dhd_enable_packet_filter(int value, dhd_pub_t *dhd);
 extern int dhd_packet_filter_add_remove(dhd_pub_t *dhdp, int add_remove, int num);
@@ -2669,5 +2720,8 @@ extern uint dhd_get_chiprev_id(dhd_pub_t *dhdp);
 #define CHECK_IS_BLOB(dhdp)		FALSE
 #define CHECK_IS_MULT_REGREV(dhdp)	TRUE
 #endif /* DHD_BLOB_EXISTENCE_CHECK && DHD_USE_CLMINFO_PARSER */
+
+#define HD_PREFIX_SIZE  2   /* hexadecimal prefix size */
+#define HD_BYTE_SIZE    2   /* hexadecimal byte size */
 
 #endif /* _dhd_h_ */

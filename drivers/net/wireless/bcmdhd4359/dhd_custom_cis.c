@@ -25,7 +25,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: dhd_custom_cis.c 699163 2017-05-12 05:18:23Z $
+ * $Id: dhd_custom_cis.c 767508 2018-06-14 01:45:04Z $
  */
 
 #include <typedefs.h>
@@ -441,6 +441,7 @@ dhd_check_module_mac(dhd_pub_t *dhdp)
 	}
 
 	if (!g_have_cis_dump) {
+		char eabuf[ETHER_ADDR_STR_LEN];
 		DHD_INFO(("%s: Couldn't read CIS information\n", __FUNCTION__));
 
 		/* Read the MAC address from the specified file */
@@ -451,12 +452,14 @@ dhd_check_module_mac(dhd_pub_t *dhdp)
 				return BCME_BADARG;
 			}
 		} else {
-			otp_mac_buf[strlen(otp_mac_buf) - 1] = '\0';
-			sscanf(otp_mac_buf, MAC_INPUT_FORMAT,
-				(uint32 *)&(mac->octet[0]), (uint32 *)&(mac->octet[1]),
-				(uint32 *)&(mac->octet[2]), (uint32 *)&(mac->octet[3]),
-				(uint32 *)&(mac->octet[4]), (uint32 *)&(mac->octet[5]));
-			otp_mac_buf[strlen(otp_mac_buf) - 1] = '\n';
+			bzero((char *)eabuf, ETHER_ADDR_STR_LEN);
+			strncpy(eabuf, otp_mac_buf, ETHER_ADDR_STR_LEN - 1);
+			if (!bcm_ether_atoe(eabuf, mac)) {
+				DHD_ERROR(("%s : mac parsing err\n", __FUNCTION__));
+				if (dhd_set_default_macaddr(dhdp) < 0) {
+					return BCME_BADARG;
+				}
+			}
 		}
 	} else {
 		struct list_head mac_list;

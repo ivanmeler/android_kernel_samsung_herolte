@@ -24,7 +24,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: wl_cfgp2p.c 699163 2017-05-12 05:18:23Z $
+ * $Id: wl_cfgp2p.c 763050 2018-05-17 04:42:47Z $
  *
  */
 #include <typedefs.h>
@@ -2448,7 +2448,7 @@ wl_cfgp2p_add_p2p_disc_if(struct bcm_cfg80211 *cfg)
 		 */
 		wl_cfgp2p_del_p2p_disc_if(cfg->p2p_wdev, cfg);
 #else
-		dhd->hang_reason = HANG_REASON_IFACE_OP_FAILURE;
+		dhd->hang_reason = HANG_REASON_IFACE_DEL_FAILURE;
 #if defined(BCMPCIE) && defined(DHD_FW_COREDUMP)
 		if (dhd->memdump_enabled) {
 			/* Load the dongle side dump to host

@@ -48,6 +48,7 @@ typedef enum {
 #ifdef CONFIG_USB_TYPEC_MANAGER_NOTIFIER
 	MUIC_NOTIFY_DEV_MANAGER,
 #endif
+	MUIC_NOTIFY_DEV_CABLE_DATA,
 } muic_notifier_device_t;
 
 struct muic_notifier_struct {

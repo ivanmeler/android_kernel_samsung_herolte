@@ -19,6 +19,7 @@
 #include <linux/slab.h>
 #include <linux/mutex.h>
 #include <linux/exynos_iovmm.h>
+#include <linux/smc.h>
 
 #include <media/videobuf2-core.h>
 #include <media/videobuf2-ion.h>
@@ -941,10 +942,26 @@ static int smfc_resume(struct device *dev)
 #endif
 
 #ifdef CONFIG_PM_RUNTIME
+#ifdef CONFIG_EXYNOS_CONTENT_PATH_PROTECTION
+static int smfc_runtime_resume(struct device *dev)
+{
+	struct smfc_dev *smfc = dev_get_drvdata(dev);
+	int ret;
+
+	ret = exynos_smc(MC_FC_SET_CFW_PROT, MC_FC_DRM_SET_CFW_PROT, PROT_JPEG, 0);
+	if (ret != SMC_TZPC_OK)
+		dev_err(smfc->dev, "fail to set cfw protection (%d)\n", ret);
+
+	return 0;
+}
+
+#else
+
 static int smfc_runtime_resume(struct device *dev)
 {
 	return 0;
 }
+#endif
 
 static int smfc_runtime_suspend(struct device *dev)
 {

@@ -27,7 +27,7 @@
  * other than the GPL, without Broadcom's express prior written consent.
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: wlioctl.h 745037 2018-02-06 18:26:04Z $
+ * $Id: wlioctl.h 763097 2018-05-17 07:56:15Z $
  */
 
 #ifndef _wlioctl_h_
@@ -2609,7 +2609,9 @@ enum wl_cnt_xtlv_id {
 	WL_CNT_XTLV_CNTV_LE10_UCODE = 0x200,	/**< wl counter ver < 11 UCODE MACSTAT */
 	WL_CNT_XTLV_LT40_UCODE_V1 = 0x300,	/**< corerev < 40 UCODE MACSTAT */
 	WL_CNT_XTLV_GE40_UCODE_V1 = 0x400,	/**< corerev >= 40 UCODE MACSTAT */
-	WL_CNT_XTLV_GE64_UCODEX_V1 = 0x800	/* corerev >= 64 UCODEX MACSTAT */
+	WL_CNT_XTLV_GE64_UCODEX_V1 = 0x800,	/* corerev >= 64 UCODEX MACSTAT */
+	WL_CNT_XTLV_GE80_UCODE_V1 = 0x900,	/* corerev >= 80 UCODEX MACSTAT */
+	WL_CNT_XTLV_GE80_TXFUNFL_UCODE_V1 = 0x1000	/* corerev >= 80 UCODEX MACSTAT */
 };
 
 /**
@@ -2619,6 +2621,8 @@ enum wl_cnt_xtlv_id {
 #define WL_CNT_MCST_VAR_NUM 64
 /* sizeof(wl_cnt_ge40mcst_v1_t), sizeof(wl_cnt_lt40mcst_v1_t), and sizeof(wl_cnt_v_le10_mcst_t) */
 #define WL_CNT_MCST_STRUCT_SZ ((uint32)sizeof(uint32) * WL_CNT_MCST_VAR_NUM)
+#define WL_CNT_REV80_MCST_STRUCT_SZ ((uint32)sizeof(wl_cnt_ge80mcst_v1_t))
+#define WL_CNT_REV80_MCST_TXFUNFlW_STRUCT_SZ ((uint32)sizeof(wl_cnt_ge80_txfunfl_v1_t))
 
 #define WL_CNT_MCXST_STRUCT_SZ ((uint32)sizeof(wl_cnt_ge64mcxst_v1_t))
 #define INVALID_CNT_VAL (uint32)(-1)
@@ -3069,6 +3073,116 @@ typedef struct {
 	uint32	rxtoolate;	/**< receive too late */
 	uint32  bphy_badplcp;	/**< number of bad PLCP reception on BPHY rate */
 } wl_cnt_lt40mcst_v1_t;
+
+/** MACSTAT counters for ucode (corerev >= 80) */
+typedef struct {
+	/* MAC counters: 32-bit version of d11.h's macstat_t */
+	/* Start of PSM2HOST stats(72) block */
+	uint32	txallfrm;	/**< total number of frames sent, incl. Data, ACK, RTS, CTS,
+				 * Control Management (includes retransmissions)
+				 */
+	uint32	txrtsfrm;	/**< number of RTS sent out by the MAC */
+	uint32	txctsfrm;	/**< number of CTS sent out by the MAC */
+	uint32	txackfrm;	/**< number of ACK frames sent out */
+	uint32	txdnlfrm;	/**< number of Null-Data transmission generated from template  */
+	uint32	txbcnfrm;	/**< beacons transmitted */
+	uint32	txampdu;	/**< number of AMPDUs transmitted */
+	uint32	txmpdu;		/**< number of MPDUs transmitted */
+	uint32	txtplunfl;	/**< Template underflows (mac was too slow to transmit ACK/CTS
+				 * or BCN)
+				 */
+	uint32	txphyerror;	/**< Transmit phy error, type of error is reported in tx-status for
+				 * driver enqueued frames
+				 */
+	uint32  pktengrxducast; /**< unicast frames rxed by the pkteng code */
+	uint32  pktengrxdmcast; /**< multicast frames rxed by the pkteng code */
+	uint32	rxfrmtoolong;	/**< Received frame longer than legal limit (2346 bytes) */
+	uint32	rxfrmtooshrt; /**< Received frame did not contain enough bytes for its frame type */
+	uint32	rxanyerr;	/**< Any RX error that is not counted by other counters. */
+	uint32	rxbadfcs;	/**< number of frames for which the CRC check failed in the MAC */
+	uint32	rxbadplcp;	/**< parity check of the PLCP header failed */
+	uint32	rxcrsglitch;	/**< PHY was able to correlate the preamble but not the header */
+	uint32	rxstrt;		/**< Number of received frames with a good PLCP
+				 * (i.e. passing parity check)
+				 */
+	uint32	rxdtucastmbss; /**< number of received DATA frames with good FCS and matching RA */
+	uint32	rxmgucastmbss; /**< number of received mgmt frames with good FCS and matching RA */
+	uint32	rxctlucast; /**< number of received CNTRL frames with good FCS and matching RA */
+	uint32	rxrtsucast;	/**< number of unicast RTS addressed to the MAC (good FCS) */
+	uint32	rxctsucast;	/**< number of unicast CTS addressed to the MAC (good FCS) */
+	uint32	rxackucast;	/**< number of ucast ACKS received (good FCS) */
+	uint32	rxdtocast; /**< number of received DATA frames (good FCS and not matching RA) */
+	uint32	rxmgocast; /**< number of received MGMT frames (good FCS and not matching RA) */
+	uint32	rxctlocast; /**< number of received CNTRL frame (good FCS and not matching RA) */
+	uint32	rxrtsocast;	/**< number of received RTS not addressed to the MAC */
+	uint32	rxctsocast;	/**< number of received CTS not addressed to the MAC */
+	uint32	rxdtmcast;	/**< number of RX Data multicast frames received by the MAC */
+	uint32	rxmgmcast;	/**< number of RX Management multicast frames received by the MAC */
+	uint32	rxctlmcast;	/**< number of RX Control multicast frames received by the MAC
+				 * (unlikely to see these)
+				 */
+	uint32	rxbeaconmbss;	/**< beacons received from member of BSS */
+	uint32	rxdtucastobss; /**< number of unicast frames addressed to the MAC from
+				  * other BSS (WDS FRAME)
+				  */
+	uint32	rxbeaconobss;	/**< beacons received from other BSS */
+	uint32	rxrsptmout;	/**< number of response timeouts for transmitted frames
+				 * expecting a response
+				 */
+	uint32	bcntxcancl;	/**< transmit beacons canceled due to receipt of beacon (IBSS) */
+	uint32	rxnodelim;	/**< number of no valid delimiter detected by ampdu parser */
+	uint32	missbcn_dbg;	/**< number of beacon missed to receive */
+	uint32	pmqovfl;	/**< number of PMQ overflows */
+	uint32	rxcgprqfrm;	/**< number of received Probe requests that made it into
+				 * the PRQ fifo
+				 */
+	uint32	rxcgprsqovfl;	/**< Rx Probe Request Que overflow in the AP */
+	uint32	txcgprsfail;	/**< Tx Probe Response Fail. AP sent probe response but did
+				 * not get ACK
+				 */
+	uint32	txcgprssuc;	/**< Tx Probe Response Success (ACK was received) */
+	uint32	prs_timeout;	/**< number of probe requests that were dropped from the PRQ
+				 * fifo because a probe response could not be sent out within
+				 * the time limit defined in M_PRS_MAXTIME
+				 */
+	uint32	txrtsfail;	/**< number of rts transmission failure that reach retry limit */
+	uint32	txucast;	/**< number of unicast tx expecting response other than cts/cwcts */
+	uint32  txinrtstxop;	/**< number of data frame transmissions during rts txop */
+	uint32	rxback;		/**< blockack rxcnt */
+	uint32	txback;		/**< blockack txcnt */
+	uint32	bphy_rxcrsglitch;	/**< PHY count of bphy glitches */
+	uint32	rxdrop20s;	/**< drop secondary cnt */
+	uint32	rxtoolate;	/**< receive too late */
+	uint32  bphy_badplcp;	/**< number of bad PLCP reception on BPHY rate */
+	uint32	rxtrig_myaid;	/* New counters added in 69 */
+	uint32	rxtrig_rand;
+	uint32	goodfcs;
+	uint32	colormiss;
+	uint32	txmampdu;
+	uint32	rxmtidback;
+	uint32	rxmstaback;
+	uint32	txfrag;
+	/* End of PSM2HOST stats block */
+	/* start of rxerror overflow counter(24) block which are modified/added in corerev 80 */
+	uint32	phyovfl;
+	uint32	rxf0ovfl;	/**< number of receive fifo 0 overflows */
+	uint32	rxf1ovfl;	/**< number of receive fifo 1 overflows */
+	uint32	lenfovfl;
+	uint32	weppeof;
+	uint32	badplcp;
+	uint32	msduthresh;
+	uint32	strmeof;
+	uint32	stsfifofull;
+	uint32	stsfifoerr;
+	uint32	PAD[6];
+	uint32	rxerr_stat;
+	uint32	ctx_fifo_full;
+	uint32	PAD[38]; /* PAD added for counter elements to be added soon */
+} wl_cnt_ge80mcst_v1_t;
+
+typedef struct {
+	uint32 txfunfl[NFIFO_EXT];
+} wl_cnt_ge80_txfunfl_v1_t;
 
 /** MACSTAT counters for "wl counter" version <= 10 */
 typedef struct {
@@ -13670,6 +13784,7 @@ typedef struct sssr_reg_info {
 #define WL_ADPS_IOV_RSSI	0x0002
 #define WL_ADPS_IOV_DUMP	0x0003
 #define WL_ADPS_IOV_DUMP_CLEAR	0x0004
+#define WL_ADPS_IOV_SUSPEND	0x0005
 
 #define ADPS_SUMMARY_STEP_NUM   2
 #define ADPS_SUMMARY_STEP_LOW	0
@@ -13677,6 +13792,9 @@ typedef struct sssr_reg_info {
 
 #define ADPS_SUB_IOV_VERSION_1	1
 #define ADPS_SUB_IOV_VERSION_2	2
+
+#define ADPS_RESUME	0u
+#define ADPS_SUSPEND	1u
 
 typedef struct wl_adps_params_v1 {
 	uint16 version;
@@ -13713,6 +13831,23 @@ typedef struct wl_adps_dump_summary_v1 {
 	uint8 padding;
 	adps_stat_elem_t stat[ADPS_SUMMARY_STEP_NUM];	/* statistics */
 } wl_adps_dump_summary_v1_t;
+
+typedef struct wl_adps_suspend_v1 {
+	uint16 version;
+	uint16 length;
+	uint8 suspend;			/* 1: suspend 0: resume */
+	uint8 padding[3];
+} wl_adps_suspend_v1_t;
+
+typedef struct wl_adps_dump_summary_v2 {
+	uint16 version;
+	uint16 length;
+	uint8 mode;					/* operation mode: On/Off */
+	uint8 current_step;				/* current step */
+	uint8 padding[2];
+	uint32 flags;					/* restrict flags */
+	adps_stat_elem_t stat[ADPS_SUMMARY_STEP_NUM];	/* statistics */
+} wl_adps_dump_summary_v2_t;
 
 typedef struct wlc_btc_2gchain_dis {
 	uint16 ver;

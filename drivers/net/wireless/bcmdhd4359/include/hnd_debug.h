@@ -24,7 +24,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: hnd_debug.h 678890 2017-01-11 11:48:36Z $
+ * $Id: hnd_debug.h 763050 2018-05-17 04:42:47Z $
  */
 
 #ifndef	_HND_DEBUG_H
@@ -172,15 +172,28 @@ typedef struct hnd_ext_trap_hdr {
 	uint8 data[];     /* TLV data */
 } hnd_ext_trap_hdr_t;
 
-#define TAG_TRAP_SIGNATURE       1  /* Processor register dumps */
-#define TAG_TRAP_STACK           2  /* Processor stack dump (possible code locations) */
-#define TAG_TRAP_MEMORY          3  /* Memory subsystem dump */
-#define TAG_TRAP_DEEPSLEEP       4  /* Deep sleep health check failures */
-#define TAG_TRAP_PSM_WD          5  /* PSM watchdog information */
-#define TAG_TRAP_PHY             6  /* Phy related issues */
-#define TAG_TRAP_BUS             7  /* Bus level issues */
-#define TAG_TRAP_MAC             8  /* Mac level issues */
-#define TAG_TRAP_BACKPLANE       9  /* Backplane related errors */
+typedef enum {
+	TAG_TRAP_NONE		 = 0,  /* None trap type */
+	TAG_TRAP_SIGNATURE       = 1,  /* Processor register dumps */
+	TAG_TRAP_STACK           = 2,  /* Processor stack dump (possible code locations) */
+	TAG_TRAP_MEMORY          = 3,  /* Memory subsystem dump */
+	TAG_TRAP_DEEPSLEEP       = 4,  /* Deep sleep health check failures */
+	TAG_TRAP_PSM_WD          = 5,  /* PSM watchdog information */
+	TAG_TRAP_PHY             = 6,  /* Phy related issues */
+	TAG_TRAP_BUS             = 7,  /* Bus level issues */
+	TAG_TRAP_MAC_SUSP        = 8,  /* Mac level suspend issues */
+	TAG_TRAP_BACKPLANE       = 9,  /* Backplane related errors */
+	/* Values 10 through 14 are in use by etd_data info iovar */
+	TAG_TRAP_PCIE_Q         = 15,  /* PCIE Queue state during memory trap */
+	TAG_TRAP_WLC_STATE      = 16,  /* WLAN state during memory trap */
+	TAG_TRAP_MAC_WAKE       = 17,  /* Mac level wake issues */
+	TAG_TRAP_PHYTXERR_THRESH = 18, /* Phy Tx Err */
+	TAG_TRAP_HC_DATA        = 19,  /* Data collected by HC module */
+	TAG_TRAP_LOG_DATA	= 20,
+	TAG_TRAP_CODE		= 21, /* The trap type */
+	TAG_TRAP_HMAP		= 22, /* HMAP violation Address and Info */
+	TAG_TRAP_LAST  /* This must be the last entry */
+} hnd_ext_tag_trap_t;
 
 typedef struct hnd_ext_trap_bp_err
 {

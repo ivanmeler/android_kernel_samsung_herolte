@@ -18,6 +18,11 @@
 #include <linux/cpu.h>
 #include <linux/moduleparam.h>
 #include <linux/debugfs.h>
+#include <linux/sched.h>	/* local_clock */
+#include <linux/version.h>
+#if KERNEL_VERSION(4, 11, 0) <= LINUX_VERSION_CODE
+#include <linux/sched/clock.h>	/* local_clock */
+#endif
 #include <linux/uaccess.h>
 #include <linux/irq.h>
 #include <linux/interrupt.h>
@@ -325,12 +330,14 @@ static int mobicore_cpu_callback(struct notifier_block *nfb,
 #endif
 	case CPU_DOWN_PREPARE:
 	case CPU_DOWN_PREPARE_FROZEN:
-		mc_dev_info("Cpu %d is going to die\n", cpu);
+		/* ExySp */
+		mc_dev_info("Cpu %d is going to hotplug out\n", cpu);
 		mc_cpu_offline(cpu);
 		break;
 	case CPU_DEAD:
 	case CPU_DEAD_FROZEN:
-		mc_dev_info("Cpu %d is dead\n", cpu);
+		/* ExySp */
+		mc_dev_info("Cpu %d is hotplug out\n", cpu);
 		break;
 	}
 	return NOTIFY_OK;
@@ -419,7 +426,7 @@ static void fastcall_work_func(struct work_struct *work)
 #ifdef MC_FASTCALL_WORKER_THREAD
 		cpumask_t new_msk = mc_exec_core_switch(mc_fc_generic);
 
-		set_cpus_allowed(fastcall_thread, new_msk);
+		set_cpus_allowed_ptr(fastcall_thread, &new_msk);
 #else
 		mc_exec_core_switch(mc_fc_generic);
 #endif
@@ -454,11 +461,19 @@ static bool mc_fastcall(void *data)
 		.data = data,
 	};
 
+#if KERNEL_VERSION(4, 9, 0) <= LINUX_VERSION_CODE
+	if (!kthread_queue_work(&fastcall_worker, &fc_work.work))
+		return false;
+
+	/* If work is queued or executing, wait for it to finish execution */
+	kthread_flush_work(&fc_work.work);
+#else
 	if (!queue_kthread_work(&fastcall_worker, &fc_work.work))
 		return false;
 
 	/* If work is queued or executing, wait for it to finish execution */
 	flush_kthread_work(&fc_work.work);
+#endif
 #else
 	struct fastcall_work fc_work = {
 		.data = data,
@@ -475,6 +490,7 @@ static bool mc_fastcall(void *data)
 
 int mc_fastcall_init(void)
 {
+	cpumask_t new_msk = CPU_MASK_CPU0;
 	int ret = mc_clock_init();
 
 	if (ret)
@@ -491,7 +507,7 @@ int mc_fastcall_init(void)
 	}
 
 	/* this thread MUST run on CPU 0 at startup */
-	set_cpus_allowed(fastcall_thread, CPU_MASK_CPU0);
+	set_cpus_allowed_ptr(fastcall_thread, &new_msk);
 
 	wake_up_process(fastcall_thread);
 #ifdef TBASE_CORE_SWITCHER
@@ -727,16 +743,16 @@ int mc_switch_core(int cpu)
 #ifdef CONFIG_SECURE_OS_BOOSTER_API
 int mc_switch_core(int cpu)
 {
-	int ret;
-	mutex_lock(&core_switch_lock);
+       int ret;
+       mutex_lock(&core_switch_lock);
        if (!(core_status & (0x1 << cpu))){
                mc_dev_devel("Core status... core #%d is off line\n", cpu);
-		mutex_unlock(&core_switch_lock);
-		return 1;
-	}
+               mutex_unlock(&core_switch_lock);
+               return 1;
+       }
        ret = __mc_switch_core(cpu);
-	mutex_unlock(&core_switch_lock);
-	return ret;
+       mutex_unlock(&core_switch_lock);
+       return ret;
 }
 #endif
 #endif

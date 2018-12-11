@@ -24,7 +24,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: dhd_pcie.c 743012 2018-01-24 11:46:34Z $
+ * $Id: dhd_pcie.c 777675 2018-08-22 07:11:54Z $
  */
 
 
@@ -574,17 +574,17 @@ dhdpcie_bus_isr(dhd_bus_t *bus)
 		DHD_TRACE(("%s: Enter\n", __FUNCTION__));
 		/* verify argument */
 		if (!bus) {
-			DHD_ERROR(("%s : bus is null pointer, exit \n", __FUNCTION__));
+			DHD_ERROR_MEM(("%s : bus is null pointer, exit \n", __FUNCTION__));
 			break;
 		}
 
 		if (bus->dhd->dongle_reset) {
-			DHD_ERROR(("%s : dongle is reset\n", __FUNCTION__));
+			DHD_ERROR_MEM(("%s : dongle is reset\n", __FUNCTION__));
 			break;
 		}
 
 		if (bus->dhd->busstate == DHD_BUS_DOWN) {
-			DHD_ERROR(("%s : bus is down \n", __FUNCTION__));
+			DHD_ERROR_MEM(("%s : bus is down \n", __FUNCTION__));
 			break;
 		}
 
@@ -606,7 +606,7 @@ dhdpcie_bus_isr(dhd_bus_t *bus)
 
 		/* Check if the interrupt is ours or not */
 		if (intstatus == 0) {
-			DHD_TRACE(("%s : this interrupt is not ours\n", __FUNCTION__));
+			DHD_ERROR_MEM(("%s : this interrupt is not ours\n", __FUNCTION__));
 			break;
 		}
 
@@ -636,7 +636,13 @@ dhdpcie_bus_isr(dhd_bus_t *bus)
 		bus->ipend = TRUE;
 
 		bus->isr_intr_disable_count++;
-		dhdpcie_bus_intr_disable(bus); /* Disable interrupt using IntMask!! */
+
+		/* For Linux, Macos etc (otherthan NDIS) instead of disabling
+		 * dongle interrupt by clearing the IntMask, disable directly
+		 * interrupt from the host side, so that host will not recieve
+		 * any interrupts at all, even though dongle raises interrupts
+		 */
+		dhdpcie_disable_irq_nosync(bus); /* Disable interrupt!! */
 
 		bus->intdis = TRUE;
 
@@ -1882,7 +1888,7 @@ static int concate_revision_bcm4359(dhd_bus_t *bus, char *fw_path, char *nv_path
 	char chipver_tag[10] = {0, };
 #if defined(SUPPORT_MULTIPLE_MODULE_CIS) && defined(USE_CID_CHECK) && \
 	defined(SUPPORT_BCM4359_MIXED_MODULES)
-	char chipver_tag_nv[10] = {0, };
+	char chipver_tag_nv[20] = {0, };
 	int module_type = -1;
 #endif /* SUPPORT_MULTIPLE_MODULE_CIS && USE_CID_CHECK && SUPPORT_BCM4359_MIXED_MODULES */
 
@@ -1908,14 +1914,17 @@ static int concate_revision_bcm4359(dhd_bus_t *bus, char *fw_path, char *nv_path
 		strncat(chipver_tag_nv, "_c0", strlen("_c0"));
 #endif /* SUPPORT_MULTIPLE_MODULE_CIS && USE_CID_CHECK && SUPPORT_BCM4359_MIXED_MODULES */
 		strncat(chipver_tag, "_c0", strlen("_c0"));
-#if defined(CONFIG_WLAN_GRACE) || defined(CONFIG_SEC_GRACEQLTE_PROJECT)
+#if defined(CONFIG_WLAN_GRACE) || defined(CONFIG_SEC_GRACEQLTE_PROJECT) || \
+	defined(CONFIG_SEC_LYKANLTE_PROJECT) || defined(CONFIG_SEC_KELLYLTE_PROJECT)
 		DHD_ERROR(("----- Adding _plus string -----\n"));
 		strncat(chipver_tag, "_plus", strlen("_plus"));
 #if defined(SUPPORT_MULTIPLE_MODULE_CIS) && defined(USE_CID_CHECK) && \
 	defined(SUPPORT_BCM4359_MIXED_MODULES)
 		strncat(chipver_tag_nv, "_plus", strlen("_plus"));
 #endif /* SUPPORT_MULTIPLE_MODULE_CIS && USE_CID_CHECK && SUPPORT_BCM4359_MIXED_MODULES */
-#endif /* CONFIG_WLAN_GRACE || CONFIG_SEC_GRACEQLTE_PROJECT */
+#endif /* CONFIG_WLAN_GRACE || CONFIG_SEC_GRACEQLTE_PROJECT ||
+	* CONFIG_SEC_LYKANLTE_PROJECT || CONFIG_SEC_KELLYLTE_PROJECT
+	*/
 	} else {
 		DHD_ERROR(("----- Unknown chip version, ver=%x -----\n", chip_ver));
 		return BCME_ERROR;
@@ -2074,6 +2083,7 @@ dhd_bus_download_firmware(struct dhd_bus *bus, osl_t *osh,
 
 	DHD_ERROR(("%s: firmware path=%s, nvram path=%s\n",
 		__FUNCTION__, bus->fw_path, bus->nv_path));
+	dhdpcie_dump_resource(bus);
 
 	ret = dhdpcie_download_firmware(bus, osh);
 
@@ -3366,6 +3376,11 @@ dhd_bus_schedule_queue(struct dhd_bus  *bus, uint16 flow_id, bool txs)
 	}
 
 	flow_ring_node = DHD_FLOW_RING(bus->dhd, flow_id);
+
+	if (flow_ring_node->prot_info == NULL) {
+		DHD_ERROR((" %s : invalid flow_ring_node \n", __FUNCTION__));
+		return BCME_NOTREADY;
+	}
 
 #ifdef DHD_LOSSLESS_ROAMING
 	if ((dhdp->dequeue_prec_map & (1 << flow_ring_node->flow_info.tid)) == 0) {
@@ -5355,6 +5370,7 @@ dhdpcie_bus_suspend(struct dhd_bus *bus, bool state)
 				bus->d3_suspend_pending = FALSE;
 				bus->dhd->busstate = DHD_BUS_SUSPEND;
 				DHD_GENERAL_UNLOCK(bus->dhd, flags);
+				dhdpcie_dump_resource(bus);
 				/* Handle Host Suspend */
 				rc = dhdpcie_pci_suspend_resume(bus, state);
 			}
@@ -5431,6 +5447,7 @@ dhdpcie_bus_suspend(struct dhd_bus *bus, bool state)
 #endif /* PCIE_INB_DW */
 		rc = dhdpcie_pci_suspend_resume(bus, state);
 
+		dhdpcie_dump_resource(bus);
 #ifdef BCMPCIE_OOB_HOST_WAKE
 		bus->oob_presuspend = FALSE;
 #endif /* BCMPCIE_OOB_HOST_WAKE */
@@ -6644,7 +6661,10 @@ dhd_bus_dpc(struct dhd_bus *bus)
 	if (!resched) {
 		bus->intstatus = 0;
 		bus->dpc_intr_enable_count++;
-		dhdpcie_bus_intr_enable(bus); /* Enable back interrupt using Intmask!! */
+		/* For Linux, Macos etc (otherthan NDIS) enable back the host interrupts
+		 * which has been disabled in the dhdpcie_bus_isr()
+		 */
+		dhdpcie_enable_irq(bus); /* Enable back interrupt!! */
 	}
 
 	DHD_GENERAL_LOCK(bus->dhd, flags);
@@ -7025,17 +7045,18 @@ dhdpci_bus_read_frames(dhd_bus_t *bus)
 				DHD_OS_WAKE_UNLOCK(bus->dhd);
 			}
 #endif /* DHD_FW_COREDUMP */
-			bus->dhd->hang_reason = HANG_REASON_PCIE_LINK_DOWN;
-			dhd_os_send_hang_message(bus->dhd);
 		} else {
 			DHD_ERROR(("%s: Link is Down.\n", __FUNCTION__));
 #ifdef CONFIG_ARCH_MSM
 			bus->no_cfg_restore = 1;
 #endif /* CONFIG_ARCH_MSM */
 			bus->is_linkdown = 1;
-			bus->dhd->hang_reason = HANG_REASON_PCIE_LINK_DOWN;
-			dhd_os_send_hang_message(bus->dhd);
 		}
+
+		dhd_prot_debug_info_print(bus->dhd);
+		bus->dhd->hang_reason = HANG_REASON_PCIE_LINK_DOWN;
+		dhd_os_send_hang_message(bus->dhd);
+		more = FALSE;
 	}
 #endif /* SUPPORT_LINKDOWN_RECOVERY */
 	return more;
@@ -7230,6 +7251,13 @@ dhdpcie_readshared(dhd_bus_t *bus)
 	/* get ring_info, ring_state and mb data ptrs and store the addresses in bus structure */
 	{
 		ring_info_t  ring_info;
+
+		/* boundary check */
+		if ((sh->rings_info_ptr < bus->dongle_ram_base) || (sh->rings_info_ptr > shaddr)) {
+			DHD_ERROR(("%s: rings_info_ptr is invalid 0x%x, skip reading ring info\n",
+				__FUNCTION__, sh->rings_info_ptr));
+			return BCME_ERROR;
+		}
 
 		if ((rv = dhdpcie_bus_membytes(bus, FALSE, sh->rings_info_ptr,
 			(uint8 *)&ring_info, sizeof(ring_info_t))) < 0)
@@ -7903,8 +7931,26 @@ dhd_bus_flow_ring_create_response(dhd_bus_t *bus, uint16 flowid, int32 status)
 
 	DHD_INFO(("%s :Flow Response %d \n", __FUNCTION__, flowid));
 
+	/* Boundary check of the flowid */
+	if (flowid >= bus->dhd->num_flow_rings) {
+		DHD_ERROR(("%s: flowid is invalid %d, max %d\n", __FUNCTION__,
+			flowid, bus->dhd->num_flow_rings));
+		return;
+	}
+
 	flow_ring_node = DHD_FLOW_RING(bus->dhd, flowid);
+	if (!flow_ring_node) {
+		DHD_ERROR(("%s: flow_ring_node is NULL\n", __FUNCTION__));
+		return;
+	}
+
 	ASSERT(flow_ring_node->flowid == flowid);
+	if (flow_ring_node->flowid != flowid) {
+		DHD_ERROR(("%s: flowid %d is different from the flowid "
+			"of the flow_ring_node %d\n", __FUNCTION__, flowid,
+			flow_ring_node->flowid));
+		return;
+	}
 
 	if (status != BCME_OK) {
 		DHD_ERROR(("%s Flow create Response failure error status = %d \n",
@@ -7992,8 +8038,26 @@ dhd_bus_flow_ring_delete_response(dhd_bus_t *bus, uint16 flowid, uint32 status)
 
 	DHD_INFO(("%s :Flow Delete Response %d \n", __FUNCTION__, flowid));
 
+	/* Boundary check of the flowid */
+	if (flowid >= bus->dhd->num_flow_rings) {
+		DHD_ERROR(("%s: flowid is invalid %d, max %d\n", __FUNCTION__,
+			flowid, bus->dhd->num_flow_rings));
+		return;
+	}
+
 	flow_ring_node = DHD_FLOW_RING(bus->dhd, flowid);
+	if (!flow_ring_node) {
+		DHD_ERROR(("%s: flow_ring_node is NULL\n", __FUNCTION__));
+		return;
+	}
+
 	ASSERT(flow_ring_node->flowid == flowid);
+	if (flow_ring_node->flowid != flowid) {
+		DHD_ERROR(("%s: flowid %d is different from the flowid "
+			"of the flow_ring_node %d\n", __FUNCTION__, flowid,
+			flow_ring_node->flowid));
+		return;
+	}
 
 	if (status != BCME_OK) {
 		DHD_ERROR(("%s Flow Delete Response failure error status = %d \n",
@@ -8057,8 +8121,26 @@ dhd_bus_flow_ring_flush_response(dhd_bus_t *bus, uint16 flowid, uint32 status)
 		return;
 	}
 
+	/* Boundary check of the flowid */
+	if (flowid >= bus->dhd->num_flow_rings) {
+		DHD_ERROR(("%s: flowid is invalid %d, max %d\n", __FUNCTION__,
+			flowid, bus->dhd->num_flow_rings));
+		return;
+	}
+
 	flow_ring_node = DHD_FLOW_RING(bus->dhd, flowid);
+	if (!flow_ring_node) {
+		DHD_ERROR(("%s: flow_ring_node is NULL\n", __FUNCTION__));
+		return;
+	}
+
 	ASSERT(flow_ring_node->flowid == flowid);
+	if (flow_ring_node->flowid != flowid) {
+		DHD_ERROR(("%s: flowid %d is different from the flowid "
+			"of the flow_ring_node %d\n", __FUNCTION__, flowid,
+			flow_ring_node->flowid));
+		return;
+	}
 
 	flow_ring_node->status = FLOW_RING_STATUS_OPEN;
 	return;
@@ -8762,6 +8844,11 @@ dhdpcie_d11_check_outofreset(dhd_pub_t *dhd)
 	for (i = 0; i < MAX_NUM_D11CORES; i++) {
 		/* Check if bit 0 of resetctrl is cleared */
 		addr = dhd->sssr_reg_info.mac_regs[i].wrapper_regs.resetctrl;
+		if (!addr) {
+			/* ignore invalid address */
+			dhd->sssr_d11_outofreset[i] = FALSE;
+			continue;
+		}
 		dhd_sbreg_op(dhd, addr, &val, TRUE);
 		if (!(val & 1)) {
 			dhd->sssr_d11_outofreset[i] = TRUE;

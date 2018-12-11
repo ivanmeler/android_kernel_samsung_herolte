@@ -24,7 +24,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: dhd_pktlog.c 742382 2018-01-22 01:56:53Z $
+ * $Id: dhd_pktlog.c 772708 2018-07-18 05:47:31Z $
  */
 
 #include <typedefs.h>
@@ -40,6 +40,7 @@
 #define strtoul(nptr, endptr, base) bcm_strtoul((nptr), (endptr), (base))
 #endif
 extern int wl_pattern_atoh(char *src, char *dst);
+extern int pattern_atoh_len(char *src, char *dst, int len);
 extern uint32 __dhd_dbg_pkt_hash(uintptr_t pkt, uint32 pktid);
 extern wifi_tx_packet_fate __dhd_dbg_map_tx_status_to_pkt_fate(uint16 status);
 
@@ -736,16 +737,18 @@ dhd_pktlog_filter_add(dhd_pktlog_filter_t *filter, char *arg)
 	}
 
 	/* parse filter bitmask */
-	mask_size = wl_pattern_atoh(bitmask,
-			(char *) &filter->info[filter->list_cnt].mask[0]);
+	mask_size = pattern_atoh_len(bitmask,
+			(char *) &filter->info[filter->list_cnt].mask[0],
+			MAX_MASK_PATTERN_FILTER_LEN);
 	if (mask_size == -1) {
 		DHD_ERROR(("Rejecting: %s\n", bitmask));
 		return BCME_ERROR;
 	}
 
 	/* parse filter pattern */
-	pattern_size = wl_pattern_atoh(pattern,
-			(char *) &filter->info[filter->list_cnt].pattern[0]);
+	pattern_size = pattern_atoh_len(pattern,
+			(char *) &filter->info[filter->list_cnt].pattern[0],
+			MAX_MASK_PATTERN_FILTER_LEN);
 	if (pattern_size == -1) {
 		DHD_ERROR(("Rejecting: %s\n", pattern));
 		return BCME_ERROR;

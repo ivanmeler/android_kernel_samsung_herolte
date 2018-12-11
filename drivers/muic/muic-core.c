@@ -53,6 +53,10 @@ static struct switch_dev switch_dock = {
 	.name = "dock",
 };
 
+struct switch_dev switch_uart3 = {
+	.name = "uart3", /* sys/class/switch/uart3/state */
+};
+
 #ifdef CONFIG_SEC_FACTORY
 struct switch_dev switch_attached_muic_cable = {
 	.name = "attached_muic_cable", /* sys/class/switch/attached_muic_cable/state */
@@ -62,6 +66,7 @@ struct switch_dev switch_attached_muic_cable = {
 
 #if defined(CONFIG_MUIC_NOTIFIER)
 static struct notifier_block dock_notifier_block;
+static struct notifier_block cable_data_notifier_block;
 
 void muic_send_dock_intent(int type)
 {
@@ -186,6 +191,41 @@ static int muic_handle_dock_notification(struct notifier_block *nb,
 	pr_info("%s: ignore(%d)\n", __func__, attached_dev);
 	return NOTIFY_DONE;
 }
+
+static int muic_handle_cable_data_notification(struct notifier_block *nb,
+			unsigned long action, void *data)
+{
+#if defined(CONFIG_CCIC_NOTIFIER) && defined(CONFIG_MUIC_SUPPORT_CCIC)
+	CC_NOTI_ATTACH_TYPEDEF *pnoti = (CC_NOTI_ATTACH_TYPEDEF *)data;
+	muic_attached_dev_t attached_dev = pnoti->cable_type;
+#else
+	muic_attached_dev_t attached_dev = *(muic_attached_dev_t *)data;
+#endif
+	int jig_state = 0;
+
+	switch (attached_dev) {
+	case ATTACHED_DEV_JIG_UART_OFF_MUIC:
+	case ATTACHED_DEV_JIG_UART_OFF_VB_MUIC:		/* VBUS enabled */
+	case ATTACHED_DEV_JIG_UART_OFF_VB_OTG_MUIC:	/* for otg test */
+	case ATTACHED_DEV_JIG_UART_OFF_VB_FG_MUIC:	/* for fg test */
+	case ATTACHED_DEV_JIG_UART_ON_MUIC:
+	case ATTACHED_DEV_JIG_UART_ON_VB_MUIC:		/* VBUS enabled */
+	case ATTACHED_DEV_JIG_USB_OFF_MUIC:
+	case ATTACHED_DEV_JIG_USB_ON_MUIC:
+		if (action == MUIC_NOTIFY_CMD_ATTACH)
+			jig_state = 1;
+		break;
+	default:
+		jig_state = 0;
+		break;
+	}
+
+	pr_info("%s: MUIC uart type(%d)\n", __func__, jig_state);
+#ifdef CONFIG_SWITCH
+	switch_set_state(&switch_uart3, jig_state);
+#endif
+	return NOTIFY_DONE;
+}
 #endif /* CONFIG_MUIC_NOTIFIER */
 
 #if defined(CONFIG_USE_SAFEOUT)
@@ -260,6 +300,14 @@ static void muic_init_switch_dev_cb(void)
 		return;
 	}
 
+	/* for UART event */
+	ret = switch_dev_register(&switch_uart3);
+	if (ret < 0) {
+		pr_err("%s: Failed to register uart3 switch(%d)\n",
+				__func__, ret);
+		return;
+	}
+
 #ifdef CONFIG_SEC_FACTORY
 	/* for cable type event */
 	ret = switch_dev_register(&switch_attached_muic_cable);
@@ -274,6 +322,8 @@ static void muic_init_switch_dev_cb(void)
 #if defined(CONFIG_MUIC_NOTIFIER)
 	muic_notifier_register(&dock_notifier_block,
 			muic_handle_dock_notification, MUIC_NOTIFY_DEV_DOCK);
+	muic_notifier_register(&cable_data_notifier_block,
+			muic_handle_cable_data_notification, MUIC_NOTIFY_DEV_CABLE_DATA);
 #endif /* CONFIG_MUIC_NOTIFIER */
 
 	pr_info("%s: done\n", __func__);
@@ -283,6 +333,7 @@ static void muic_cleanup_switch_dev_cb(void)
 {
 #if defined(CONFIG_MUIC_NOTIFIER)
 	muic_notifier_unregister(&dock_notifier_block);
+	muic_notifier_unregister(&cable_data_notifier_block);
 #endif /* CONFIG_MUIC_NOTIFIER */
 
 	pr_info("%s: done\n", __func__);

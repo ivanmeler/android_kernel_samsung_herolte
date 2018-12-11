@@ -26,7 +26,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: dhd_msgbuf.c 733632 2017-11-29 08:46:58Z $
+ * $Id: dhd_msgbuf.c 771185 2018-07-09 09:10:58Z $
  */
 
 
@@ -8260,6 +8260,9 @@ dhd_prot_debug_info_print(dhd_pub_t *dhd)
 	DHD_ERROR(("DHD: %s\n", dhd_version));
 	DHD_ERROR(("Firmware: %s\n", fw_version));
 
+	DHD_ERROR(("\n ------- DUMPING PCIE EP Resouce Info ------- \r\n"));
+	dhdpcie_dump_resource(dhd->bus);
+
 	DHD_ERROR(("\n ------- DUMPING PROTOCOL INFORMATION ------- \r\n"));
 	DHD_ERROR(("ICPrevs: Dev %d, Host %d, active %d\n",
 		prot->device_ipc_version,
@@ -8286,9 +8289,14 @@ dhd_prot_debug_info_print(dhd_pub_t *dhd)
 		ring->dma_buf.va, ltoh32(ring->base_addr.high_addr),
 		ltoh32(ring->base_addr.low_addr), dma_buf_len));
 	DHD_ERROR(("CtrlPost: From Host mem: RD: %d WR %d \r\n", ring->rd, ring->wr));
-	dhd_bus_cmn_readshared(dhd->bus, &rd, RING_RD_UPD, ring->idx);
-	dhd_bus_cmn_readshared(dhd->bus, &wr, RING_WR_UPD, ring->idx);
-	DHD_ERROR(("CtrlPost: From Shared Mem: RD: %d WR %d \r\n", rd, wr));
+	if (dhd->bus->is_linkdown) {
+		DHD_ERROR(("CtrlPost: From Shared Mem: RD and WR are invalid"
+			" due to PCIe link down\r\n"));
+	} else {
+		dhd_bus_cmn_readshared(dhd->bus, &rd, RING_RD_UPD, ring->idx);
+		dhd_bus_cmn_readshared(dhd->bus, &wr, RING_WR_UPD, ring->idx);
+		DHD_ERROR(("CtrlPost: From Shared Mem: RD: %d WR %d \r\n", rd, wr));
+	}
 	DHD_ERROR(("CtrlPost: seq num: %d \r\n", ring->seqnum % H2D_EPOCH_MODULO));
 
 	ring = &prot->d2hring_ctrl_cpln;
@@ -8297,9 +8305,14 @@ dhd_prot_debug_info_print(dhd_pub_t *dhd)
 		ring->dma_buf.va, ltoh32(ring->base_addr.high_addr),
 		ltoh32(ring->base_addr.low_addr), dma_buf_len));
 	DHD_ERROR(("CtrlCpl: From Host mem: RD: %d WR %d \r\n", ring->rd, ring->wr));
-	dhd_bus_cmn_readshared(dhd->bus, &rd, RING_RD_UPD, ring->idx);
-	dhd_bus_cmn_readshared(dhd->bus, &wr, RING_WR_UPD, ring->idx);
-	DHD_ERROR(("CtrlCpl: From Shared Mem: RD: %d WR %d \r\n", rd, wr));
+	if (dhd->bus->is_linkdown) {
+		DHD_ERROR(("CtrlCpl: From Shared Mem: RD and WR are invalid"
+			" due to PCIe link down\r\n"));
+	} else {
+		dhd_bus_cmn_readshared(dhd->bus, &rd, RING_RD_UPD, ring->idx);
+		dhd_bus_cmn_readshared(dhd->bus, &wr, RING_WR_UPD, ring->idx);
+		DHD_ERROR(("CtrlCpl: From Shared Mem: RD: %d WR %d \r\n", rd, wr));
+	}
 	DHD_ERROR(("CtrlCpl: Expected seq num: %d \r\n", ring->seqnum % H2D_EPOCH_MODULO));
 
 	ring = prot->h2dring_info_subn;
@@ -8309,9 +8322,14 @@ dhd_prot_debug_info_print(dhd_pub_t *dhd)
 			ring->dma_buf.va, ltoh32(ring->base_addr.high_addr),
 			ltoh32(ring->base_addr.low_addr), dma_buf_len));
 		DHD_ERROR(("InfoSub: From Host mem: RD: %d WR %d \r\n", ring->rd, ring->wr));
-		dhd_bus_cmn_readshared(dhd->bus, &rd, RING_RD_UPD, ring->idx);
-		dhd_bus_cmn_readshared(dhd->bus, &wr, RING_WR_UPD, ring->idx);
-		DHD_ERROR(("InfoSub: From Shared Mem: RD: %d WR %d \r\n", rd, wr));
+		if (dhd->bus->is_linkdown) {
+			DHD_ERROR(("InfoSub: From Shared Mem: RD and WR are invalid"
+				" due to PCIe link down\r\n"));
+		} else {
+			dhd_bus_cmn_readshared(dhd->bus, &rd, RING_RD_UPD, ring->idx);
+			dhd_bus_cmn_readshared(dhd->bus, &wr, RING_WR_UPD, ring->idx);
+			DHD_ERROR(("InfoSub: From Shared Mem: RD: %d WR %d \r\n", rd, wr));
+		}
 		DHD_ERROR(("InfoSub: seq num: %d \r\n", ring->seqnum % H2D_EPOCH_MODULO));
 	}
 	ring = prot->d2hring_info_cpln;
@@ -8321,9 +8339,14 @@ dhd_prot_debug_info_print(dhd_pub_t *dhd)
 			ring->dma_buf.va, ltoh32(ring->base_addr.high_addr),
 			ltoh32(ring->base_addr.low_addr), dma_buf_len));
 		DHD_ERROR(("InfoCpl: From Host mem: RD: %d WR %d \r\n", ring->rd, ring->wr));
-		dhd_bus_cmn_readshared(dhd->bus, &rd, RING_RD_UPD, ring->idx);
-		dhd_bus_cmn_readshared(dhd->bus, &wr, RING_WR_UPD, ring->idx);
-		DHD_ERROR(("InfoCpl: From Shared Mem: RD: %d WR %d \r\n", rd, wr));
+		if (dhd->bus->is_linkdown) {
+			DHD_ERROR(("InfoCpl: From Shared Mem: RD and WR are invalid"
+				" due to PCIe link down\r\n"));
+		} else {
+			dhd_bus_cmn_readshared(dhd->bus, &rd, RING_RD_UPD, ring->idx);
+			dhd_bus_cmn_readshared(dhd->bus, &wr, RING_WR_UPD, ring->idx);
+			DHD_ERROR(("InfoCpl: From Shared Mem: RD: %d WR %d \r\n", rd, wr));
+		}
 		DHD_ERROR(("InfoCpl: Expected seq num: %d \r\n", ring->seqnum % H2D_EPOCH_MODULO));
 	}
 
@@ -8410,45 +8433,50 @@ dhd_prot_ringupd_dump(dhd_pub_t *dhd, struct bcmstrbuf *b)
 {
 	uint32 *ptr;
 	uint32 value;
-	uint32 i;
-	uint32 max_h2d_queues = dhd_bus_max_h2d_queues(dhd->bus);
 
-	OSL_CACHE_INV((void *)dhd->prot->d2h_dma_indx_wr_buf.va,
-		dhd->prot->d2h_dma_indx_wr_buf.len);
+	if (dhd->prot->d2h_dma_indx_wr_buf.va) {
+		uint32 i;
+		uint32 max_h2d_queues = dhd_bus_max_h2d_queues(dhd->bus);
 
-	ptr = (uint32 *)(dhd->prot->d2h_dma_indx_wr_buf.va);
+		OSL_CACHE_INV((void *)dhd->prot->d2h_dma_indx_wr_buf.va,
+			dhd->prot->d2h_dma_indx_wr_buf.len);
 
-	bcm_bprintf(b, "\n max_tx_queues %d\n", max_h2d_queues);
+		ptr = (uint32 *)(dhd->prot->d2h_dma_indx_wr_buf.va);
 
-	bcm_bprintf(b, "\nRPTR block H2D common rings, 0x%04x\n", ptr);
-	value = ltoh32(*ptr);
-	bcm_bprintf(b, "\tH2D CTRL: value 0x%04x\n", value);
-	ptr++;
-	value = ltoh32(*ptr);
-	bcm_bprintf(b, "\tH2D RXPOST: value 0x%04x\n", value);
+		bcm_bprintf(b, "\n max_tx_queues %d\n", max_h2d_queues);
 
-	ptr++;
-	bcm_bprintf(b, "RPTR block Flow rings , 0x%04x\n", ptr);
-	for (i = BCMPCIE_H2D_COMMON_MSGRINGS; i < max_h2d_queues; i++) {
+		bcm_bprintf(b, "\nRPTR block H2D common rings, 0x%04x\n", ptr);
 		value = ltoh32(*ptr);
-		bcm_bprintf(b, "\tflowring ID %d: value 0x%04x\n", i, value);
+		bcm_bprintf(b, "\tH2D CTRL: value 0x%04x\n", value);
 		ptr++;
+		value = ltoh32(*ptr);
+		bcm_bprintf(b, "\tH2D RXPOST: value 0x%04x\n", value);
+
+		ptr++;
+		bcm_bprintf(b, "RPTR block Flow rings , 0x%04x\n", ptr);
+		for (i = BCMPCIE_H2D_COMMON_MSGRINGS; i < max_h2d_queues; i++) {
+			value = ltoh32(*ptr);
+			bcm_bprintf(b, "\tflowring ID %d: value 0x%04x\n", i, value);
+			ptr++;
+		}
 	}
 
-	OSL_CACHE_INV((void *)dhd->prot->h2d_dma_indx_rd_buf.va,
-		dhd->prot->h2d_dma_indx_rd_buf.len);
+	if (dhd->prot->h2d_dma_indx_rd_buf.va) {
+		OSL_CACHE_INV((void *)dhd->prot->h2d_dma_indx_rd_buf.va,
+			dhd->prot->h2d_dma_indx_rd_buf.len);
 
-	ptr = (uint32 *)(dhd->prot->h2d_dma_indx_rd_buf.va);
+		ptr = (uint32 *)(dhd->prot->h2d_dma_indx_rd_buf.va);
 
-	bcm_bprintf(b, "\nWPTR block D2H common rings, 0x%04x\n", ptr);
-	value = ltoh32(*ptr);
-	bcm_bprintf(b, "\tD2H CTRLCPLT: value 0x%04x\n", value);
-	ptr++;
-	value = ltoh32(*ptr);
-	bcm_bprintf(b, "\tD2H TXCPLT: value 0x%04x\n", value);
-	ptr++;
-	value = ltoh32(*ptr);
-	bcm_bprintf(b, "\tD2H RXCPLT: value 0x%04x\n", value);
+		bcm_bprintf(b, "\nWPTR block D2H common rings, 0x%04x\n", ptr);
+		value = ltoh32(*ptr);
+		bcm_bprintf(b, "\tD2H CTRLCPLT: value 0x%04x\n", value);
+		ptr++;
+		value = ltoh32(*ptr);
+		bcm_bprintf(b, "\tD2H TXCPLT: value 0x%04x\n", value);
+		ptr++;
+		value = ltoh32(*ptr);
+		bcm_bprintf(b, "\tD2H RXCPLT: value 0x%04x\n", value);
+	}
 
 	return 0;
 }
