@@ -26,7 +26,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: bcmevent.h 700076 2017-05-17 14:42:22Z $
+ * $Id: bcmevent.h 763162 2018-05-17 10:22:09Z $
  *
  */
 
@@ -284,8 +284,9 @@ typedef union bcm_event_msg_u {
 #define WLC_E_PFN_BSSID_SCAN_BACKOFF	168	/* PFN BSSID SCAN BAckoff event */
 #define WLC_E_AGGR_EVENT		169	/* Aggregated event */
 #define WLC_E_TVPM_MITIGATION		171	/* Change in mitigation applied by TVPM */
-#define WLC_E_LAST			172	/* highest val + 1 for range checking */
-#if (WLC_E_LAST > 172)
+#define WLC_E_ADPS      		172	/* ADPS event */
+#define WLC_E_LAST			173	/* highest val + 1 for range checking */
+#if (WLC_E_LAST > 173)
 #error "WLC_E_LAST: Invalid value for last event; must be <= 172."
 #endif /* WLC_E_LAST */
 
@@ -957,5 +958,32 @@ typedef struct wl_event_tvpm_mitigation {
 	uint8 pad;
 	uint16 on_off;		/* mitigation status bits */
 } wl_event_tvpm_mitigation_t;
+
+/* WLC_E_ADPS event data */
+#define WL_EVENT_ADPS_VER_1		1
+
+/* WLC_E_ADPS event type */
+#define WL_E_TYPE_ADPS_BAD_AP		1
+
+/* WLC_E_ADPS status */
+enum {
+	WL_E_STATUS_ADPS_DEAUTH = 0,
+	WL_E_STATUS_ADPS_MAX
+};
+
+typedef struct wl_event_adps_bad_ap {
+	uint32 status;
+	uint32 reason;
+	struct ether_addr ea;	/* bssid */
+} wl_event_adps_bad_ap_t;
+
+typedef struct wl_event_adps {
+	uint16	version;	/* structure version */
+	uint16	length;		/* length of structure */
+	uint32	type;		/* event type */
+	uint8	data[];		/* variable length data */
+} wl_event_adps_v1_t;
+
+typedef wl_event_adps_v1_t wl_event_adps_t;
 
 #endif /* _BCMEVENT_H_ */

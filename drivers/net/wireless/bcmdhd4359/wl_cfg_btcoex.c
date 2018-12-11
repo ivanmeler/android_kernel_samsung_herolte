@@ -24,7 +24,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: wl_cfg_btcoex.c 748337 2018-02-22 11:50:54Z $
+ * $Id: wl_cfg_btcoex.c 760934 2018-05-04 03:44:49Z $
  */
 
 #include <net/rtnetlink.h>
@@ -92,8 +92,11 @@ dev_wlc_intvar_get_reg(struct net_device *dev, char *name,
 	} var;
 	int error;
 
-	bcm_mkiovar(name, (char *)(&reg), sizeof(reg),
-		(char *)(&var), sizeof(var.buf));
+	memset(&var, 0, sizeof(var));
+	error = bcm_mkiovar(name, (char *)(&reg), sizeof(reg), (char *)(&var), sizeof(var.buf));
+	if (error == 0) {
+		return BCME_BUFTOOSHORT;
+	}
 	error = wldev_ioctl_get(dev, WLC_GET_VAR, (char *)(&var), sizeof(var.buf));
 
 	*retval = dtoh32(var.val);
@@ -104,10 +107,12 @@ static int
 dev_wlc_bufvar_set(struct net_device *dev, char *name, char *buf, int len)
 {
 	char ioctlbuf_local[WLC_IOCTL_SMLEN];
+	int ret;
 
-	bcm_mkiovar(name, buf, len, ioctlbuf_local, sizeof(ioctlbuf_local));
-
-	return (wldev_ioctl_set(dev, WLC_SET_VAR, ioctlbuf_local, sizeof(ioctlbuf_local)));
+	ret = bcm_mkiovar(name, buf, len, ioctlbuf_local, sizeof(ioctlbuf_local));
+	if (ret == 0)
+		return BCME_BUFTOOSHORT;
+	return (wldev_ioctl_set(dev, WLC_SET_VAR, ioctlbuf_local, ret));
 }
 /*
 get named driver variable to uint register value and return error indication

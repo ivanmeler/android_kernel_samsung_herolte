@@ -351,6 +351,16 @@ const struct cntry_locales_custom translate_custom_table[] = {
 #else
 	{"US", "US", 988},
 #endif /* DHD_SUPPORT_US_949 */
+#if defined(DHD_SUPPORT_QA_6)
+	/* Support Qatar 5G band 36-64 100-144 149-165 channels
+	 * This QA/6 should be used only HERO project and
+	 * FW version should be sync up with 9.96.11 or higher version.
+	 * If Use the old FW ver before 9.96.11 in HERO project, Country QA/6 is not supported.
+	 * So when changing the country code to QA, It will be returned to fail and
+	 * still previous Country code
+	 */
+	{"QA", "QA", 6},
+#endif /* DHD_SUPPORT_QA_6 */
 	{"CU", "US", 988},
 	{"CA", "Q2", 993},
 #endif /* default ccode/regrev */
@@ -1119,10 +1129,10 @@ const char *softap_info_items[] = {
 const char *softap_info_values[] = {
 	"yes", "yes", "10", "yes", "yes", "yes", NULL
 };
-#elif defined(BCM43455_CHIP) || defined(BCM43456_CHIP)
+#elif defined(BCM43454_CHIP) || defined(BCM43455_CHIP) || defined(BCM43456_CHIP)
 const char *softap_info_values[] = {
 #ifdef WL_RESTRICTED_APSTA_SCC
-	"yes", "yes", "5", "no", "yes", "yes", NULL
+	"yes", "yes", "10", "no", "yes", "yes", NULL
 #else
 	"no", "yes", "10", "no", "yes", "yes", NULL
 #endif /* WL_RESTRICTED_APSTA_SCC */

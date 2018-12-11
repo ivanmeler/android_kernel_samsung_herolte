@@ -3616,9 +3616,10 @@ static int sc_resume(struct device *dev)
 static int sc_runtime_resume(struct device *dev)
 {
 	struct sc_dev *sc = dev_get_drvdata(dev);
+	int ret;
 
 	if (!IS_ERR(sc->clk_chld) && !IS_ERR(sc->clk_parn)) {
-		int ret = clk_set_parent(sc->clk_chld, sc->clk_parn);
+		ret = clk_set_parent(sc->clk_chld, sc->clk_parn);
 		if (ret) {
 			dev_err(sc->dev, "%s: Failed to setup MUX: %d\n",
 				__func__, ret);
@@ -3628,6 +3629,15 @@ static int sc_runtime_resume(struct device *dev)
 
 	if (sc->qosreq_int_level > 0)
 		pm_qos_update_request(&sc->qosreq_int, sc->qosreq_int_level);
+
+#ifdef CONFIG_EXYNOS_CONTENT_PATH_PROTECTION
+	ret = exynos_smc(MC_FC_SET_CFW_PROT,
+	               MC_FC_DRM_SET_CFW_PROT,
+	               SC_SMC_PROTECTION_ID(sc->dev_id), 0);
+	if (ret != SMC_TZPC_OK)
+	       dev_err(sc->dev,"fail to set cfw protection (%d)\n", ret);
+#endif
+
 
 	return 0;
 }

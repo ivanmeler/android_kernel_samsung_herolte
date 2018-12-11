@@ -3170,8 +3170,22 @@ static void sec_bat_calculate_safety_time(struct sec_battery_info *battery)
 	int curr = 0;
 	int input_power = battery->current_max * battery->input_voltage * 10000;
 	int charging_power = battery->charging_current * battery->pdata->swelling_normal_float_voltage;
+	static int discharging_cnt = 0;
 
-	if (battery->lcd_status && battery->stop_timer) {
+	if (battery->current_avg < 0) {
+		discharging_cnt++;
+	} else {
+		discharging_cnt = 0;
+	}
+
+	if (discharging_cnt >= 5) {
+		battery->expired_time = battery->pdata->expired_time;
+		battery->prev_safety_time = 0;
+		pr_info("%s : SAFETY TIME RESET! DISCHARGING CNT(%d)\n",
+			__func__, discharging_cnt);
+		discharging_cnt = 0;
+		return;
+	} else if (battery->lcd_status && battery->stop_timer) {
 		battery->prev_safety_time = 0;
 		return;
 	}
@@ -3771,7 +3785,7 @@ static void sec_bat_monitor_work(
 
 continue_monitor:
 	/* calculate safety time */
-	if (!battery->charging_block)
+	if (!battery->charging_block && battery->status != POWER_SUPPLY_STATUS_DISCHARGING)
 		sec_bat_calculate_safety_time(battery);
 
 	dev_info(battery->dev,

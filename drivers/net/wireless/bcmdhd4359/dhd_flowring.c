@@ -27,7 +27,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: dhd_flowring.c 710862 2017-07-14 07:43:59Z $
+ * $Id: dhd_flowring.c 760460 2018-05-02 05:59:45Z $
  */
 
 
@@ -631,6 +631,15 @@ dhd_flowid_alloc(dhd_pub_t *dhdp, uint8 ifindex, uint8 prio, char *sa, char *da)
 
 	DHD_INFO(("%s: allocated flowid %d\n", __FUNCTION__, fl_hash_node->flowid));
 
+	if (fl_hash_node->flowid >= dhdp->num_flow_rings) {
+		DHD_ERROR(("%s: flowid=%d num_flow_rings=%d ifindex=%d prio=%d role=%d\n",
+			__FUNCTION__, fl_hash_node->flowid, dhdp->num_flow_rings,
+			ifindex, prio, if_flow_lkup[ifindex].role));
+		dhd_prhex("da", (uchar *)da, ETHER_ADDR_LEN, DHD_ERROR_VAL);
+		dhd_prhex("sa", (uchar *)sa, ETHER_ADDR_LEN, DHD_ERROR_VAL);
+		return FLOWID_INVALID;
+	}
+
 	return fl_hash_node->flowid;
 } /* dhd_flowid_alloc */
 
@@ -1043,9 +1052,14 @@ int dhd_update_flow_prio_map(dhd_pub_t *dhdp, uint8 map)
 /** Inform firmware on updated flow priority mapping, called on IOVAR */
 int dhd_flow_prio_map(dhd_pub_t *dhd, uint8 *map, bool set)
 {
-	uint8 iovbuf[24] = {0};
+	uint8 iovbuf[24];
+	int len;
 	if (!set) {
-		bcm_mkiovar("bus:fl_prio_map", NULL, 0, (char*)iovbuf, sizeof(iovbuf));
+		memset(&iovbuf, 0, sizeof(iovbuf));
+		len = bcm_mkiovar("bus:fl_prio_map", NULL, 0, (char*)iovbuf, sizeof(iovbuf));
+		if (len == 0) {
+			return BCME_BUFTOOSHORT;
+		}
 		if (dhd_wl_ioctl_cmd(dhd, WLC_GET_VAR, iovbuf, sizeof(iovbuf), FALSE, 0) < 0) {
 			DHD_ERROR(("%s: failed to get fl_prio_map\n", __FUNCTION__));
 			return BCME_ERROR;
@@ -1053,8 +1067,11 @@ int dhd_flow_prio_map(dhd_pub_t *dhd, uint8 *map, bool set)
 		*map = iovbuf[0];
 		return BCME_OK;
 	}
-	bcm_mkiovar("bus:fl_prio_map", (char *)map, 4, (char*)iovbuf, sizeof(iovbuf));
-	if (dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, iovbuf, sizeof(iovbuf), TRUE, 0) < 0) {
+	len = bcm_mkiovar("bus:fl_prio_map", (char *)map, 4, (char*)iovbuf, sizeof(iovbuf));
+	if (len == 0) {
+		return BCME_BUFTOOSHORT;
+	}
+	if (dhd_wl_ioctl_cmd(dhd, WLC_SET_VAR, iovbuf, len, TRUE, 0) < 0) {
 		DHD_ERROR(("%s: failed to set fl_prio_map \n",
 			__FUNCTION__));
 		return BCME_ERROR;

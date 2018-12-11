@@ -24,7 +24,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: dhd_cdc.c 699163 2017-05-12 05:18:23Z $
+ * $Id: dhd_cdc.c 763050 2018-05-17 04:42:47Z $
  *
  * BDC is like CDC, except it includes a header for data packets to convey
  * packet priority over the bus, and flags (e.g. to indicate checksum status
@@ -866,3 +866,449 @@ dhd_process_pkt_reorder_info(dhd_pub_t *dhd, uchar *reorder_info_buf, uint reord
 	}
 	return 0;
 }
+
+#ifdef WL_CFGVENDOR_SEND_HANG_EVENT
+#define SIZE_OF_DELIMETER_4BYTE_STR		9
+#define STACK_DUMP_KEY_COUNT			4
+#define STACK_DUMP_RAW_DATA_COUNT		12
+#define TRAP_SPECIFIC_RAW_DATA_COUNT		28
+
+#if !defined(NOT_SUPPORT_EXT_TRAP_INFO)
+void
+copy_ext_trap_sig(dhd_pub_t *dhd, trap_t *tr)
+{
+	uint32 *ext_data = dhd->extended_trap_data;
+	hnd_ext_trap_hdr_t *hdr;
+	const bcm_tlv_t *tlv;
+
+	if (ext_data == NULL) {
+		return;
+	}
+	/* First word is original trap_data */
+	ext_data++;
+
+	/* Followed by the extended trap data header */
+	hdr = (hnd_ext_trap_hdr_t *)ext_data;
+
+	tlv = bcm_parse_tlvs(hdr->data, hdr->len, TAG_TRAP_SIGNATURE);
+	if (tlv) {
+		memcpy(tr, &tlv->data, sizeof(struct _trap_struct));
+	}
+}
+#endif /* !NOT_SUPPORT_EXT_TRAP_INFO */
+
+int
+fill_dummy_data(char *dst, int dst_len, char delimeter, uint32 value, int cnt)
+{
+	uint32 i;
+
+	/* out of bound */
+	if (dst_len < SIZE_OF_DELIMETER_4BYTE_STR*cnt) {
+		DHD_ERROR(("%s dst_len=%d, fill_size=%d\n", __FUNCTION__,
+				dst_len, cnt*SIZE_OF_DELIMETER_4BYTE_STR));
+		return BCME_ERROR;
+	}
+
+	for (i = 0; i < cnt; i++) {
+		scnprintf(dst, SIZE_OF_DELIMETER_4BYTE_STR+1, "%c%08x", delimeter, value);
+		dst += SIZE_OF_DELIMETER_4BYTE_STR;
+	}
+
+	return (SIZE_OF_DELIMETER_4BYTE_STR*cnt);
+}
+
+#define TRAP_T_NAME_OFFSET(var) {#var, OFFSETOF(trap_t, var)}
+
+typedef struct {
+	char name[HANG_INFO_TRAP_T_NAME_MAX];
+	uint32 offset;
+} hang_info_trap_t;
+
+static hang_info_trap_t hang_info_trap_tbl[] = {
+	{"reason", 0},
+	{"ver", VENDOR_SEND_HANG_EXT_INFO_VER},
+	{"stype", 0},
+	TRAP_T_NAME_OFFSET(type),
+	TRAP_T_NAME_OFFSET(epc),
+	TRAP_T_NAME_OFFSET(cpsr),
+	TRAP_T_NAME_OFFSET(spsr),
+	TRAP_T_NAME_OFFSET(r0),
+	TRAP_T_NAME_OFFSET(r1),
+	TRAP_T_NAME_OFFSET(r2),
+	TRAP_T_NAME_OFFSET(r3),
+	TRAP_T_NAME_OFFSET(r4),
+	TRAP_T_NAME_OFFSET(r5),
+	TRAP_T_NAME_OFFSET(r6),
+	TRAP_T_NAME_OFFSET(r7),
+	TRAP_T_NAME_OFFSET(r8),
+	TRAP_T_NAME_OFFSET(r9),
+	TRAP_T_NAME_OFFSET(r10),
+	TRAP_T_NAME_OFFSET(r11),
+	TRAP_T_NAME_OFFSET(r12),
+	TRAP_T_NAME_OFFSET(r13),
+	TRAP_T_NAME_OFFSET(r14),
+	TRAP_T_NAME_OFFSET(pc),
+	{"", 0}
+};
+
+#define TAG_TRAP_IS_STATE(tag) \
+	((tag == TAG_TRAP_MEMORY) || (tag == TAG_TRAP_PCIE_Q) || (tag == TAG_TRAP_WLC_STATE))
+
+static void
+copy_hang_info_head(char *dest, trap_t *src, int len, int field_name,
+		int *bytes_written, int *cnt, char *cookie)
+{
+	uint8 *ptr;
+	int remain_len;
+	int i;
+
+	ptr = (uint8 *)src;
+
+	memset(dest, 0, len);
+	remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - *bytes_written;
+
+	/* hang reason, hang info ver */
+	for (i = 0; (i < HANG_INFO_TRAP_T_SUBTYPE_IDX) && (*cnt < HANG_FIELD_CNT_MAX);
+			i++, (*cnt)++) {
+		if (field_name) {
+			remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - *bytes_written;
+			*bytes_written += scnprintf(&dest[*bytes_written], remain_len, "%s:%c",
+					hang_info_trap_tbl[i].name, HANG_KEY_DEL);
+		}
+		remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - *bytes_written;
+		*bytes_written += scnprintf(&dest[*bytes_written], remain_len, "%d%c",
+				hang_info_trap_tbl[i].offset, HANG_KEY_DEL);
+
+	}
+
+	if (*cnt < HANG_FIELD_CNT_MAX) {
+		if (field_name) {
+			remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - *bytes_written;
+			*bytes_written += scnprintf(&dest[*bytes_written], remain_len, "%s:%c",
+					"cookie", HANG_KEY_DEL);
+		}
+		remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - *bytes_written;
+		*bytes_written += scnprintf(&dest[*bytes_written], remain_len, "%s%c",
+				cookie, HANG_KEY_DEL);
+		(*cnt)++;
+	}
+
+	if (*cnt < HANG_FIELD_CNT_MAX) {
+		if (field_name) {
+			remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - *bytes_written;
+			*bytes_written += scnprintf(&dest[*bytes_written], remain_len, "%s:%c",
+					hang_info_trap_tbl[HANG_INFO_TRAP_T_SUBTYPE_IDX].name,
+					HANG_KEY_DEL);
+		}
+		remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - *bytes_written;
+		*bytes_written += scnprintf(&dest[*bytes_written], remain_len, "%08x%c",
+				hang_info_trap_tbl[HANG_INFO_TRAP_T_SUBTYPE_IDX].offset,
+				HANG_KEY_DEL);
+		(*cnt)++;
+	}
+
+	if (*cnt < HANG_FIELD_CNT_MAX) {
+		if (field_name) {
+			remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - *bytes_written;
+			*bytes_written += scnprintf(&dest[*bytes_written], remain_len, "%s:%c",
+					hang_info_trap_tbl[HANG_INFO_TRAP_T_EPC_IDX].name,
+					HANG_KEY_DEL);
+		}
+		remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - *bytes_written;
+		*bytes_written += scnprintf(&dest[*bytes_written], remain_len, "%08x%c",
+				*(uint32 *)
+				(ptr + hang_info_trap_tbl[HANG_INFO_TRAP_T_EPC_IDX].offset),
+				HANG_KEY_DEL);
+		(*cnt)++;
+	}
+}
+
+static void
+copy_hang_info_trap_t(char *dest, trap_t *src, int len, int field_name,
+		int *bytes_written, int *cnt, char *cookie)
+{
+	uint8 *ptr;
+	int remain_len;
+	int i;
+
+	ptr = (uint8 *)src;
+
+	remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - *bytes_written;
+
+	for (i = HANG_INFO_TRAP_T_OFFSET_IDX;
+			(hang_info_trap_tbl[i].name[0] != 0) && (*cnt < HANG_FIELD_CNT_MAX);
+			i++, (*cnt)++) {
+		if (field_name) {
+			remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - *bytes_written;
+			*bytes_written += scnprintf(&dest[*bytes_written], remain_len, "%c%s:",
+					HANG_RAW_DEL, hang_info_trap_tbl[i].name);
+		}
+		remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - *bytes_written;
+		*bytes_written += scnprintf(&dest[*bytes_written], remain_len, "%c%08x",
+				HANG_RAW_DEL, *(uint32 *)(ptr + hang_info_trap_tbl[i].offset));
+	}
+}
+
+#if !defined(NOT_SUPPORT_EXT_TRAP_INFO)
+static void
+copy_hang_info_stack(dhd_pub_t *dhd, char *dest, int *bytes_written, int *cnt)
+{
+	int remain_len;
+	int i = 0;
+	const uint32 *stack;
+	uint32 *ext_data = dhd->extended_trap_data;
+	hnd_ext_trap_hdr_t *hdr;
+	const bcm_tlv_t *tlv;
+	int remain_stack_cnt = 0;
+	uint32 dummy_data = 0;
+	int bigdata_key_stack_cnt = 0;
+
+	if (ext_data == NULL) {
+		return;
+	}
+	/* First word is original trap_data */
+	ext_data++;
+
+	/* Followed by the extended trap data header */
+	hdr = (hnd_ext_trap_hdr_t *)ext_data;
+
+	tlv = bcm_parse_tlvs(hdr->data, hdr->len, TAG_TRAP_STACK);
+
+	remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - *bytes_written;
+
+	if (tlv) {
+		stack = (const uint32 *)tlv->data;
+
+		*bytes_written += scnprintf(&dest[*bytes_written], remain_len,
+				"%08x", *(uint32 *)(stack++));
+		(*cnt)++;
+		if (*cnt >= HANG_FIELD_CNT_MAX) {
+			return;
+		}
+		for (i = 1; i < (uint32)(tlv->len / sizeof(uint32)); i++, bigdata_key_stack_cnt++) {
+			remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - *bytes_written;
+			/* Raw data for bigdata use '_' and Key data for bigdata use space */
+			*bytes_written += scnprintf(&dest[*bytes_written], remain_len,
+			"%c%08x",
+			i <= HANG_INFO_BIGDATA_KEY_STACK_CNT ? HANG_KEY_DEL : HANG_RAW_DEL,
+			*(uint32 *)(stack++));
+
+			(*cnt)++;
+			if ((*cnt >= HANG_FIELD_CNT_MAX) ||
+					(i >= HANG_FIELD_TRAP_T_STACK_CNT_MAX)) {
+				return;
+			}
+		}
+	}
+
+	remain_stack_cnt = HANG_FIELD_TRAP_T_STACK_CNT_MAX - i;
+
+	for (i = 0; i < remain_stack_cnt; i++) {
+		remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - *bytes_written;
+		*bytes_written += scnprintf(&dest[*bytes_written], remain_len, "%c%08x",
+				HANG_RAW_DEL, dummy_data);
+		(*cnt)++;
+		if (*cnt >= HANG_FIELD_CNT_MAX) {
+			return;
+		}
+	}
+}
+
+static void
+get_hang_info_trap_subtype(dhd_pub_t *dhd, uint32 *subtype)
+{
+	uint32 i;
+	uint32 *ext_data = dhd->extended_trap_data;
+	hnd_ext_trap_hdr_t *hdr;
+	const bcm_tlv_t *tlv;
+
+	/* First word is original trap_data */
+	ext_data++;
+
+	/* Followed by the extended trap data header */
+	hdr = (hnd_ext_trap_hdr_t *)ext_data;
+
+	/* Dump a list of all tags found  before parsing data */
+	for (i = TAG_TRAP_DEEPSLEEP; i < TAG_TRAP_LAST; i++) {
+		tlv = bcm_parse_tlvs(hdr->data, hdr->len, i);
+		if (tlv) {
+			if (!TAG_TRAP_IS_STATE(i)) {
+				*subtype = i;
+				return;
+			}
+		}
+	}
+}
+
+static void
+copy_hang_info_specific(dhd_pub_t *dhd, char *dest, int *bytes_written, int *cnt)
+{
+	int remain_len;
+	int i;
+	const uint32 *data;
+	uint32 *ext_data = dhd->extended_trap_data;
+	hnd_ext_trap_hdr_t *hdr;
+	const bcm_tlv_t *tlv;
+	int remain_trap_data = 0;
+	uint8 buf_u8[sizeof(uint32)] = { 0, };
+	const uint8 *p_u8;
+
+	if (ext_data == NULL) {
+		return;
+	}
+	/* First word is original trap_data */
+	ext_data++;
+
+	/* Followed by the extended trap data header */
+	hdr = (hnd_ext_trap_hdr_t *)ext_data;
+
+	tlv = bcm_parse_tlvs(hdr->data, hdr->len, TAG_TRAP_SIGNATURE);
+	if (tlv) {
+		/* header include tlv hader */
+		remain_trap_data = (hdr->len - tlv->len - sizeof(uint16));
+	}
+
+	tlv = bcm_parse_tlvs(hdr->data, hdr->len, TAG_TRAP_STACK);
+	if (tlv) {
+		/* header include tlv hader */
+		remain_trap_data -= (tlv->len + sizeof(uint16));
+	}
+
+	data = (const uint32 *)(hdr->data + (hdr->len  - remain_trap_data));
+
+	remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - *bytes_written;
+
+	for (i = 0; i < (uint32)(remain_trap_data / sizeof(uint32)) && *cnt < HANG_FIELD_CNT_MAX;
+			i++, (*cnt)++) {
+		remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - *bytes_written;
+		*bytes_written += scnprintf(&dest[*bytes_written], remain_len, "%c%08x",
+				HANG_RAW_DEL, *(uint32 *)(data++));
+	}
+
+	if (*cnt >= HANG_FIELD_CNT_MAX) {
+		return;
+	}
+
+	remain_trap_data -= (sizeof(uint32) * i);
+
+	if (remain_trap_data > sizeof(buf_u8)) {
+		DHD_ERROR(("%s: resize remain_trap_data\n", __FUNCTION__));
+		remain_trap_data =  sizeof(buf_u8);
+	}
+
+	if (remain_trap_data) {
+		p_u8 = (const uint8 *)data;
+		for (i = 0; i < remain_trap_data; i++) {
+			buf_u8[i] = *(const uint8 *)(p_u8++);
+		}
+
+		remain_len = VENDOR_SEND_HANG_EXT_INFO_LEN - *bytes_written;
+		*bytes_written += scnprintf(&dest[*bytes_written], remain_len, "%c%08x",
+				HANG_RAW_DEL, ltoh32_ua(buf_u8));
+		(*cnt)++;
+	}
+}
+#endif /* !NOT_SUPPORT_EXT_TRAP_INFO */
+
+void
+copy_hang_info_trap(dhd_pub_t *dhd)
+{
+	trap_t tr;
+	int bytes_written;
+#if !defined(NOT_SUPPORT_EXT_TRAP_INFO)
+	int trap_subtype = 0;
+#endif /* NOT_SUPPORT_EXT_TRAP_INFO */
+
+	if (!dhd || !dhd->hang_info) {
+		DHD_ERROR(("%s dhd=%p hang_info=%p\n", __FUNCTION__,
+			dhd, (dhd ? dhd->hang_info : NULL)));
+		return;
+	}
+
+	if (!dhd->dongle_trap_occured) {
+		DHD_ERROR(("%s: dongle_trap_occured is FALSE\n", __FUNCTION__));
+		return;
+	}
+
+	memset(&tr, 0x00, sizeof(struct _trap_struct));
+#ifdef NOT_SUPPORT_EXT_TRAP_INFO
+	memset(dhd->hang_info, 0x00, VENDOR_SEND_HANG_EXT_INFO_LEN);
+	memcpy(&tr, &dhd->last_trap_info, sizeof(trap_t));
+#else
+	copy_ext_trap_sig(dhd, &tr);
+	get_hang_info_trap_subtype(dhd, &trap_subtype);
+#endif /* NOT_SUPPORT_EXT_TRAP_INFO */
+
+	hang_info_trap_tbl[HANG_INFO_TRAP_T_REASON_IDX].offset = HANG_REASON_DONGLE_TRAP;
+#ifdef NOT_SUPPORT_EXT_TRAP_INFO
+	hang_info_trap_tbl[HANG_INFO_TRAP_T_SUBTYPE_IDX].offset = 0;
+#else
+	hang_info_trap_tbl[HANG_INFO_TRAP_T_SUBTYPE_IDX].offset = trap_subtype;
+#endif /* NOT_SUPPORT_EXT_TRAP_INFO */
+
+	bytes_written = 0;
+	dhd->hang_info_cnt = 0;
+	get_debug_dump_time(dhd->debug_dump_time_hang_str);
+
+	copy_hang_info_head(dhd->hang_info, &tr, VENDOR_SEND_HANG_EXT_INFO_LEN, FALSE,
+			&bytes_written, &dhd->hang_info_cnt, dhd->debug_dump_time_hang_str);
+
+	DHD_INFO(("hang info haed cnt: %d len: %d data: %s\n",
+		dhd->hang_info_cnt, (int)strlen(dhd->hang_info), dhd->hang_info));
+
+	clear_debug_dump_time(dhd->debug_dump_time_hang_str);
+
+	if (dhd->hang_info_cnt < HANG_FIELD_CNT_MAX) {
+#ifdef NOT_SUPPORT_EXT_TRAP_INFO
+		/* need to remove key delimiter to avoid double key delimiter */
+		bytes_written--;
+		/* key - sp0/sp4/sp8/sp12 */
+		fill_dummy_data(dhd->hang_info + bytes_written,
+				VENDOR_SEND_HANG_EXT_INFO_LEN - bytes_written,
+				HANG_KEY_DEL,
+				0x00,
+				STACK_DUMP_KEY_COUNT);
+		bytes_written += STACK_DUMP_KEY_COUNT*SIZE_OF_DELIMETER_4BYTE_STR;
+		dhd->hang_info_cnt += STACK_DUMP_KEY_COUNT;
+		DHD_ERROR(("hang info stack_key cnt: %d len: %d data: %s\n",
+			dhd->hang_info_cnt, (int)strlen(dhd->hang_info), dhd->hang_info));
+
+		/* stack raw data */
+		fill_dummy_data(dhd->hang_info + bytes_written,
+				VENDOR_SEND_HANG_EXT_INFO_LEN - bytes_written,
+				HANG_RAW_DEL,
+				0x00,
+				STACK_DUMP_RAW_DATA_COUNT);
+		bytes_written += STACK_DUMP_RAW_DATA_COUNT*SIZE_OF_DELIMETER_4BYTE_STR;
+		dhd->hang_info_cnt += STACK_DUMP_RAW_DATA_COUNT;
+#else
+		copy_hang_info_stack(dhd, dhd->hang_info, &bytes_written, &dhd->hang_info_cnt);
+#endif /* NOT_SUPPORT_EXT_TRAP_INFO */
+		DHD_INFO(("hang info stack cnt: %d len: %d data: %s\n",
+			dhd->hang_info_cnt, (int)strlen(dhd->hang_info), dhd->hang_info));
+	}
+
+	if (dhd->hang_info_cnt < HANG_FIELD_CNT_MAX) {
+		copy_hang_info_trap_t(dhd->hang_info, &tr, VENDOR_SEND_HANG_EXT_INFO_LEN, FALSE,
+				&bytes_written, &dhd->hang_info_cnt, dhd->debug_dump_time_hang_str);
+		DHD_INFO(("hang info trap_t cnt: %d len: %d data: %s\n",
+			dhd->hang_info_cnt, (int)strlen(dhd->hang_info), dhd->hang_info));
+	}
+
+	if (dhd->hang_info_cnt < HANG_FIELD_CNT_MAX) {
+#ifdef NOT_SUPPORT_EXT_TRAP_INFO
+		fill_dummy_data(dhd->hang_info + bytes_written,
+				VENDOR_SEND_HANG_EXT_INFO_LEN - bytes_written,
+				HANG_RAW_DEL,
+				0x00,
+				TRAP_SPECIFIC_RAW_DATA_COUNT);
+		bytes_written += TRAP_SPECIFIC_RAW_DATA_COUNT*SIZE_OF_DELIMETER_4BYTE_STR;
+		dhd->hang_info_cnt += TRAP_SPECIFIC_RAW_DATA_COUNT;
+#else
+		copy_hang_info_specific(dhd, dhd->hang_info, &bytes_written, &dhd->hang_info_cnt);
+#endif /* NOT_SUPPORT_EXT_TRAP_INFO */
+		DHD_INFO(("hang info specific cnt: %d len: %d data: %s\n",
+			dhd->hang_info_cnt, (int)strlen(dhd->hang_info), dhd->hang_info));
+	}
+}
+#endif /* WL_CFGVENDOR_SEND_HANG_EVENT */

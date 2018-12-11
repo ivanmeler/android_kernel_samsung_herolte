@@ -24,7 +24,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: wl_cfg80211.h 750618 2018-03-07 11:14:10Z $
+ * $Id: wl_cfg80211.h 784024 2018-10-10 04:44:24Z $
  */
 
 /**
@@ -43,6 +43,9 @@
 #include <linux/rfkill.h>
 
 #include <wl_cfgp2p.h>
+#ifdef WL_BAM
+#include <wl_bam.h>
+#endif  /* WL_BAM */
 struct wl_conf;
 struct wl_iface;
 struct bcm_cfg80211;
@@ -65,6 +68,13 @@ struct wl_ibss;
 #define WL_DBG_DBG	(1 << 2)
 #define WL_DBG_INFO	(1 << 1)
 #define WL_DBG_ERR	(1 << 0)
+
+#if (LINUX_VERSION_CODE >= KERNEL_VERSION(4, 7, 0))
+/* Newer kernels use defines from nl80211.h */
+#define IEEE80211_BAND_2GHZ	NL80211_BAND_2GHZ
+#define IEEE80211_BAND_5GHZ	NL80211_BAND_5GHZ
+#define IEEE80211_NUM_BANDS	NUM_NL80211_BANDS
+#endif /* LINUX_VER >= 4.7 */
 
 #ifdef DHD_LOG_DUMP
 extern void dhd_log_dump_write(int type, const char *fmt, ...);
@@ -507,6 +517,16 @@ struct wl_profile {
 	bool active;
 };
 
+struct wl_wps_ie {
+	uint8	id;		/* IE ID: 0xDD */
+	uint8	len;		/* IE length */
+	uint8	OUI[3];		/* WiFi WPS specific OUI */
+	uint8	oui_type;	/*  Vendor specific OUI Type */
+	uint8	attrib[1];	/* variable length attributes */
+} __attribute__ ((packed));
+typedef struct wl_wps_ie wl_wps_ie_t;
+
+
 struct net_info {
 	struct net_device *ndev;
 	struct wireless_dev *wdev;
@@ -887,7 +907,7 @@ struct bcm_cfg80211 {
 #endif /* DHD_ENABLE_BIGDATA_LOGGING */
 	u16 ap_oper_channel;
 #if defined(SUPPORT_RANDOM_MAC_SCAN)
-	bool random_mac_enabled;
+	bool random_mac_running;
 #endif /* SUPPORT_RANDOM_MAC_SCAN */
 #ifdef DHD_LOSSLESS_ROAMING
 	struct timer_list roam_timeout;   /* Timer for catch roam timeout */
@@ -926,6 +946,9 @@ struct bcm_cfg80211 {
 #ifdef SUPPORT_CUSTOM_SET_CAC
 	int enable_cac;
 #endif	/* SUPPORT_CUSTOM_SET_CAC */
+#ifdef WL_BAM
+	wl_bad_ap_mngr_t bad_ap_mngr;
+#endif  /* WL_BAM */
 };
 
 #if defined(STRICT_GCC_WARNINGS) && defined(__GNUC__) && (__GNUC__ > 4 || (__GNUC__ == \
@@ -960,10 +983,8 @@ wl_probe_wdev_all(struct bcm_cfg80211 *cfg)
 	GCC_DIAGNOSTIC_PUSH();
 	BCM_LIST_FOR_EACH_ENTRY_SAFE(_net_info, next,
 		&cfg->net_list, list) {
-		WL_ERR(("%s: net_list[%d] bssidx: %d, "
-			"ndev: %p, wdev: %p \n", __FUNCTION__,
-			idx++, _net_info->bssidx,
-			_net_info->ndev, _net_info->wdev));
+		WL_ERR(("%s: net_list[%d] bssidx: %d\n",
+			__FUNCTION__, idx++, _net_info->bssidx));
 	}
 	GCC_DIAGNOSTIC_POP();
 	spin_unlock_irqrestore(&cfg->net_list_sync, flags);
@@ -1777,8 +1798,7 @@ extern uint8 *wl_get_up_table(void);
 u64 wl_cfg80211_get_new_roc_id(struct bcm_cfg80211 *cfg);
 
 #if defined(SUPPORT_RANDOM_MAC_SCAN)
-int wl_cfg80211_set_random_mac(struct net_device *dev, bool enable);
-int wl_cfg80211_random_mac_enable(struct net_device *dev);
+int wl_cfg80211_random_mac_enable(struct net_device *dev, uint8 *rand_mac, uint8 *rand_mask);
 int wl_cfg80211_random_mac_disable(struct net_device *dev);
 #endif /* SUPPORT_RANDOM_MAC_SCAN */
 #ifdef SUPPORT_AP_HIGHER_BEACONRATE
@@ -1808,6 +1828,7 @@ int wl_cfg80211_iface_count(struct net_device *dev);
 struct net_device* wl_get_ap_netdev(struct bcm_cfg80211 *cfg, char *ifname);
 struct net_device* wl_get_netdev_by_name(struct bcm_cfg80211 *cfg, char *ifname);
 int wl_cfg80211_get_vndr_ouilist(struct bcm_cfg80211 *cfg, uint8 *buf, int max_cnt);
+void wl_cfg80211_disassoc(struct net_device *ndev);
 #ifdef SUPPORT_SET_CAC
 extern int wl_cfg80211_enable_cac(struct net_device *dev, int enable);
 #endif /* SUPPORT_SET_CAC */
@@ -1827,4 +1848,10 @@ static inline int wl_abort_scan_and_check(struct bcm_cfg80211 *cfg)
 	return TRUE;
 }
 #endif /* DHD_ABORT_SCAN_CREATE_INTERFACE */
+#ifdef APSTA_RESTRICTED_CHANNEL
+extern s32 wl_cfg80211_set_indoor_channels(struct net_device *ndev, char *command, int total_len);
+extern s32 wl_cfg80211_get_indoor_channels(struct net_device *ndev, char *command, int total_len);
+extern s32 wl_cfg80211_read_indoor_channels(struct net_device *ndev, void *buf, int buflen);
+extern bool wl_cfg80211_check_indoor_channels(struct net_device *ndev, int channel);
+#endif /* APSTA_RESTRICTED_CHANNEL */
 #endif /* _wl_cfg80211_h_ */

@@ -86,23 +86,6 @@ alternative_if ARM64_UNMAP_KERNEL_AT_EL0
 	mov	x30, xzr
 	.endif
 	.endif
-alternative_else_nop_endif
-#endif
-
-	sub	sp, sp, #S_FRAME_SIZE
-	b	el\()\el\()_\label
-	.endm
-
-	.macro tramp_alias, dst, sym
-	mov_q	\dst, TRAMP_VALIAS
-	add	\dst, \dst, #(\sym - .entry.tramp.text)
-	.endm
-
-	.macro	kernel_entry, el, regsize = 64
-	.if	\regsize == 32
-	mov	w0, w0				// zero upper 32 bits of x0
-	.endif
-
 #ifdef CONFIG_SOC_EXYNOS8890
 	.if     \regsize == 32
 	.if     \el == 0
@@ -115,6 +98,41 @@ alternative_else_nop_endif
 	.endif
 	.endif
 #endif
+
+alternative_else_nop_endif
+#endif
+
+	sub	sp, sp, #S_FRAME_SIZE
+	.if     \el == 0
+	stp     x0, x1, [sp, #16 * 0]
+	stp     x2, x3, [sp, #16 * 1]
+	mrs     x0, elr_el1
+	mrs     x1, esr_el1
+	mrs     x2, spsr_el1
+	mrs     x3, far_el1
+	.endif
+
+	b	el\()\el\()_\label
+	.endm
+
+	.macro tramp_alias, dst, sym
+	mov_q	\dst, TRAMP_VALIAS
+	add	\dst, \dst, #(\sym - .entry.tramp.text)
+	.endm
+
+	.macro	kernel_entry, el, regsize = 64
+	.if     \el == 0
+	msr     elr_el1, x0
+	msr     esr_el1, x1
+	msr     spsr_el1, x2
+	msr     far_el1, x3
+	ldp     x0, x1, [sp, #16 * 0]
+	ldp     x2, x3, [sp, #16 * 1]
+	.endif
+
+	.if     \regsize == 32
+	mov     w0, w0                          // zero upper 32 bits of x0
+	.endif
 
 	stp	x0, x1, [sp, #16 * 0]
 	stp	x2, x3, [sp, #16 * 1]

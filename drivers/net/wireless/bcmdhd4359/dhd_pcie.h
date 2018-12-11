@@ -24,7 +24,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: dhd_pcie.h 727682 2017-10-23 04:45:57Z $
+ * $Id: dhd_pcie.h 771836 2018-07-12 03:25:34Z $
  */
 
 
@@ -430,6 +430,7 @@ extern uint32 dhdpcie_rc_config_read(dhd_bus_t *bus, uint offset);
 extern uint32 dhdpcie_rc_access_cap(dhd_bus_t *bus, int cap, uint offset, bool is_ext,
 		bool is_write, uint32 writeval);
 extern uint32 dhd_debug_get_rc_linkcap(dhd_bus_t *bus);
+extern void dhdpcie_dump_resource(dhd_bus_t *bus);
 extern int dhdpcie_start_host_pcieclock(dhd_bus_t *bus);
 extern int dhdpcie_stop_host_pcieclock(dhd_bus_t *bus);
 extern int dhdpcie_disable_device(dhd_bus_t *bus);
@@ -483,6 +484,8 @@ extern void dhd_os_ib_set_device_wake(struct dhd_bus *bus, bool val);
 #define MSM_PCIE_DEVICE_ID 0x0104
 #elif defined(CONFIG_ARCH_MSM8998)
 #define MSM_PCIE_DEVICE_ID 0x0105
+#elif defined(CONFIG_ARCH_SDM845)
+#define MSM_PCIE_DEVICE_ID 0x0106
 #else
 #error "Not supported platform"
 #endif

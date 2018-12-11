@@ -1,5 +1,126 @@
-BCM4361 DHD 1.77.65 for Android Great/Dream/Hero & BCM4345X & BCM4343X Project
+BCM4361 DHD 1.77.72.1 for Android Great/Dream/Hero & BCM4345X & BCM4343X Project
 (Notes: 1.77.x is twigged off from 1.579.235.9)
+
+DHD 1.77.72.1 - 2018.10.17
+Others
+ - CS6302259(By Kang Hyung Wook) Supported DHD driven Random MAC feature
+
+
+DHD 1.77.72 - 2018.09.07
+Security Patch
+ - CS5120366(By Jeong Min Cheol) SI-11983: Fixed potential buffer overflow due to sscanf
+ - CS5168121(By Kim Tae-Yong) Hide host memory address information for security
+ - CS5188660(By Min SungBin) SI-11783: Fixed potential kernel panic from malicious message
+ - CS5262126(By Min SungBin) SI-11164 Fixed buffer overflow in handling PKTLOG_FILTER_ADD command
+ - CS5264403(By Min SungBin) SI-12150: Fixed out of bounds read in dhd_ioctl_process()
+ - CS5272148(By Kang Hyung Wook) SI-12126: Fixed buffer overflow when parsing MAC by file
+ - CS5368479(By Min SungBin) SI-12312: Hided pointer information
+ - CS5549090(By Min SungBin) SI-11784: Added the validation routine of ifidx variable to fix the security issue
+ - CS5550321(By Min SungBin) SI-11785: Added the boundary check routine for flowid to fix the security issue
+ - CS5844556(By Kang Hyung Wook) SI-12304: Hided wdev and ndev pointer information for security issue
+ - CS5844633(By Kang Hyung Wook) SI-12262: Changed the print format specifier to hide pointer information
+ - CS5844688(By Kang Hyung Wook) SI-12227: Fixed out of bounds read in dhd_get_memdump_info() function
+
+Others
+ - CS3550383(By Ahn Byunghun) Fixed battery hydrant due to wakelock
+ - CS4447594(By Min SungBin) Fixed can't be reading RD/WR indices of common ring issue when PCIe link down is occurred
+ - CS4541746(By Park HeeBae) Adding log for pkt info received during sleep
+ - CS5117925(By Park HeeBae) Removal unnecessary wakelock for TPut enhancement
+ - CS5117925(By Park HeeBae) TPut parameter change
+ - CS5152496(By Huang Junming) Code change for W2019 bring-up
+ - CS5152496(By Huang Junming) Split the DHD_DT_COMPAT_ENTRY into two different definition to support backward compatibility
+ - CS5219364(By Park HeeBae) Reading dongle memory via workq
+ - CS5395053(By Min SungBin) Added memory boundary check routine in dhdpcie_readshared() function
+ - CS5488359(By Min SungBin) Added Qatar country regrev QA/6 in translate_custom_table for HERO project
+   (This patch should be sync up with BCM4359C0 - FW 9.96.11 or higher version)
+ - CS5550621(By Park HeeBae) Triggering hang on KSO failure
+ - CS5635953(By Choi Junsu) Added private command to set fixed bcn_li_dtim
+ - CS5943720(By Junming Huang) Code change for W2018 O OS bring-up
+ - Added virtual and physical address information log of BAR0/BAR1 to support PCIe related issue
+ - Disable DEBUG_UART feature at DHD
+ - Fixed wrong BDC data offset calculation in Lossless Roaming
+ - Moved the closednet configuration to appropriate position in order to support Android P OS
+
+
+DHD 1.77.71.2 - 2018.07.27
+Others
+ - CS3550383(By Park HeeBae) Added wakelock patch in Solis to Galileo
+ - CS4541746(By Park HeeBae) Adding log for pkt info received during sleep
+ - CS5117925(By Park HeeBae) Removal unnecessary wakelock for TPut enhancement
+ - CS5117925(By Park HeeBae) TPut parameter change
+ - CS5219364(By Park HeeBae) Reading dongle memory via workq
+ - CS5550621(By Park HeeBae) Triggering hang on KSO failure
+ - Fixed wrong BDC data offset calculation in Lossless Roaming
+
+
+DHD 1.77.71 - 2018.06.15
+Security Patch
+ - CS5219404(By Choi Hyeonu) SI-12070: Fixed vulnerability issue due to NULL pointer dereference
+
+Others
+ - CS4857485(By HeeBae Park) Fixed compile error
+ - Fixed Coverity issues - Added NULL check condition
+
+
+DHD 1.77.70 - 2018.05.25
+Major Issue
+ - CS4449537(By Huang Junming) Fixed the packet delay with TPLINK AP on Tencent site
+     * Issue summary
+       While running the Game application using TPLINK AP,  packet delay is detected at the Game server side
+     * Analysis / Root cause
+       According to Air sniffer log, AP couldn't receive 802.11 Ack or Block Ack frame which DUT sent on the noisy environment
+       If TPLINK lost AMPDU these frames, AP holds frames which already received during 1 second
+     * Solution
+       Increase LRL(Long Retry Limit) from 6 to 12 to increase the opportunity to receive frame on AP side
+
+Kernel Panic
+ - CS4854788(By Jeong Min Cheol) Moved the debug info prints to avoid the Kernel panic due to watchdog bark
+
+Others
+ - CS4227562(By SungBin Min) Supported a list of bad APs handling PS mode improperly
+ - CS4284701(By Park Hee Bae) Added Galileo(Tizen) Code
+ - CS4596042(By Kwak Hogil) Changed EXCESS_PM_WAKE_EVENT interval time on suspend mode
+ - CS4679906(By Yoon Jae Ho) Added to check MFP condition when enabling MFP
+ - CS4865776(By Kim Tae-Yong) Decided FW/NVRAM/BLOB base location by referring PLATFORM_VERSION and ANDROID_VERSION together
+ - CS4944817(By Kim MinSoo) Disabled DHD TCP ACK Suppress for Great KOR project
+ - CS4961402 (By SungBin Min)Added error logs and changed the return value in ISR
+ - CS4998218(By Park Hee Bae) Added a few features in Solis(Tizen) for Galileo(Tizen)
+ - CS4998218(By Park Hee Bae) Added limited bigdata logging feature for Galileo(Tizen)
+ - CS5077680(By Yoon Jung Min) Fixed mishandling PCIe IRQ at host
+ - (CS4865666 By Ja Heon Gu) Fixed BT Music Chopping/NAPI Download  performance issue by enabling DHD_TX_LBP/DHD_LB_IRQSET feature
+ - Added invalid flowid check routine
+ - Dropped tx packet if it is larger than MAX_MTU_SZ(1600 bytes)
+ - Enhanced STA/SoftAP concurrent mode support
+ - Fixed Coverity issues - Added return value check
+ - Supported CFG80211 API - cfg80211_scan_done() with Linux kernel higher than 4.8.0
+
+
+DHD 1.77.69 - 2018.04.13
+Security Patch
+ - CS4511968(By Hogil Kwak) Fixed out of bound read of GET_ADPS private command reported by KASAN
+ - CS4789072(By Kim Gwang Min) Fixed out of bounds read access issues
+
+Others
+ - CS4045271(By Hogil Kwak) Added SET_ADPS log message
+ - CS4725359(By Junsu Choi) Disabled android PNO feature
+ - CS4757515(By Jeong Min Cheol) Disabled CAC at initial state on BCM4359 device
+ - CS4779893(By Anh Tran Tuan) Fixed to get proper link statistic value on VTS test
+ - CS4789317(By Van Son Nguyen) Fixed HANG recovery issue due to reason code
+ - CS4807325(By Min SungBin) Replaced country code to XZ ccode if ccode is an undefined country
+ - CS4807862(By Van Son Nguyen) TPUT enhancement and dongle dump enable for J6 project
+ - CS4842583(By Seo Jung Kuk Seo) Fixed SoftAP turn on failure due to invalid channel configuration
+ - Supported SSSR dump for BCM4359C0 project
+
+
+DHD 1.77.67 - 2018.03.23
+New Feature
+ - CS4714586(By kwon Jaecheol) Increased the number of maximum STA association to 10 in case of STA/SoftAP concurrent mode
+
+Others
+ - CS4688655(By Lee SoonHo) Added to disable vhtmode after set country code
+ - CS4696802(By Ahn Byunghun) Added UDP port 137 packet filter for Tizen
+ - CS4713830(By Choi Jongmin) Added to execute memdump when performing private command 'DEBUG_DUMP' on SDIO bus interface
+
 
 DHD 1.77.65 - 2018.03.16
 Others

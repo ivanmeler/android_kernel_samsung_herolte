@@ -1,4 +1,6 @@
 /*
+ * Bad AP Manager for ADPS
+ *
  * Copyright (C) 1999-2018, Broadcom Corporation
  * 
  *      Unless you and Broadcom execute a separate written software license
@@ -22,30 +24,32 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: epivers.h.in 596126 2015-10-29 19:53:48Z $
- *
-*/
+ * $Id: wl_bam.h 763128 2018-05-17 08:38:35Z $
+ */
+#ifndef _WL_BAM_H_
+#define _WL_BAM_H_
+#include <typedefs.h>
+#include <linux/kernel.h>
+#include <linux/netdevice.h>
 
-#ifndef _epivers_h_
-#define _epivers_h_
+#include <wl_cfgp2p.h>
 
-#define	EPI_MAJOR_VERSION	1
+typedef struct wl_bad_ap_mngr {
+	uint32 num;
+	spinlock_t lock;
+	struct mutex fs_lock;		/* lock for bad ap file list */
+	struct list_head list;
 
-#define	EPI_MINOR_VERSION	77
+	wl_event_adps_bad_ap_t data;
+} wl_bad_ap_mngr_t;
 
-#define	EPI_RC_NUMBER		72
+void wl_bad_ap_mngr_init(struct bcm_cfg80211 *cfg);
+void wl_bad_ap_mngr_deinit(struct bcm_cfg80211 *cfg);
 
-#define	EPI_INCREMENTAL_NUMBER	1
+bool wl_adps_bad_ap_check(struct bcm_cfg80211 *cfg, const struct ether_addr *bssid);
+int wl_adps_enabled(struct bcm_cfg80211 *cfg, struct net_device *ndev);
+int wl_adps_set_suspend(struct bcm_cfg80211 *cfg, struct net_device *ndev, uint8 suspend);
 
-#define	EPI_BUILD_NUMBER	0
-
-#define	EPI_VERSION		1, 77, 72, 1
-
-#define	EPI_VERSION_NUM		0x014d4801
-
-#define EPI_VERSION_DEV		1.77.72
-
-/* Driver Version String, ASCII, 32 chars max */
-#define	EPI_VERSION_STR		"1.77.72.1 (r)"
-
-#endif /* _epivers_h_ */
+s32 wl_adps_event_handler(struct bcm_cfg80211 *cfg, bcm_struct_cfgdev *cfgdev,
+	const wl_event_msg_t *e, void *data);
+#endif  /* _WL_BAM_H_ */

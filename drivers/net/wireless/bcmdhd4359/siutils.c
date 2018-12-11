@@ -25,7 +25,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: siutils.c 668442 2016-11-03 08:42:43Z $
+ * $Id: siutils.c 758534 2018-04-19 06:50:30Z $
  */
 
 #include <bcm_cfg.h>
@@ -624,11 +624,13 @@ si_doattach(si_info_t *sii, uint devid, osl_t *osh, volatile void *regs,
 	}
 
 	sih->bustype = bustype;
+#ifdef BCMBUSTYPE
 	if (bustype != BUSTYPE(bustype)) {
 		SI_ERROR(("si_doattach: bus type %d does not match configured bus type %d\n",
 			bustype, BUSTYPE(bustype)));
 		return NULL;
 	}
+#endif
 
 	/* bus/core/clk setup for register access */
 	if (!si_buscore_prep(sii, bustype, devid, sdh)) {
