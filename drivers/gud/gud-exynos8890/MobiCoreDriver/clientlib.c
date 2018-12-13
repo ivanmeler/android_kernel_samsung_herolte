@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2017 TRUSTONIC LIMITED
+ * Copyright (c) 2013-2015 TRUSTONIC LIMITED
  * All Rights Reserved.
  *
  * This program is free software; you can redistribute it and/or
@@ -108,33 +108,23 @@ static void clientlib_client_put(void)
 enum mc_result mc_open_device(u32 device_id)
 {
 	enum mc_result mc_result = MC_DRV_OK;
-	int ret;
 
 	/* Check parameters */
 	if (!is_valid_device(device_id))
 		return MC_DRV_ERR_UNKNOWN_DEVICE;
 
 	mutex_lock(&dev_mutex);
-	/* Make sure TEE was started */
-	ret = mc_wait_tee_start();
-	if (ret) {
-		mc_dev_err("TEE failed to start, now or in the past");
-		mc_result = MC_DRV_ERR_INVALID_DEVICE_FILE;
-		goto end;
-	}
-
 	if (!open_count)
 		client = client_create(true);
 
 	if (client) {
 		open_count++;
-		mc_dev_devel("successfully opened the device\n");
+		mc_dev_devel("Successfully opened the device\n");
 	} else {
 		mc_result = MC_DRV_ERR_INVALID_DEVICE_FILE;
-		mc_dev_err("could not open device\n");
+		mc_dev_devel("Could not open device\n");
 	}
 
-end:
 	mutex_unlock(&dev_mutex);
 	return mc_result;
 }
@@ -286,13 +276,8 @@ enum mc_result mc_wait_notification(struct mc_session_handle *session,
 		return MC_DRV_ERR_DAEMON_DEVICE_NOT_OPEN;
 
 	/* Call core api */
-	do {
-		ret = convert(client_waitnotif_session(client,
-						       session->session_id,
-						       timeout, false));
-	} while ((MC_INFINITE_TIMEOUT == timeout) &&
-		 (MC_DRV_ERR_INTERRUPTED_BY_SIGNAL == ret));
-
+	ret = convert(client_waitnotif_session(client, session->session_id,
+					       timeout, false));
 	clientlib_client_put();
 	return ret;
 }
