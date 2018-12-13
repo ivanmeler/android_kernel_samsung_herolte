@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2017 TRUSTONIC LIMITED
+ * Copyright (c) 2013-2015 TRUSTONIC LIMITED
  * All Rights Reserved.
  *
  * This program is free software; you can redistribute it and/or
@@ -17,7 +17,6 @@
 #include <linux/slab.h>
 #include <linux/device.h>
 #include <linux/debugfs.h>
-#include <linux/version.h>
 
 #include "main.h"
 #include "fastcall.h"
@@ -72,11 +71,7 @@ static struct logging_ctx {
 	int	thread_err;
 	u16	prev_source;		/* Previous Log source */
 	char	line[LOG_LINE_SIZE];	/* Log Line buffer */
-#if KERNEL_VERSION(4, 4, 0) > LINUX_VERSION_CODE
 	u32	enabled;		/* Log can be disabled via debugfs */
-#else
-	bool	enabled;		/* Log can be disabled via debugfs */
-#endif
 	bool	dead;
 } log_ctx;
 
