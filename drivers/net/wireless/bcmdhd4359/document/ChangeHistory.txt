@@ -1,5 +1,25 @@
-BCM4361 DHD 1.77.72.1 for Android Great/Dream/Hero & BCM4345X & BCM4343X Project
+BCM4361 DHD 1.77.72.5 for Android Great/Dream/Hero & BCM4345X & BCM4343X Project
 (Notes: 1.77.x is twigged off from 1.579.235.9)
+
+DHD 1.77.72.5 - 2018.11.06
+Others
+ - CS6302259(By Kang Hyung Wook) Supported DHD driven Random MAC feature for old kernel version less than 3.19
+ - Fixed DHD TCP ACK Suppress operation controlled by ARGOS scheduler
+
+
+DHD 1.77.72.3 - 2018.10.31
+Security Patch
+ - CS6156404(By Kang Hyung Wook) SI-12974: Fixed to be not print out ndev pointer for security issue
+ - CS6189370(By Kang Hyung Wook) SI-12455: Added synchronization scheme for Monitor Mode IOVAR to avoid race condition
+ - CS6196908(By Kang Hyung Wook) SI-11983: Changed the SUBLOGLEVELZ definition to correct form to fix the security issue
+ - CS6198456(By Kang Hyung Wook) SI-13022: Fixed the out-of-the-bound read due to bcm_atoi() function
+ - V2018072201 Fixed OOB read in the wl_inform_single_bss() function
+ - V2018072202 Fixed OOB write in the wl_notify_sched_scan_results() function
+
+Others
+ - CS5488359(By Min SungBin) Added Qatar country regrev QA/6 in translate_custom_table for BCM43454/BCM43455 chipsets
+   (This patch should be sync up with BCM43454/BCM43455 - FW 7.120.12, 7_120_11_2 or higher version)
+
 
 DHD 1.77.72.1 - 2018.10.17
 Others

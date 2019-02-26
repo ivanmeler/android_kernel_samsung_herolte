@@ -24,7 +24,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: dhd_common.c 772708 2018-07-18 05:47:31Z $
+ * $Id: dhd_common.c 764462 2018-05-25 10:58:17Z $
  */
 #include <typedefs.h>
 #include <osl.h>
@@ -3239,35 +3239,6 @@ wl_pattern_atoh(char *src, char *dst)
 		num[2] = '\0';
 		dst[i] = (uint8)strtoul(num, NULL, 16);
 		src += 2;
-	}
-	return i;
-}
-
-int
-pattern_atoh_len(char *src, char *dst, int len)
-{
-	int i;
-	if (strncmp(src, "0x", HD_PREFIX_SIZE) != 0 &&
-			strncmp(src, "0X", HD_PREFIX_SIZE) != 0) {
-		DHD_ERROR(("Mask invalid format. Needs to start with 0x\n"));
-		return -1;
-	}
-	src = src + HD_PREFIX_SIZE; /* Skip past 0x */
-	if (strlen(src) % HD_BYTE_SIZE != 0) {
-		DHD_ERROR(("Mask invalid format. Needs to be of even length\n"));
-		return -1;
-	}
-	for (i = 0; *src != '\0'; i++) {
-		char num[HD_BYTE_SIZE + 1];
-
-		if (i > len - 1) {
-			DHD_ERROR(("pattern not in range, idx: %d len: %d\n", i, len));
-			return -1;
-		}
-		bcm_strncpy_s(num, sizeof(num), src, HD_BYTE_SIZE);
-		num[HD_BYTE_SIZE] = '\0';
-		dst[i] = (uint8)strtoul(num, NULL, 16);
-		src += HD_BYTE_SIZE;
 	}
 	return i;
 }

@@ -27,7 +27,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: dhd.h 784024 2018-10-10 04:44:24Z $
+ * $Id: dhd.h 788951 2018-11-14 12:30:11Z $
  */
 
 /****************
@@ -2720,8 +2720,5 @@ extern uint dhd_get_chiprev_id(dhd_pub_t *dhdp);
 #define CHECK_IS_BLOB(dhdp)		FALSE
 #define CHECK_IS_MULT_REGREV(dhdp)	TRUE
 #endif /* DHD_BLOB_EXISTENCE_CHECK && DHD_USE_CLMINFO_PARSER */
-
-#define HD_PREFIX_SIZE  2   /* hexadecimal prefix size */
-#define HD_BYTE_SIZE    2   /* hexadecimal byte size */
 
 #endif /* _dhd_h_ */
