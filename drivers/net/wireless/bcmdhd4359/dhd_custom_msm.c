@@ -23,7 +23,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: dhd_custom_msm.c 772722 2018-07-18 06:22:03Z $
+ * $Id: dhd_custom_msm.c 742443 2018-01-22 09:17:21Z $
  *
  */
 
@@ -40,10 +40,9 @@
 #include <linux/fcntl.h>
 #include <linux/fs.h>
 #include <linux/of_gpio.h>
-#if defined(CONFIG_ARCH_MSM8996) || defined(CONFIG_ARCH_MSM8998) || \
-	defined(CONFIG_ARCH_SDM845)
+#if defined(CONFIG_ARCH_MSM8996) || defined(CONFIG_ARCH_MSM8998)
 #include <linux/msm_pcie.h>
-#endif /* CONFIG_ARCH_MSM8996 || CONFIG_ARCH_MSM8998 || CONFIG_ARCH_SDM845 */
+#endif /* CONFIG_ARCH_MSM8996 || CONFIG_ARCH_MSM8998 */
 
 #ifdef CONFIG_BROADCOM_WIFI_RESERVED_MEM
 extern int dhd_init_wlan_mem(void);
@@ -53,22 +52,17 @@ extern void *dhd_wlan_mem_prealloc(int section, unsigned long size);
 #define WIFI_TURNON_DELAY       200
 static int wlan_reg_on = -1;
 #ifdef CONFIG_BCM4359
-#ifdef CONFIG_ARCH_SDM845
-#define DHD_DT_COMPAT_ENTRY		"android,bcmdhd_wlan"
-#else
 #define DHD_DT_COMPAT_ENTRY		"samsung,bcmdhd_wlan"
-#endif /* CONFIG_ARCH_SDM845 */
 #else
 #define DHD_DT_COMPAT_ENTRY		"android,bcmdhd_wlan"
 #endif /* CONFIG_BCM4359 */
 #define WIFI_WL_REG_ON_PROPNAME		"wlan-en-gpio"
 
-#if defined(CONFIG_ARCH_MSM8996) || defined(CONFIG_ARCH_MSM8998) || \
-	defined(CONFIG_ARCH_SDM845)
+#if defined(CONFIG_ARCH_MSM8996) || defined(CONFIG_ARCH_MSM8998)
 #define MSM_PCIE_CH_NUM			0
 #else
 #define MSM_PCIE_CH_NUM			1
-#endif /* CONFIG_ARCH_MSM8996 || CONFIG_ARCH_MSM8998 || CONFIG_ARCH_SDM845 */
+#endif /* CONFIG_ARCH_MSM8996 || CONFIG_ARCH_MSM8998 */
 
 #ifdef CONFIG_BCMDHD_OOB_HOST_WAKE
 static int wlan_host_wake_up = -1;
@@ -242,8 +236,7 @@ fail:
 	printk(KERN_INFO"%s: FINISH.......\n", __FUNCTION__);
 	return ret;
 }
-#if defined(CONFIG_ARCH_MSM8996) || defined(CONFIG_ARCH_MSM8998) || \
-	defined(CONFIG_ARCH_SDM845)
+#if defined(CONFIG_ARCH_MSM8996) || defined(CONFIG_ARCH_MSM8998)
 #if defined(CONFIG_DEFERRED_INITCALLS)
 deferred_module_init(dhd_wlan_init);
 #else
@@ -251,4 +244,4 @@ late_initcall(dhd_wlan_init);
 #endif /* CONFIG_DEFERRED_INITCALLS */
 #else
 device_initcall(dhd_wlan_init);
-#endif /* CONFIG_ARCH_MSM8996 || CONFIG_ARCH_MSM8998 || CONFIG_ARCH_SDM845 */
+#endif /* CONFIG_ARCH_MSM8996 || CONFIG_ARCH_MSM8998 */

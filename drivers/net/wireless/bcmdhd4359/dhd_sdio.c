@@ -24,7 +24,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: dhd_sdio.c 774476 2018-07-31 14:24:07Z $
+ * $Id: dhd_sdio.c 774477 2018-07-31 14:27:16Z $
  */
 
 #include <typedefs.h>

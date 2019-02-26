@@ -48,7 +48,9 @@
 
 /* definition for EVS mode */
 #define MBOX_EVS_MODE			(16)
+#define MBOX_UMTS_MODE			(18)
 #define DEVFREQ_MIF_EVS_FREQ		(1144000)
+#define DEVFREQ_MIF_UMTS_FREQ		(676000)
 
 static unsigned long origin_suspend_freq = 0;
 static struct pm_qos_request int_pm_qos_from_mif;
@@ -116,7 +118,9 @@ static int exynos8890_devfreq_mif_pm_suspend_prepare(struct device *dev,
 		origin_suspend_freq = data->devfreq_profile.suspend_freq;
 
 #ifdef CONFIG_MCU_IPC
-	if (mbox_get_value(MBOX_EVS_MODE))
+	if (mbox_get_value(MBOX_UMTS_MODE))
+		data->devfreq_profile.suspend_freq = DEVFREQ_MIF_UMTS_FREQ;
+	else if (mbox_get_value(MBOX_EVS_MODE))
 		data->devfreq_profile.suspend_freq = DEVFREQ_MIF_EVS_FREQ;
 	else
 		data->devfreq_profile.suspend_freq = origin_suspend_freq;
