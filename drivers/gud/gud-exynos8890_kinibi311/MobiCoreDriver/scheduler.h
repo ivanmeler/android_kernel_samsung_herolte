@@ -11,7 +11,15 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
  */
-#ifndef MOBICORE_COMPONENT_BUILD_TAG
-#define MOBICORE_COMPONENT_BUILD_TAG \
-	"t-base-EXYNOS64-Android-310B-V011-20180509_074946_48827"
-#endif
+
+#ifndef __MC_SCHEDULER_H__
+#define __MC_SCHEDULER_H__
+
+int mc_scheduler_init(void);
+static inline void mc_scheduler_exit(void) {}
+int mc_scheduler_start(void);
+void mc_scheduler_stop(void);
+int mc_scheduler_suspend(void);
+int mc_scheduler_resume(void);
+
+#endif /* __MC_SCHEDULER_H__ */

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2015 TRUSTONIC LIMITED
+ * Copyright (c) 2013-2017 TRUSTONIC LIMITED
  * All Rights Reserved.
  *
  * This program is free software; you can redistribute it and/or
@@ -36,10 +36,6 @@
 #include "main.h"
 #include "clock.h"	/* mc_clock_enable, mc_clock_disable */
 #include "fastcall.h"
-
-#ifdef CONFIG_RKP_CFP_FIX_SMC_BUG
-#include <linux/rkp_cfp.h>
-#endif
 
 /* ExySp: Lock for core switch processing */
 #ifdef CONFIG_SECURE_OS_BOOSTER_API
@@ -174,13 +170,7 @@ static inline int _smc(union mc_fc_generic *mc_fc_generic)
 		 * the asm code might clobber them.
 		 */
 		__asm__ volatile (
-#ifdef CONFIG_RKP_CFP_FIX_SMC_BUG
-			PRE_SMC_INLINE
-#endif
 			"smc #0\n"
-#ifdef CONFIG_RKP_CFP_FIX_SMC_BUG
-			POST_SMC_INLINE
-#endif
 			: "+r"(reg0), "+r"(reg1), "+r"(reg2), "+r"(reg3)
 			:
 			: "x4", "x5", "x6", "x7", "x8", "x9", "x10", "x11",
@@ -201,13 +191,7 @@ static inline int _smc(union mc_fc_generic *mc_fc_generic)
 			 */
 			".arch_extension sec\n"
 #endif /* MC_ARCH_EXTENSION_SEC */
-#ifdef CONFIG_RKP_CFP_FIX_SMC_BUG
-			PRE_SMC_INLINE
-#endif
 			"smc #0\n"
-#ifdef CONFIG_RKP_CFP_FIX_SMC_BUG
-			POST_SMC_INLINE
-#endif
 			: "+r"(reg0), "+r"(reg1), "+r"(reg2), "+r"(reg3)
 		);
 
@@ -331,13 +315,13 @@ static int mobicore_cpu_callback(struct notifier_block *nfb,
 	case CPU_DOWN_PREPARE:
 	case CPU_DOWN_PREPARE_FROZEN:
 		/* ExySp */
-		mc_dev_info("Cpu %d is going to hotplug out\n", cpu);
+		mc_dev_devel("Cpu %d is going to hotplug out\n", cpu);
 		mc_cpu_offline(cpu);
 		break;
 	case CPU_DEAD:
 	case CPU_DEAD_FROZEN:
 		/* ExySp */
-		mc_dev_info("Cpu %d is hotplug out\n", cpu);
+		mc_dev_devel("Cpu %d is hotplug out\n", cpu);
 		break;
 	}
 	return NOTIFY_OK;
@@ -384,7 +368,7 @@ static ssize_t debug_coreswitch_write(struct file *file,
 	if (buffer_len < 1)
 		return -EINVAL;
 
-	if (kstrtouint_from_user(buffer, buffer_len, 0, &new_cpu))
+	if (kstrtoint_from_user(buffer, buffer_len, 0, &new_cpu))
 		return -EINVAL;
 
 	mc_dev_devel("Set active cpu to %d\n", new_cpu);
@@ -498,7 +482,7 @@ int mc_fastcall_init(void)
 
 #ifdef MC_FASTCALL_WORKER_THREAD
 	fastcall_thread = kthread_create(kthread_worker_fn, &fastcall_worker,
-					 "mc_fastcall");
+					 "tee_fastcall");
 	if (IS_ERR(fastcall_thread)) {
 		ret = PTR_ERR(fastcall_thread);
 		fastcall_thread = NULL;

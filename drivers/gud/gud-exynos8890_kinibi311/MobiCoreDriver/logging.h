@@ -11,7 +11,13 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
  */
-#ifndef MOBICORE_COMPONENT_BUILD_TAG
-#define MOBICORE_COMPONENT_BUILD_TAG \
-	"t-base-EXYNOS64-Android-310B-V011-20180509_074946_48827"
-#endif
+#ifndef _MC_LOGGING_H_
+#define _MC_LOGGING_H_
+
+void mc_logging_run(void);
+int  mc_logging_init(void);
+void mc_logging_exit(void);
+int mc_logging_start(void);
+void mc_logging_stop(void);
+
+#endif /* _MC_LOGGING_H_ */

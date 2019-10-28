@@ -68,10 +68,10 @@ static struct logging_ctx {
 	};
 	bool	buffer_is_shared;	/* Log buffer cannot be freed */
 	u32	tail;			/* MobiCore log read position */
-	u32	line_len;		/* Log Line buffer current length */
 	int	thread_err;
 	u16	prev_source;		/* Previous Log source */
-	char	line[LOG_LINE_SIZE];	/* Log Line buffer */
+	char	line[LOG_LINE_SIZE + 1];/* Log Line buffer */
+	u32	line_len;		/* Log Line buffer current length */
 #if KERNEL_VERSION(4, 4, 0) > LINUX_VERSION_CODE
 	u32	enabled;		/* Log can be disabled via debugfs */
 #else
@@ -82,22 +82,19 @@ static struct logging_ctx {
 
 static inline void log_eol(u16 source)
 {
-	if (!strnlen(log_ctx.line, LOG_LINE_SIZE)) {
-		/* In case a TA tries to print a 0x0 */
-		log_ctx.line_len = 0;
+	if (!log_ctx.line_len)
 		return;
-	}
 
 	if (log_ctx.prev_source)
-		/* MobiCore Userspace */
+		/* TEE user-space */
 		dev_info(g_ctx.mcd, "%03x|%s\n", log_ctx.prev_source,
 			 log_ctx.line);
 	else
-		/* MobiCore kernel */
-		dev_info(g_ctx.mcd, "%s\n", log_ctx.line);
+		/* TEE kernel */
+		dev_info(g_ctx.mcd, "mtk|%s\n", log_ctx.line);
 
+	log_ctx.line[0] = '\0';
 	log_ctx.line_len = 0;
-	log_ctx.line[0] = 0;
 }
 
 /*
@@ -106,12 +103,15 @@ static inline void log_eol(u16 source)
  */
 static inline void log_char(char ch, u16 source)
 {
+	if (ch == '\0')
+		return;
+
 	if (ch == '\n' || ch == '\r') {
 		log_eol(source);
 		return;
 	}
 
-	if ((log_ctx.line_len >= (LOG_LINE_SIZE - 1)) ||
+	if ((log_ctx.line_len >= LOG_LINE_SIZE) ||
 	    (source != log_ctx.prev_source))
 		log_eol(source);
 

@@ -385,19 +385,22 @@ int mcp_session_waitnotif(struct mcp_session *session, s32 timeout,
 
 end:
 	mutex_lock(&mcp_ctx.notifications_mutex);
-	if (ret)
-		session->notif_state = MCP_NOTIF_DEAD;
-	else
+	if (!ret)
 		session->notif_state = MCP_NOTIF_CONSUMED;
+	else if (ret != -ERESTARTSYS)
+		session->notif_state = MCP_NOTIF_DEAD;
+	session->notif_cpu_clk = local_clock();
 	mutex_unlock(&mcp_ctx.notifications_mutex);
 
 	mutex_unlock(&session->notif_wait_lock);
 	if (ret && ((ret != -ETIME) || !silent_expiry)) {
+#ifdef CONFIG_FREEZER
 		if (ret == -ERESTARTSYS && system_freezing_cnt.counter == 1)
 			mc_dev_devel("freezing session %x\n", session->id);
 		else
-			mc_dev_info("session %x ec %d ret %d\n",
-				    session->id, session->exit_code, ret);
+#endif
+			mc_dev_devel("session %x ec %d ret %d\n",
+				     session->id, session->exit_code, ret);
 	}
 
 	return ret;
@@ -503,9 +506,9 @@ static inline int wait_mcp_notification(void)
 	}
 
 	/* TEE halted or dead: dump status and SMC log */
+	/* ExySp */
 //	mark_mcp_dead();
 	mcp_dump_mobicore_status();
-
 	panic("tbase halt");
 
 	return -ETIME;
@@ -637,9 +640,13 @@ out:
 	}
 
 	if (err) {
-		mc_dev_err("%s: res %d/ret %d\n",
-			   mcp_cmd_to_string(cmd_id), msg->rsp_header.result,
-			   err);
+		if ((cmd_id == MC_MCP_CMD_CLOSE_SESSION) && (err == -EAGAIN))
+			mc_dev_devel("%s: try again\n",
+				     mcp_cmd_to_string(cmd_id));
+		else
+			mc_dev_err("%s: res %d/ret %d\n",
+				   mcp_cmd_to_string(cmd_id),
+				   msg->rsp_header.result, err);
 		return err;
 	}
 
@@ -845,7 +852,7 @@ void mcp_kill_session(struct mcp_session *session)
 	mutex_unlock(&mcp_ctx.sessions_lock);
 }
 
-int mcp_map(u32 session_id, struct mcp_buffer_map *map)
+static int _mcp_map(u32 session_id, struct mcp_buffer_map *map)
 {
 	union mcp_message cmd;
 	int ret;
@@ -864,7 +871,7 @@ int mcp_map(u32 session_id, struct mcp_buffer_map *map)
 	return ret;
 }
 
-int mcp_unmap(u32 session_id, const struct mcp_buffer_map *map)
+static int _mcp_unmap(u32 session_id, const struct mcp_buffer_map *map)
 {
 	union mcp_message cmd;
 
@@ -877,7 +884,7 @@ int mcp_unmap(u32 session_id, const struct mcp_buffer_map *map)
 	return mcp_cmd(&cmd, session_id, NULL, NULL);
 }
 
-int mcp_multimap(u32 session_id, struct mcp_buffer_map *maps)
+static int _mcp_multimap(u32 session_id, struct mcp_buffer_map *maps)
 {
 	struct mcp_buffer_map *map = maps;
 	union mcp_message cmd;
@@ -908,7 +915,7 @@ int mcp_multimap(u32 session_id, struct mcp_buffer_map *maps)
 	return 0;
 }
 
-int mcp_multiunmap(u32 session_id, const struct mcp_buffer_map *maps)
+static int _mcp_multiunmap(u32 session_id, const struct mcp_buffer_map *maps)
 {
 	const struct mcp_buffer_map *map = maps;
 	union mcp_message cmd;
@@ -924,6 +931,92 @@ int mcp_multiunmap(u32 session_id, const struct mcp_buffer_map *maps)
 	}
 
 	return mcp_cmd(&cmd, session_id, NULL, NULL);
+}
+
+int mcp_multimap(u32 session_id, struct mcp_buffer_map *maps, bool use_multimap)
+{
+	int i, ret = 0;
+
+	/* Use multimap feature if available */
+	if (g_ctx.f_multimap && use_multimap) {
+		/* Send MCP message to map buffers in SWd */
+		ret = _mcp_multimap(session_id, maps);
+		if (!ret) {
+			for (i = 0; i < MC_MAP_MAX; i++)
+				if (maps[i].secure_va)
+					atomic_inc(&g_ctx.c_maps);
+		} else {
+			mc_dev_devel("multimap failed: %d\n", ret);
+		}
+
+		return ret;
+	}
+
+	/* Revert to old-style map */
+	for (i = 0; i < MC_MAP_MAX; i++) {
+		if (maps[i].type == WSM_INVALID)
+			continue;
+
+		/* Send MCP message to map buffer in SWd */
+		ret = _mcp_map(session_id, &maps[i]);
+		if (ret) {
+			mc_dev_devel("maps[%d] map failed: %d\n", i, ret);
+			break;
+		}
+
+		atomic_inc(&g_ctx.c_maps);
+	}
+
+	/* On failure, unmap what was mapped */
+	if (ret) {
+		for (i = 0; i < MC_MAP_MAX; i++) {
+			if ((maps[i].type == WSM_INVALID) || !maps[i].secure_va)
+				continue;
+
+			if (_mcp_unmap(session_id, &maps[i]))
+				mc_dev_devel("maps[%d] unmap failed: %d\n",
+					     i, ret);
+			else
+				atomic_dec(&g_ctx.c_maps);
+		}
+	}
+
+	return ret;
+}
+
+int mcp_multiunmap(u32 session_id, struct mcp_buffer_map *maps,
+		   bool use_multimap)
+{
+	int i, ret = 0;
+
+	/* Use multimap feature if available */
+	if (g_ctx.f_multimap && use_multimap) {
+		/* Send MCP command to unmap buffers in SWd */
+		ret = _mcp_multiunmap(session_id, maps);
+		if (ret) {
+			mc_dev_devel("mcp_multiunmap failed: %d\n", ret);
+		} else {
+			for (i = 0; i < MC_MAP_MAX; i++)
+				if (maps[i].secure_va)
+					atomic_dec(&g_ctx.c_maps);
+		}
+	} else {
+		for (i = 0; i < MC_MAP_MAX; i++) {
+			if (!maps[i].secure_va)
+				continue;
+
+			/* Send MCP command to unmap buffer in SWd */
+			ret = _mcp_unmap(session_id, &maps[i]);
+			if (ret)
+				mc_dev_devel("maps[%d] unmap failed: %d\n",
+					     i, ret);
+				/* Keep going */
+			else
+				atomic_dec(&g_ctx.c_maps);
+		}
+	}
+
+	return ret;
 }
 
 static int mcp_close(void)
@@ -976,6 +1069,7 @@ static inline bool mcp_notifications_flush_nolock(void)
 		mc_dev_devel("pop %x\n", session->id);
 		notif_queue_push(session->id);
 		session->notif_state = MCP_NOTIF_SENT;
+		session->notif_cpu_clk = local_clock();
 		list_del_init(&session->notifications_list);
 		flushed = true;
 	}
@@ -1015,6 +1109,7 @@ int mcp_notify(struct mcp_session *session)
 			list_add_tail(&session->notifications_list,
 				      &mcp_ctx.notifications);
 			session->notif_state = MCP_NOTIF_QUEUED;
+			session->notif_cpu_clk = local_clock();
 			mc_dev_devel("push %x\n", session->id);
 		}
 
@@ -1027,6 +1122,7 @@ int mcp_notify(struct mcp_session *session)
 	} else {
 		notif_queue_push(session->id);
 		session->notif_state = MCP_NOTIF_SENT;
+		session->notif_cpu_clk = local_clock();
 		if (mcp_ctx.scheduler_cb(MCP_NSIQ)) {
 			mc_dev_err("MC_SMC_N_SIQ failed\n");
 			ret = -EPROTO;
@@ -1056,7 +1152,6 @@ static inline void handle_session_notif(u32 session_id, u32 exit_code)
 {
 	struct mcp_session *session = NULL, *s;
 
-	mc_dev_devel("notification from %x ec %d\n", session_id, exit_code);
 	mutex_lock(&mcp_ctx.sessions_lock);
 	list_for_each_entry(s, &mcp_ctx.sessions, list) {
 		if (s->id == session_id) {
@@ -1065,11 +1160,11 @@ static inline void handle_session_notif(u32 session_id, u32 exit_code)
 		}
 	}
 
+	mc_dev_devel("notification from session %x exit code %d state %d\n",
+		     session_id, exit_code, session ? session->state : -1);
 	if (session) {
 		/* TA has terminated */
 		if (exit_code) {
-			mc_dev_devel("exit code %d for session %x state %d",
-				     session_id, exit_code, session->state);
 			/* Update exit code, or not */
 			mutex_lock(&session->exit_code_lock);
 			/*
@@ -1094,6 +1189,7 @@ static inline void handle_session_notif(u32 session_id, u32 exit_code)
 		/* Unblock waiter */
 		mutex_lock(&mcp_ctx.notifications_mutex);
 		session->notif_state = MCP_NOTIF_RECEIVED;
+		session->notif_cpu_clk = local_clock();
 		mutex_unlock(&mcp_ctx.notifications_mutex);
 		complete(&session->completion);
 	}
@@ -1113,7 +1209,7 @@ static int irq_bh_worker(void *arg)
 	struct notification_queue *rx = mcp_ctx.nq.rx;
 
 	while (mcp_ctx.irq_bh_active) {
-		wait_for_completion(&mcp_ctx.irq_bh_complete);
+		wait_for_completion_killable(&mcp_ctx.irq_bh_complete);
 
 		/* Deal with all pending notifications in one go */
 		while ((rx->hdr.write_cnt - rx->hdr.read_cnt) > 0) {
@@ -1180,6 +1276,9 @@ int mcp_start(void)
 	size_t q_len = ALIGN(2 * (sizeof(struct notification_queue_header) +
 		NQ_NUM_ELEMS * sizeof(struct notification)), 4);
 	int ret;
+#if defined(irq_get_irq_data)
+	struct irq_data *irq_d;
+#endif
 
 	/* Make sure we have an interrupt number before going on */
 #if defined(CONFIG_OF)
@@ -1195,6 +1294,13 @@ int mcp_start(void)
 		return -EINVAL;
 	}
 
+	/*
+	 * Initialize the time structure for SWd
+	 * At this stage, we don't know if the SWd needs to get the REE time and
+	 * we set it anyway.
+	 */
+	mcp_update_time();
+
 	/* Call the INIT fastcall to setup shared buffers */
 	ret = mc_fc_init(virt_to_phys(mcp_ctx.base),
 			 (uintptr_t)mcp_ctx.mcp_buffer -
@@ -1209,6 +1315,11 @@ int mcp_start(void)
 	mcp_ctx.mcp_buffer->message.init_values.irq = MC_INTR_SSIQ_SWD;
 #endif
 	mcp_ctx.mcp_buffer->message.init_values.flags |= MC_IV_FLAG_TIME;
+#if defined(irq_get_irq_data)
+	irq_d = irq_get_irq_data(mcp_ctx.irq);
+	if (irq_d)
+		mcp_ctx.mcp_buffer->message.init_values.irq = irq_d->hwirq;
+#endif
 	mcp_ctx.mcp_buffer->message.init_values.time_ofs =
 		(u32)((uintptr_t)mcp_ctx.time - (uintptr_t)mcp_ctx.base);
 	mcp_ctx.mcp_buffer->message.init_values.time_len =
@@ -1389,8 +1500,9 @@ int mcp_debug_sessions(struct kasnprintf_buf *buf)
 	int ret;
 
 	/* Header */
-	ret = kasnprintf(buf, "%4s %4s %4s %-15s %-11s\n",
-			 "ID", "type", "ec", "state", "notif state");
+	ret = kasnprintf(buf, "%20s %4s %4s %4s %-15s %-11s\n",
+			 "CPU clock", "ID", "type", "ec", "state",
+			 "notif state");
 	if (ret < 0)
 		return ret;
 
@@ -1398,9 +1510,10 @@ int mcp_debug_sessions(struct kasnprintf_buf *buf)
 	list_for_each_entry(session, &mcp_ctx.sessions, list) {
 		s32 exit_code = mcp_session_exitcode(session);
 
-		ret = kasnprintf(buf, "%4x %-4s %4d %-15s %-11s\n",
-				 session->id, session->is_gp ? "GP" : "MC",
-				 exit_code, state_to_string(session->state),
+		ret = kasnprintf(buf, "%20llu %4x %-4s %4d %-15s %-11s\n",
+				 session->notif_cpu_clk, session->id,
+				 session->is_gp ? "GP" : "MC", exit_code,
+				 state_to_string(session->state),
 				 notif_state_to_string(session->notif_state));
 		if (ret < 0)
 			break;

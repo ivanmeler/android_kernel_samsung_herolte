@@ -22,6 +22,7 @@
 #include "public/mc_user.h"
 
 #include "main.h"
+#include "admin.h"	/* is_authenticator_pid */
 #include "user.h"
 #include "client.h"
 #include "mcp.h"	/* mcp_get_version */
@@ -142,7 +143,8 @@ static long user_ioctl(struct file *file, unsigned int id, unsigned long arg)
 		ret = client_open_session(client, &session.sid, &session.uuid,
 					  session.tci, session.tcilen,
 					  session.is_gp_uuid,
-					  &session.identity);
+					  &session.identity, session.pid,
+					  session.flags);
 		if (ret)
 			break;
 
@@ -164,7 +166,8 @@ static long user_ioctl(struct file *file, unsigned int id, unsigned long arg)
 		/* Call internal api */
 		ret = client_open_trustlet(client, &trustlet.sid, trustlet.spid,
 					   trustlet.buffer, trustlet.tlen,
-					   trustlet.tci, trustlet.tcilen);
+					   trustlet.tci, trustlet.tcilen,
+					   trustlet.pid, trustlet.flags);
 		if (ret)
 			break;
 
@@ -230,7 +233,8 @@ static long user_ioctl(struct file *file, unsigned int id, unsigned long arg)
 		break;
 	}
 	case MC_IO_ERR: {
-		struct mc_ioctl_geterr *uerr = (struct mc_ioctl_geterr *)uarg;
+		struct mc_ioctl_geterr __user *uerr =
+			(struct mc_ioctl_geterr __user *)uarg;
 		u32 sid;
 		s32 exit_code;
 
@@ -263,8 +267,18 @@ static long user_ioctl(struct file *file, unsigned int id, unsigned long arg)
 
 		break;
 	}
+	case MC_IO_AUTHENTICATOR_CHECK: {
+		struct mc_authenticator_check info;
+
+		if (copy_from_user(&info, uarg, sizeof(info))) {
+			ret = -EFAULT;
+			break;
+		}
+		ret = is_authenticator_pid(info.pid);
+		break;
+	}
 	default:
-		mc_dev_err("unsupported cmd=0x%x\n", id);
+		mc_dev_err("unsupported command no %d\n", id);
 		ret = -ENOIOCTLCMD;
 	}
 

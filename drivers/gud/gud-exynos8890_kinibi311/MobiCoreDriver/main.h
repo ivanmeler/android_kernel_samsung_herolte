@@ -38,6 +38,8 @@
 #define mc_dev_devel(...)		do {} while (0)
 #endif /* !DEBUG */
 
+#define TEEC_LOGIN_KERNEL	0xF0000001
+
 #define TEE_START_NOT_TRIGGERED 1
 
 /* MobiCore Driver Kernel Module context data. */

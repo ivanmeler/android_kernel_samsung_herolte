@@ -11,7 +11,26 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
  */
-#ifndef MOBICORE_COMPONENT_BUILD_TAG
-#define MOBICORE_COMPONENT_BUILD_TAG \
-	"t-base-EXYNOS64-Android-310B-V011-20180509_074946_48827"
+
+#ifndef _MC_PM_H_
+#define _MC_PM_H_
+
+#include "platform.h"	/* MC_BL_NOTIFIER */
+
+#ifdef MC_BL_NOTIFIER
+/* Initialize Power Management */
+int mc_pm_start(void);
+/* Free all Power Management resources*/
+void mc_pm_stop(void);
+#else
+static inline int mc_pm_start(void)
+{
+	return 0;
+}
+
+static inline void mc_pm_stop(void)
+{
+}
 #endif
+
+#endif /* _MC_PM_H_ */

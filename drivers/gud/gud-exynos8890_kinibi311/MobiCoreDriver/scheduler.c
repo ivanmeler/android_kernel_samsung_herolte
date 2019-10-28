@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2015 TRUSTONIC LIMITED
+ * Copyright (c) 2013-2016 TRUSTONIC LIMITED
  * All Rights Reserved.
  *
  * This program is free software; you can redistribute it and/or
@@ -39,7 +39,7 @@ static struct sched_ctx {
 	struct mutex		sleep_mutex;	/* Protect sleep request */
 	struct mutex		request_mutex;	/* Protect all below */
 	/* The order of this enum matters */
-	enum {
+	enum sched_command {
 		NONE,		/* No specific request */
 		YIELD,		/* Run the SWd */
 		NSIQ,		/* Schedule the SWd */
@@ -49,7 +49,7 @@ static struct sched_ctx {
 	bool			suspended;
 } sched_ctx;
 
-static int mc_scheduler_command(int command)
+static int mc_scheduler_command(enum sched_command command)
 {
 	if (IS_ERR_OR_NULL(sched_ctx.thread))
 		return -EFAULT;
@@ -64,7 +64,7 @@ static int mc_scheduler_command(int command)
 	return 0;
 }
 
-static int mc_scheduler_pm_command(int command)
+static int mc_scheduler_pm_command(enum sched_command command)
 {
 	int ret = -EPERM;
 
@@ -133,7 +133,8 @@ static int tee_scheduler(void *arg)
 			if (!timeout_ms) {
 				mc_scheduler_command(NSIQ);
 			} else {
-				if (timeout_ms < 0)
+				if ((timeout_ms < 0) ||
+				    (timeout_ms > DEFAULT_TIMEOUT_MS))
 					timeout_ms = DEFAULT_TIMEOUT_MS;
 
 				if (!wait_for_completion_timeout(

@@ -11,7 +11,15 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
  */
-#ifndef MOBICORE_COMPONENT_BUILD_TAG
-#define MOBICORE_COMPONENT_BUILD_TAG \
-	"t-base-EXYNOS64-Android-310B-V011-20180509_074946_48827"
-#endif
+
+#ifndef _USER_H_
+#define _USER_H_
+
+struct cdev;
+
+int mc_user_init(struct cdev *cdev);
+static inline void mc_user_exit(void)
+{
+}
+
+#endif /* _USER_H_ */

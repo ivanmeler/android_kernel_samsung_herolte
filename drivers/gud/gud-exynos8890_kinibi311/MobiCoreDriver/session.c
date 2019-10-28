@@ -65,7 +65,6 @@ static inline bool gid_lt(kgid_t left, kgid_t right)
 }
 #endif
 #include "main.h"
-#include "admin.h"		/* mc_is_admin_tgid */
 #include "mmu.h"
 #include "mcp.h"
 #include "client.h"		/* *cbuf* */
@@ -74,20 +73,16 @@ static inline bool gid_lt(kgid_t left, kgid_t right)
 
 #define SHA1_HASH_SIZE       20
 
-struct wsm {
-	/* Buffer NWd addr (uva or kva, used only for lookup) */
-	uintptr_t		va;
-	/* buffer length */
-	u32			len;
-	/* Buffer SWd addr */
-	u32			sva;
-	/* mmu L2 table */
-	struct tee_mmu		*mmu;
-	/* possibly a pointer to a cbuf */
-	struct cbuf		*cbuf;
-	/* list node */
-	struct list_head	list;
-};
+/*
+ * WSM state transition:
+ *  * EMPTY	->	NEW	: MMU created [wsm_create]
+ *  * NEW	->	ACTIVE	: buffer mapped to SWd and returned to client
+ *  * ACTIVE	->	INACTIVE: "unmapped" by client, but not from SWd
+ *  * INACTIVE	->	PENDING	: identified for re-use
+ *  * NEW	->	EMPTY	: map failed or space needed or close [wsm_free]
+ *  * INACTIVE	->	NEW	: unmapped from SWd, to make space
+ *  * PENDING	->	INACTIVE: map of other buffer failed
+ */
 
 /* Cleanup for GP TAs, implemented as a worker to not impact other sessions */
 static void session_close_worker(struct work_struct *work)
@@ -102,46 +97,93 @@ static void session_close_worker(struct work_struct *work)
 		complete(&session->close_completion);
 }
 
-static struct wsm *wsm_create(struct tee_session *session, uintptr_t va,
-			      u32 len)
+static inline const char *wsm_state_str(enum tee_wsm_state state)
 {
-	struct wsm *wsm;
-
-	/* Allocate structure */
-	wsm = kzalloc(sizeof(*wsm), GFP_KERNEL);
-	if (!wsm)
-		return ERR_PTR(-ENOMEM);
-
-	wsm->mmu = client_mmu_create(session->client, va, len, &wsm->cbuf);
-	if (IS_ERR(wsm->mmu)) {
-		int ret = PTR_ERR(wsm->mmu);
-
-		kfree(wsm);
-		return ERR_PTR(ret);
+	switch (state) {
+	case TEE_WSM_EMPTY:
+		return "empty";
+	case TEE_WSM_NEW:
+		return "new";
+	case TEE_WSM_ACTIVE:
+		return "active";
+	case TEE_WSM_INACTIVE:
+		return "inactive";
+	case TEE_WSM_PENDING:
+		return "pending";
+	case TEE_WSM_OBSOLETE:
+		return "obsolete";
 	}
+	return "invalid";
+}
+
+static int wsm_create(struct tee_session *session, struct tee_wsm *wsm,
+		      struct mc_ioctl_buffer *buf)
+{
+	if (wsm->state != TEE_WSM_EMPTY) {
+		mc_dev_err("invalid wsm state %s\n", wsm_state_str(wsm->state));
+		return -EINVAL;
+	}
+
+	/* Mapping of other application buffer is force-disabled for now */
+	session->flags &= ~MC_IO_SESSION_REMOTE_BUFFERS;
+	wsm->mmu = client_mmu_create(session->client, session->pid,
+				     session->flags, buf->va, buf->len,
+				     &wsm->cbuf);
+	if (IS_ERR(wsm->mmu))
+		return PTR_ERR(wsm->mmu);
 
 	/* Increment debug counter */
 	atomic_inc(&g_ctx.c_wsms);
-	wsm->va = va;
-	wsm->len = len;
-	mc_dev_devel("created wsm %p: mmu %p cbuf %p va %lx len %u\n",
-		     wsm, wsm->mmu, wsm->cbuf, wsm->va, wsm->len);
-	return wsm;
+	wsm->va = buf->va;
+	wsm->len = buf->len;
+	wsm->flags = buf->flags;
+	wsm->state = TEE_WSM_NEW;
+	return 0;
+}
+
+static inline bool wsm_matches(struct tee_session *session, struct tee_wsm *wsm,
+			       struct mc_ioctl_buffer *buf)
+{
+	struct tee_mmu *mmu;
+	bool matches;
+
+	if (wsm->state != TEE_WSM_INACTIVE) {
+		mc_dev_err("invalid wsm state %s\n", wsm_state_str(wsm->state));
+		return false;
+	}
+
+	if ((buf->va != wsm->va) || (buf->len != wsm->len))
+		return false;
+
+	mmu = client_mmu_create(session->client, session->pid, session->flags,
+				buf->va, buf->len, &wsm->cbuf);
+	if (IS_ERR(mmu))
+		return false;
+
+	/* Compare MMUs and this backing physical addresses */
+	matches = client_mmu_matches(wsm->mmu, mmu);
+	client_mmu_free(session->client, wsm->va, mmu, wsm->cbuf);
+	return matches;
 }
 
 /*
  * Free a WSM object, must be called under the session's wsms_lock
  */
-static void wsm_free(struct tee_session *session, struct wsm *wsm)
+static void wsm_free(struct tee_session *session, struct tee_wsm *wsm)
 {
+	if (wsm->state != TEE_WSM_NEW) {
+		mc_dev_err("invalid wsm state %s\n", wsm_state_str(wsm->state));
+		return;
+	}
+
 	/* Free MMU table */
 	client_mmu_free(session->client, wsm->va, wsm->mmu, wsm->cbuf);
 	/* Delete wsm object */
 	mc_dev_devel("freed wsm %p: mmu %p cbuf %p va %lx len %u sva %x\n",
 		     wsm, wsm->mmu, wsm->cbuf, wsm->va, wsm->len, wsm->sva);
-	kfree(wsm);
 	/* Decrement debug counter */
 	atomic_dec(&g_ctx.c_wsms);
+	wsm->state = TEE_WSM_EMPTY;
 }
 
 #if KERNEL_VERSION(4, 6, 0) <= LINUX_VERSION_CODE
@@ -289,7 +331,7 @@ end:
  * groups_search is not EXPORTed so copied from kernel/groups.c
  * a simple bsearch
  */
-int has_group(const struct cred *cred, gid_t id_gid)
+static int has_group(const struct cred *cred, gid_t id_gid)
 {
 	const struct group_info *group_info = cred->group_info;
 	unsigned int left, right;
@@ -317,7 +359,7 @@ int has_group(const struct cred *cred, gid_t id_gid)
 }
 
 static int check_prepare_identity(const struct mc_identity *identity,
-				  struct identity *mcp_identity)
+				  struct identity *mcp_identity, pid_t pid)
 {
 	struct mc_identity *mcp_id = (struct mc_identity *)mcp_identity;
 	u8 hash[SHA1_HASH_SIZE];
@@ -326,33 +368,32 @@ static int check_prepare_identity(const struct mc_identity *identity,
 	unsigned int data_len;
 	struct task_struct *task;
 
+	/* Copy login type */
+	mcp_identity->login_type = identity->login_type;
+
+	if ((identity->login_type == LOGIN_PUBLIC) ||
+	    (identity->login_type == TEEC_LOGIN_KERNEL))
+		return 0;
+
 	/* Mobicore doesn't support GP client authentication. */
-	if (!g_ctx.f_client_login &&
-	    (identity->login_type != LOGIN_PUBLIC)) {
-		mc_dev_err("Unsupported login type %d\n", identity->login_type);
+	if (!g_ctx.f_client_login) {
+		mc_dev_err("Unsupported login type %x\n", identity->login_type);
 		return -EINVAL;
 	}
 
 	/* Only proxy can provide a PID */
-	if (identity->pid) {
-		if (!mc_is_admin_tgid(current->tgid)) {
-			mc_dev_err("Incorrect PID %d\n", current->tgid);
-			return -EPERM;
-		}
+	if (pid) {
 		rcu_read_lock();
-		task = pid_task(find_vpid(identity->pid), PIDTYPE_PID);
+		task = pid_task(find_vpid(pid), PIDTYPE_PID);
 		if (!task) {
 			rcu_read_unlock();
-			mc_dev_err("No task for PID %d\n", identity->gid);
+			mc_dev_err("No task for PID %d\n", pid);
 			return -EINVAL;
 		}
 	} else {
 		rcu_read_lock();
 		task = current;
 	}
-
-	/* Copy login type */
-	mcp_identity->login_type = identity->login_type;
 
 	/* Fill in uid field */
 	if ((identity->login_type == LOGIN_USER) ||
@@ -409,9 +450,11 @@ static int check_prepare_identity(const struct mc_identity *identity,
 	}
 
 	if (application) {
-		if (hash_path_and_data(task, hash, data, data_len)) {
-			mc_dev_devel("error in hash calculation\n");
-			return -EAGAIN;
+		int ret = hash_path_and_data(task, hash, data, data_len);
+
+		if (ret) {
+			mc_dev_devel("hash calculation returned %d\n", ret);
+			return ret;
 		}
 
 		memcpy(&mcp_id->login_data, hash, sizeof(mcp_id->login_data));
@@ -425,14 +468,32 @@ static int check_prepare_identity(const struct mc_identity *identity,
  * Note: object is not attached to client yet.
  */
 struct tee_session *session_create(struct tee_client *client, bool is_gp,
-				   struct mc_identity *identity)
+				   struct mc_identity *identity, pid_t pid,
+				   u32 flags)
 {
 	struct tee_session *session;
 	struct identity mcp_identity;
+	int i;
+
+	/* Only proxy can provide a PID (Android system user) */
+	if (pid) {
+#ifndef CONFIG_ANDROID
+		mc_dev_err("Cannot provide PID\n");
+		return ERR_PTR(-EPERM);
+#else
+		uid_t euid = __kuid_val(task_euid(current));
+
+		if (euid != 1000) {
+			mc_dev_err("incorrect EUID %d for PID %d\n", euid,
+				   current->tgid);
+			return ERR_PTR(-EPERM);
+		}
+#endif
+	}
 
 	if (is_gp) {
 		/* Check identity method and data. */
-		int ret = check_prepare_identity(identity, &mcp_identity);
+		int ret = check_prepare_identity(identity, &mcp_identity, pid);
 
 		if (ret)
 			return ERR_PTR(ret);
@@ -455,7 +516,10 @@ struct tee_session *session_create(struct tee_client *client, bool is_gp,
 	kref_init(&session->kref);
 	INIT_LIST_HEAD(&session->list);
 	mutex_init(&session->wsms_lock);
-	INIT_LIST_HEAD(&session->wsms);
+	session->pid = pid;
+	for (i = 0; i < MC_MAP_MAX; i++)
+		session->wsms_lru[i] = &session->wsms[i];
+	session->flags = flags;
 	mc_dev_devel("created session %p: client %p\n",
 		     session, session->client);
 	return session;
@@ -466,16 +530,26 @@ int session_open(struct tee_session *session, const struct tee_object *obj,
 {
 	struct mcp_buffer_map map;
 
+	if (len > BUFFER_LENGTH_MAX)
+		return -EINVAL;
+
 	tee_mmu_buffer(obj_mmu, &map);
 	/* Create wsm object for tci */
 	if (tci && len) {
-		struct wsm *wsm;
+		struct tee_wsm *wsm = &session->tci;
 		struct mcp_buffer_map tci_map;
+		struct mc_ioctl_buffer buf;
 		int ret = 0;
 
-		wsm = wsm_create(session, tci, len);
-		if (IS_ERR(wsm))
-			return PTR_ERR(wsm);
+		buf.va = tci;
+		buf.len = len;
+		buf.flags = MC_IO_MAP_INPUT_OUTPUT;
+		ret = wsm_create(session, wsm, &buf);
+		if (ret)
+			return ret;
+
+		mc_dev_devel("created tci: mmu %p cbuf %p va %lx len %u\n",
+			     wsm->mmu, wsm->cbuf, wsm->va, wsm->len);
 
 		tee_mmu_buffer(wsm->mmu, &tci_map);
 		ret = mcp_open_session(&session->mcp_session, obj, &map,
@@ -485,14 +559,11 @@ int session_open(struct tee_session *session, const struct tee_object *obj,
 			return ret;
 		}
 
-		mutex_lock(&session->wsms_lock);
-		list_add_tail(&wsm->list, &session->wsms);
-		mutex_unlock(&session->wsms_lock);
 		return 0;
 	}
 
 	if (tci || len) {
-		mc_dev_err("Tci pointer and length are incoherent\n");
+		mc_dev_devel("Tci pointer and length are incoherent\n");
 		return -EINVAL;
 	}
 
@@ -523,8 +594,8 @@ int session_close(struct tee_session *session)
 		wait_for_completion(&session->close_completion);
 		break;
 	default:
-		mc_dev_err("failed to close session %x in SWd\n",
-			   session->mcp_session.id);
+		mc_dev_devel("failed to close session %x in SWd\n",
+			     session->mcp_session.id);
 		ret = -EPERM;
 	}
 	mutex_unlock(&session->close_lock);
@@ -549,16 +620,24 @@ int session_close(struct tee_session *session)
 static void session_release(struct kref *kref)
 {
 	struct tee_session *session;
-	struct wsm *wsm, *next;
+	int i;
 
 	/* Remove remaining shared buffers (unmapped in SWd by mcp_close) */
 	session = container_of(kref, struct tee_session, kref);
-	list_for_each_entry_safe(wsm, next, &session->wsms, list) {
-		mc_dev_devel("session %p: free wsm %p\n", session, wsm);
-		if (wsm->sva)
-			atomic_dec(&g_ctx.c_maps);
+	for (i = 0; i < MC_MAP_MAX; i++) {
+		if (session->wsms[i].state < TEE_WSM_ACTIVE)
+			continue;
 
-		wsm_free(session, wsm);
+		mc_dev_devel("session %p: free wsm #%d\n", session, i);
+		/* Assume WSM unmapped by SWd */
+		session->wsms[i].state = TEE_WSM_NEW;
+		wsm_free(session, &session->wsms[i]);
+		atomic_dec(&g_ctx.c_maps);
+	}
+
+	if (session->tci.state != TEE_WSM_EMPTY) {
+		mc_dev_devel("session %p: free tci\n", session);
+		wsm_free(session, &session->tci);
 	}
 
 	mc_dev_devel("freed session %p: client %p id %x\n",
@@ -593,7 +672,7 @@ int session_kill(struct tee_session *session)
 int session_notify_swd(struct tee_session *session)
 {
 	if (!session) {
-		mc_dev_err("Session pointer is null\n");
+		mc_dev_devel("Session pointer is null\n");
 		return -EINVAL;
 	}
 
@@ -608,13 +687,24 @@ s32 session_exitcode(struct tee_session *session)
 	return mcp_session_exitcode(&session->mcp_session);
 }
 
-static inline int wsm_debug_structs(struct kasnprintf_buf *buf, struct wsm *wsm)
+static int wsm_debug_structs(struct kasnprintf_buf *buf, struct tee_wsm *wsm,
+			     int no)
 {
 	ssize_t ret;
 
-	ret = kasnprintf(buf,
-			 "\t\twsm %p: mmu %pK cbuf %pK va %pK len %u sva %x\n",
-			 wsm, wsm->mmu, wsm->cbuf, (void *)wsm->va, wsm->len, wsm->sva);
+	if (wsm->state == TEE_WSM_EMPTY)
+		return 0;
+
+	ret = kasnprintf(buf, "\t\t");
+	if (no < 0)
+		ret = kasnprintf(buf, "tci %p: cbuf %p va %lx len %u\n",
+				 wsm, wsm->cbuf, wsm->va, wsm->len);
+	else if (wsm->state > TEE_WSM_EMPTY)
+		ret = kasnprintf(buf,
+				 "wsm #%d: cbuf %p va %lx len %u sva %x %s\n",
+				 no, wsm->cbuf, wsm->va, wsm->len, wsm->sva,
+				 wsm_state_str(wsm->state));
+
 	if (ret < 0)
 		return ret;
 
@@ -627,239 +717,329 @@ static inline int wsm_debug_structs(struct kasnprintf_buf *buf, struct wsm *wsm)
 	return 0;
 }
 
-/*
- * Share buffers with SWd and add corresponding WSM objects to session.
- */
-int session_wsms_add(struct tee_session *session,
-		     struct mc_ioctl_buffer *bufs)
+static int session_remap(struct tee_session *session, int need_freeing,
+			 struct mcp_buffer_map *new_maps, bool use_multimap)
 {
-	struct wsm *wsms[MC_MAP_MAX] = { 0 };
+	/* Free some first inactive buffers in array */
 	struct mcp_buffer_map maps[MC_MAP_MAX];
-	int i, ret = 0;
-	bool at_least_one = false;
+	int i, ret, to_unmap = 0;
 
-	/* Check parameters */
-	if (!session)
-		return -ENXIO;
+	if (need_freeing)
+		mc_dev_devel("need to unmap %d inactive wsms\n", need_freeing);
 
-	/* Create MMU and map for each buffer */
+	/* Find inactive mappings */
+	memset(maps, 0, sizeof(maps));
 	for (i = 0; i < MC_MAP_MAX; i++) {
-		if (!bufs[i].va) {
-			maps[i].type = WSM_INVALID;
+		struct tee_wsm *wsm = session->wsms_lru[i];
+
+		/* Only inactive and obsolete buffers can be unmapped */
+		switch (wsm->state) {
+		case TEE_WSM_OBSOLETE:
+			break;
+		case TEE_WSM_INACTIVE:
+			/* Only unmap inactive buffers if required */
+			if (!need_freeing)
+				continue;
+
+			need_freeing--;
+			break;
+		default:
 			continue;
 		}
 
-		wsms[i] = wsm_create(session, bufs[i].va, bufs[i].len);
-		if (IS_ERR(wsms[i])) {
-			ret = PTR_ERR(wsms[i]);
-			mc_dev_err("maps[%d] va=%llx create failed: %d\n",
-				   i, bufs[i].va, ret);
-			goto err;
+		wsm->state = TEE_WSM_NEW;
+		tee_mmu_buffer(wsm->mmu, &maps[i]);
+		maps[i].secure_va = wsm->sva;
+		to_unmap++;
+		mc_dev_devel(
+			"maps[%d] rm va=%lx: t:%u a:%llx o:%u l:%u s:%llx\n",
+			i, wsm->va, maps[i].type, maps[i].phys_addr,
+			maps[i].offset, maps[i].length, maps[i].secure_va);
+	}
+
+	if (to_unmap) {
+		mc_dev_devel("unmap %d wsms\n", to_unmap);
+		ret = mcp_multiunmap(session->mcp_session.id, maps,
+				     use_multimap);
+		if (ret)
+			return ret;
+
+		/* Remove WSMs from session */
+		for (i = 0; i < MC_MAP_MAX; i++) {
+			struct tee_wsm *wsm = &session->wsms[i];
+
+			if (wsm->state == TEE_WSM_NEW)
+				/* Free wsm */
+				wsm_free(session, &session->wsms[i]);
 		}
-
-		tee_mmu_buffer(wsms[i]->mmu, &maps[i]);
-		mc_dev_devel("maps[%d] va=%llx: t:%u a:%llx o:%u l:%u\n",
-			     i, bufs[i].va, maps[i].type, maps[i].phys_addr,
-			     maps[i].offset, maps[i].length);
-		at_least_one = true;
 	}
 
-	if (!at_least_one) {
-		mc_dev_err("no buffers to map\n");
-		return -EINVAL;
-	}
+	/* Nothing to map */
+	if (!new_maps)
+		return 0;
 
 	/* Map buffers */
-	if (g_ctx.f_multimap) {
-		/* Send MCP message to map buffers in SWd */
-		ret = mcp_multimap(session->mcp_session.id, maps);
-		if (ret) {
-			mc_dev_err("multimap failed: %d\n", ret);
-			goto err;
+	return mcp_multimap(session->mcp_session.id, new_maps, use_multimap);
+}
+
+/*
+ * Share buffers with SWd and add corresponding WSM objects to session.
+ * This may involve some re-use or cleanup of inactive mappings.
+ */
+int session_map(struct tee_session *session, struct mc_ioctl_buffer *bufs)
+{
+	struct tee_wsm wsms[MC_MAP_MAX];
+	/*
+	 * Array with same index as bufs, to send the buffers information to MCP
+	 */
+	struct mcp_buffer_map new_maps[MC_MAP_MAX];
+	int i, bi, si, mapped = 0, active = 0, new = 0, ret = 0;
+	const bool use_multimap = !(session->flags & MC_IO_SESSION_NO_MULTIMAP);
+
+	memset(wsms, 0, sizeof(wsms));
+
+	mutex_lock(&session->wsms_lock);
+
+	/* Count mapped buffers and new ones, initilise temporary array */
+	for (i = 0; i < MC_MAP_MAX; i++) {
+		if (bufs[i].va)
+			new++;
+
+		if (session->wsms[i].state >= TEE_WSM_ACTIVE) {
+			mapped++;
+			if (session->wsms[i].state == TEE_WSM_ACTIVE)
+				active++;
 		}
 
-		for (i = 0; i < MC_MAP_MAX; i++) {
-			if (!wsms[i])
-				continue;
+		wsms[i].state = TEE_WSM_EMPTY;
+	}
 
-			wsms[i]->sva = maps[i].secure_va;
-			atomic_inc(&g_ctx.c_maps);
+	mc_dev_devel("maps: mapped=%d active=%d new=%d\n", mapped, active, new);
+	if (!new) {
+		mc_dev_devel("no buffers to map\n");
+		ret = -EINVAL;
+		goto out;
+	}
+
+	/* Only four buffers maybe mapped at a single time */
+	if ((active + new) > MC_MAP_MAX) {
+		mc_dev_devel("too many buffers to map: %d\n", active + new);
+		ret = -EPERM;
+		goto out;
+	}
+
+	/* Re-use WSM or create MMU and map for each buffer */
+	for (bi = 0; bi < MC_MAP_MAX; bi++) {
+		/* No buffer at this index */
+		if (!bufs[bi].va) {
+			new_maps[bi].type = WSM_INVALID;
+			continue;
 		}
-	} else {
-		/* Map each buffer */
-		for (i = 0; i < MC_MAP_MAX; i++) {
-			if (!wsms[i])
+
+		/* Try to re-use */
+		for (si = 0; si < MC_MAP_MAX; si++) {
+			struct tee_wsm *wsm = &session->wsms[si];
+
+			if (wsm->state != TEE_WSM_INACTIVE)
 				continue;
 
-			/* Send MCP message to map buffer in SWd */
-			ret = mcp_map(session->mcp_session.id, &maps[i]);
-			if (ret) {
-				mc_dev_err("maps[%d] va=%llx map failed: %d\n",
-					   i, bufs[i].va, ret);
+			if (wsm_matches(session, wsm, &bufs[bi])) {
+				wsm->state = TEE_WSM_PENDING;
+				/* Use wsms[bi] to reference re-used WSM */
+				wsms[bi].state = TEE_WSM_PENDING;
+				wsms[bi].index = si;
+				/* One less new buffer to map */
+				new--;
+				mc_dev_devel("maps[%d] va=%llx l=%u re-used\n",
+					     bi, bufs[bi].va, bufs[bi].len);
 				break;
 			}
-
-			wsms[i]->sva = maps[i].secure_va;
-			atomic_inc(&g_ctx.c_maps);
 		}
 
-		/* Unmap what was mapped on failure */
+		/* No need to map */
+		if (wsms[bi].state == TEE_WSM_PENDING) {
+			new_maps[bi].type = WSM_INVALID;
+			continue;
+		}
+
+		/* Create new */
+		ret = wsm_create(session, &wsms[bi], &bufs[bi]);
 		if (ret) {
-			for (i = 0; i < MC_MAP_MAX; i++) {
-				if (!wsms[i] || !wsms[i]->sva)
-					continue;
-
-				if (mcp_unmap(session->mcp_session.id,
-					      &maps[i]))
-					mc_dev_err("unmap failed: %d\n", ret);
-				else
-					atomic_dec(&g_ctx.c_maps);
-			}
-
+			mc_dev_devel("maps[%d] va=%llx create failed: %d\n",
+				     bi, bufs[bi].va, ret);
 			goto err;
 		}
+
+		mc_dev_devel("created wsm #%d: mmu %p cbuf %p va %lx len %u\n",
+			     bi, wsms[bi].mmu, wsms[bi].cbuf, wsms[bi].va,
+			     wsms[bi].len);
+		tee_mmu_buffer(wsms[bi].mmu, &new_maps[bi]);
+		mc_dev_devel("maps[%d] va=%llx: t:%u a:%llx o:%u l:%u\n",
+			     bi, bufs[bi].va, new_maps[bi].type,
+			     new_maps[bi].phys_addr, new_maps[bi].offset,
+			     new_maps[bi].length);
 	}
 
-	for (i = 0; i < MC_MAP_MAX; i++) {
-		if (!wsms[i])
+	/* Make space and map new buffers */
+	ret = session_remap(session, (mapped + new) > MC_MAP_MAX ?
+				(mapped + new) - MC_MAP_MAX : 0,
+			    new_maps, use_multimap);
+	if (ret)
+		goto err;
+
+	/* Update data */
+	for (bi = 0; bi < MC_MAP_MAX; bi++) {
+		switch (wsms[bi].state) {
+		case TEE_WSM_EMPTY:
+			/* Not used */
 			continue;
+		case TEE_WSM_NEW:
+			/* Newly mapped */
+			wsms[bi].state = TEE_WSM_ACTIVE;
+			wsms[bi].sva = new_maps[bi].secure_va;
+			bufs[bi].sva = wsms[bi].sva;
 
-		/* Store WSM into session */
-		mutex_lock(&session->wsms_lock);
-		list_add_tail(&wsms[i]->list, &session->wsms);
-		mutex_unlock(&session->wsms_lock);
-		bufs[i].sva = wsms[i]->sva;
-		mc_dev_devel("maps[%d] va=%llx map'd len=%u sva=%llx\n",
-			     i, bufs[i].va, bufs[i].len, bufs[i].sva);
+			/* Store WSM into session */
+			for (si = 0; si < MC_MAP_MAX; si++) {
+				if (session->wsms[si].state == TEE_WSM_EMPTY) {
+					session->wsms[si] = wsms[bi];
+					break;
+				}
+			}
+			break;
+		case TEE_WSM_PENDING: {
+			/* Re-used */
+			struct tee_wsm *wsm = &session->wsms[wsms[bi].index];
+
+			wsm->state = TEE_WSM_ACTIVE;
+			bufs[bi].sva = wsm->sva;
+			} break;
+		default:
+			mc_dev_err("unexpected temporary WSM state %s",
+				   wsm_state_str(wsms[bi].state));
+			goto err;
+		}
+
+		mc_dev_devel("maps[%d] va=%llx len=%u sva=%llx (%s)\n",
+			     bi, bufs[bi].va, bufs[bi].len, bufs[bi].sva,
+			     wsms[bi].state == TEE_WSM_ACTIVE ?
+				"new" : "re-used");
 	}
 
-	return 0;
+	goto out;
 
 err:
-	for (i = 0; i < MC_MAP_MAX; i++)
-		if (!IS_ERR_OR_NULL(wsms[i]))
-			wsm_free(session, wsms[i]);
+	/* Cleanup */
+	for (i = 0; i < MC_MAP_MAX; i++) {
+		/* Bring session WSMs back to their previous states */
+		struct tee_wsm *wsm = &session->wsms[i];
 
+		switch (wsm->state) {
+		case TEE_WSM_NEW:
+			wsm_free(session, wsm);
+			break;
+		case TEE_WSM_PENDING:
+			wsm->state = TEE_WSM_INACTIVE;
+			break;
+		default:
+			break;
+		}
+
+		/* Free any newly created WSM */
+		if (wsms[i].state == TEE_WSM_NEW)
+			wsm_free(session, &wsms[i]);
+	}
+
+out:
+	mutex_unlock(&session->wsms_lock);
+	mc_dev_devel("ret=%d\n", ret);
 	return ret;
 }
 
-static inline struct wsm *wsm_find(struct tee_session *session, uintptr_t sva)
-{
-	struct wsm *wsm;
-
-	list_for_each_entry(wsm, &session->wsms, list)
-		if (wsm->sva == sva)
-			return wsm;
-
-	return NULL;
-}
-
 /*
- * Stop sharing buffers and delete corrsponding WSM objects.
+ * In theory, stop sharing buffers with the SWd. In fact, mark them inactive.
  */
-int session_wsms_remove(struct tee_session *session,
-			const struct mc_ioctl_buffer *bufs)
+int session_unmap(struct tee_session *session,
+		  const struct mc_ioctl_buffer *bufs)
 {
-	struct wsm *wsms[MC_MAP_MAX] = { 0 };
-	struct mcp_buffer_map maps[MC_MAP_MAX];
-	int i, ret = 0;
+	int bi, ret = 0;
 	bool at_least_one = false;
-
-	if (!session) {
-		mc_dev_err("session pointer is null\n");
-		return -EINVAL;
-	}
+	const bool use_multimap = !(session->flags & MC_IO_SESSION_NO_MULTIMAP);
 
 	mutex_lock(&session->wsms_lock);
 
 	/* Find, check and map buffer */
-	for (i = 0; i < MC_MAP_MAX; i++) {
-		struct wsm *wsm;
+	for (bi = 0; bi < MC_MAP_MAX; bi++) {
+		struct tee_wsm *wsm;
+		int si, li;
+		bool lru_found = false;
 
-		if (!bufs[i].va) {
-			maps[i].secure_va = 0;
+		if (!bufs[bi].va)
 			continue;
+
+		/* Find corresponding mapping */
+		for (si = 0; si < MC_MAP_MAX; si++) {
+			wsm = &session->wsms[si];
+
+			if ((wsm->state == TEE_WSM_ACTIVE) &&
+			    (wsm->sva == bufs[bi].sva))
+				break;
 		}
 
-		wsm = wsm_find(session, bufs[i].sva);
-		if (!wsm) {
+		/* Not found */
+		if (si == MC_MAP_MAX) {
 			ret = -EINVAL;
-			mc_dev_err("maps[%d] va=%llx sva=%llx not found\n",
-				   i, bufs[i].va, bufs[i].sva);
+			mc_dev_devel("maps[%d] va=%llx sva=%llx not found\n",
+				     bi, bufs[bi].va, bufs[bi].sva);
 			goto out;
 		}
 
 		/* Check VA */
-		if (wsm->va != bufs[i].va) {
+		if (wsm->va != bufs[bi].va) {
 			ret = -EINVAL;
-			mc_dev_err("maps[%d] va=%llx does not match %lx\n",
-				   i, bufs[i].va, wsm->va);
+			mc_dev_devel("maps[%d] va=%llx does not match %lx\n",
+				     bi, bufs[bi].va, wsm->va);
 			goto out;
 		}
 
 		/* Check length */
-		if (wsm->len != bufs[i].len) {
+		if (wsm->len != bufs[bi].len) {
 			ret = -EINVAL;
-			mc_dev_err("maps[%d] va=%llx len mismatch: %u != %u\n",
-				   i, bufs[i].va, wsm->len, bufs[i].len);
+			mc_dev_devel("maps[%d] va=%llx len mismatch: %u != %u\n"
+				     , bi, bufs[bi].va, wsm->len, bufs[bi].len);
 			goto out;
 		}
 
-		wsms[i] = wsm;
-		tee_mmu_buffer(wsms[i]->mmu, &maps[i]);
-		maps[i].secure_va = wsms[i]->sva;
-		mc_dev_devel("maps[%d] va=%llx: t:%u a:%llx o:%u l:%u s:%llx\n",
-			     i, bufs[i].va, maps[i].type, maps[i].phys_addr,
-			     maps[i].offset, maps[i].length, maps[i].secure_va);
+		/* Decide next state based on flags */
+		if (wsm->flags & MC_IO_MAP_PERSISTENT) {
+			wsm->state = TEE_WSM_INACTIVE;
+
+			/* Update LRU array */
+			if (session->wsms_lru[MC_MAP_MAX - 1] != wsm) {
+				for (li = 0; li < MC_MAP_MAX; li++) {
+					if (session->wsms_lru[li] == wsm)
+						lru_found = true;
+					else if (lru_found)
+						session->wsms_lru[li - 1] =
+							session->wsms_lru[li];
+				}
+				session->wsms_lru[MC_MAP_MAX - 1] = wsm;
+			}
+		} else {
+			wsm->state = TEE_WSM_OBSOLETE;
+		}
+
 		at_least_one = true;
 	}
 
 	if (!at_least_one) {
 		ret = -EINVAL;
-		mc_dev_err("no buffers to unmap\n");
+		mc_dev_devel("no buffers to unmap\n");
 		goto out;
 	}
 
-	if (g_ctx.f_multimap) {
-		/* Send MCP command to unmap buffers in SWd */
-		ret = mcp_multiunmap(session->mcp_session.id, maps);
-		if (ret) {
-			mc_dev_err("mcp_multiunmap failed: %d\n", ret);
-		} else {
-			for (i = 0; i < MC_MAP_MAX; i++)
-				if (maps[i].secure_va)
-					atomic_dec(&g_ctx.c_maps);
-		}
-	} else {
-		for (i = 0; i < MC_MAP_MAX; i++) {
-			if (!maps[i].secure_va)
-				continue;
-
-			/* Send MCP command to unmap buffer in SWd */
-			ret = mcp_unmap(session->mcp_session.id, &maps[i]);
-			if (ret) {
-				mc_dev_err(
-					"maps[%d] va=%llx unmap failed: %d\n",
-					i, bufs[i].va, ret);
-				/* Keep going */
-			} else {
-				atomic_dec(&g_ctx.c_maps);
-			}
-		}
-	}
-
-	for (i = 0; i < MC_MAP_MAX; i++) {
-		if (!wsms[i])
-			continue;
-
-		/* Remove wsm from its parent session's list */
-		list_del(&wsms[i]->list);
-		/* Free wsm */
-		wsm_free(session, wsms[i]);
-		mc_dev_devel("maps[%d] va=%llx unmap'd len=%u sva=%llx\n",
-			     i, bufs[i].va, bufs[i].len, bufs[i].sva);
-	}
-
+	/* Unmap obsolete buffers */
+	ret = session_remap(session, 0, NULL, use_multimap);
 out:
 	mutex_unlock(&session->wsms_lock);
 	return ret;
@@ -878,30 +1058,32 @@ int session_waitnotif(struct tee_session *session, s32 timeout,
 int session_debug_structs(struct kasnprintf_buf *buf,
 			  struct tee_session *session, bool is_closing)
 {
-	struct wsm *wsm;
 	s32 exit_code;
-	int ret;
+	int i, ret;
 
 	exit_code = mcp_session_exitcode(&session->mcp_session);
-	ret = kasnprintf(buf, "\tsession %pK [%d]: %x %s ec %d%s\n", session,
-			 kref_read(&session->kref), session->mcp_session.id,
-			 session->mcp_session.is_gp ? "GP" : "MC", exit_code,
-			 is_closing ? " <closing>" : "");
+	ret = kasnprintf(buf, "\tsession %p [%d]: %x %s PID %d ec %d%s\n",
+			 session, kref_read(&session->kref),
+			 session->mcp_session.id,
+			 session->mcp_session.is_gp ? "GP" : "MC", session->pid,
+			 exit_code, is_closing ? " <closing>" : "");
 	if (ret < 0)
 		return ret;
 
-	/* WMSs */
-	mutex_lock(&session->wsms_lock);
-	if (list_empty(&session->wsms))
-		goto done;
-
-	list_for_each_entry(wsm, &session->wsms, list) {
-		ret = wsm_debug_structs(buf, wsm);
+	/* TCI */
+	if (session->tci.state != TEE_WSM_EMPTY) {
+		ret = wsm_debug_structs(buf, &session->tci, -1);
 		if (ret < 0)
-			goto done;
+			return ret;
 	}
 
-done:
+	/* WMSs */
+	mutex_lock(&session->wsms_lock);
+	for (i = 0; i < MC_MAP_MAX; i++) {
+		ret = wsm_debug_structs(buf, &session->wsms[i], i);
+		if (ret < 0)
+			break;
+	}
 	mutex_unlock(&session->wsms_lock);
 	if (ret < 0)
 		return ret;

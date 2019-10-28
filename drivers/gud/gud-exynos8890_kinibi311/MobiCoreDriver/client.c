@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2015 TRUSTONIC LIMITED
+ * Copyright (c) 2013-2017 TRUSTONIC LIMITED
  * All Rights Reserved.
  *
  * This program is free software; you can redistribute it and/or
@@ -191,9 +191,9 @@ static void client_release(struct kref *kref)
 	atomic_dec(&g_ctx.c_clients);
 }
 
-void client_put(struct tee_client *client)
+int client_put(struct tee_client *client)
 {
-	kref_put(&client->kref, client_release);
+	return kref_put(&client->kref, client_release);
 }
 
 /*
@@ -329,9 +329,9 @@ void clients_kill_sessions(void)
  * @return driver error code
  */
 int client_open_session(struct tee_client *client, u32 *session_id,
-			const struct mc_uuid_t *uuid, uintptr_t	 tci,
+			const struct mc_uuid_t *uuid, uintptr_t tci,
 			size_t tci_len, bool is_gp_uuid,
-			struct mc_identity *identity)
+			struct mc_identity *identity, pid_t pid, u32 flags)
 {
 	int err = 0;
 	u32 sid = 0;
@@ -352,7 +352,7 @@ int client_open_session(struct tee_client *client, u32 *session_id,
 
 	/* Open session */
 	err = client_add_session(client, obj, tci, tci_len, &sid, is_gp_uuid,
-				 identity);
+				 identity, pid, flags);
 	/* Fill in return parameter */
 	if (!err)
 		*session_id = sid;
@@ -373,7 +373,7 @@ end:
  */
 int client_open_trustlet(struct tee_client *client, u32 *session_id, u32 spid,
 			 uintptr_t trustlet, size_t trustlet_len,
-			 uintptr_t tci, size_t tci_len)
+			 uintptr_t tci, size_t tci_len, pid_t pid, u32 flags)
 {
 	struct tee_object *obj;
 	struct mc_identity identity = {
@@ -391,7 +391,7 @@ int client_open_trustlet(struct tee_client *client, u32 *session_id, u32 spid,
 
 	/* Open session */
 	err = client_add_session(client, obj, tci, tci_len, &sid, false,
-				 &identity);
+				 &identity, pid, flags);
 	/* Fill in return parameter */
 	if (!err)
 		*session_id = sid;
@@ -410,7 +410,7 @@ end:
  */
 int client_add_session(struct tee_client *client, const struct tee_object *obj,
 		       uintptr_t tci, size_t len, u32 *session_id, bool is_gp,
-		       struct mc_identity *identity)
+		       struct mc_identity *identity, pid_t pid, u32 flags)
 {
 	struct tee_session *session = NULL;
 	struct tee_mmu *obj_mmu = NULL;
@@ -423,7 +423,7 @@ int client_add_session(struct tee_client *client, const struct tee_object *obj,
 	 * Adding session to list must be done AFTER it is started (once we have
 	 * sid), therefore it cannot be done within session_create().
 	 */
-	session = session_create(client, is_gp, identity);
+	session = session_create(client, is_gp, identity, pid, flags);
 	if (IS_ERR(session))
 		return PTR_ERR(session);
 
@@ -591,7 +591,7 @@ int client_map_session_wsms(struct tee_client *client, u32 session_id,
 		return -ENXIO;
 
 	/* Add buffer to the session */
-	ret = session_wsms_add(session, bufs);
+	ret = session_map(session, bufs);
 	/* Put session */
 	session_put(session);
 	mc_dev_devel("session %x, exit with %d\n", session_id, ret);
@@ -611,7 +611,7 @@ int client_unmap_session_wsms(struct tee_client *client, u32 session_id,
 		return -ENXIO;
 
 	/* Remove buffer from session */
-	ret = session_wsms_remove(session, bufs);
+	ret = session_unmap(session, bufs);
 	/* Put session */
 	session_put(session);
 	mc_dev_devel("session %x, exit with %d\n", session_id, ret);
@@ -656,7 +656,7 @@ int client_cbuf_create(struct tee_client *client, u32 len, uintptr_t *addr,
 	if (WARN(!client, "No client available"))
 		return -EINVAL;
 
-	if (WARN(!len, "No len available"))
+	if (!len || (len > BUFFER_LENGTH_MAX))
 		return -EINVAL;
 
 	order = get_order(len);
@@ -779,8 +779,9 @@ int client_cbuf_free(struct tee_client *client, uintptr_t addr)
 	return 0;
 }
 
-struct tee_mmu *client_mmu_create(struct tee_client *client, uintptr_t va,
-				  u32 len, struct cbuf **cbuf_p)
+struct tee_mmu *client_mmu_create(struct tee_client *client, pid_t pid,
+				  u32 flags, uintptr_t va, u32 len,
+				  struct cbuf **cbuf_p)
 {
 	/* Check if buffer is contained in a cbuf */
 	struct cbuf *cbuf = cbuf_get_by_addr(client, va);
@@ -806,11 +807,27 @@ struct tee_mmu *client_mmu_create(struct tee_client *client, uintptr_t va,
 		}
 	} else if (!client_is_kernel(client)) {
 		/* Provide task if buffer was allocated in user space */
-		task = current;
+		if (pid && (flags & MC_IO_SESSION_REMOTE_BUFFERS)) {
+			rcu_read_lock();
+			task = pid_task(find_vpid(pid), PIDTYPE_PID);
+			if (!task) {
+				rcu_read_unlock();
+				mc_dev_err("No task for PID %d\n", pid);
+				return ERR_PTR(-EINVAL);
+			}
+			get_task_struct(task);
+			rcu_read_unlock();
+		} else {
+			task = current;
+			get_task_struct(task);
+		}
 	}
 
 	/* Build MMU table for buffer */
 	mmu = tee_mmu_create(task, (void *)va, len);
+	if (task)
+		put_task_struct(task);
+
 	if (IS_ERR_OR_NULL(mmu) && cbuf)
 		cbuf_put(cbuf);
 
@@ -837,9 +854,9 @@ void client_init(void)
 static inline int cbuf_debug_structs(struct kasnprintf_buf *buf,
 				     struct cbuf *cbuf)
 {
-	return kasnprintf(buf, "\tcbuf %pK [%d]: addr %pK uaddr %pK len %u\n",
-			  cbuf, kref_read(&cbuf->kref), (void *)cbuf->addr,
-			  (void *)cbuf->uaddr, cbuf->len);
+	return kasnprintf(buf, "\tcbuf %p [%d]: addr %lx uaddr %lx len %u\n",
+			  cbuf, kref_read(&cbuf->kref), cbuf->addr,
+			  cbuf->uaddr, cbuf->len);
 }
 
 static int client_debug_structs(struct kasnprintf_buf *buf,
@@ -850,12 +867,12 @@ static int client_debug_structs(struct kasnprintf_buf *buf,
 	int ret;
 
 	if (client->pid)
-		ret = kasnprintf(buf, "client %pK [%d]: %s (%d)%s\n",
+		ret = kasnprintf(buf, "client %p [%d]: %s (%d)%s\n",
 				 client, kref_read(&client->kref),
 				 client->comm, client->pid,
 				 is_closing ? " <closing>" : "");
 	else
-		ret = kasnprintf(buf, "client %pK [%d]: [kernel]%s\n",
+		ret = kasnprintf(buf, "client %p [%d]: [kernel]%s\n",
 				 client, kref_read(&client->kref),
 				 is_closing ? " <closing>" : "");
 

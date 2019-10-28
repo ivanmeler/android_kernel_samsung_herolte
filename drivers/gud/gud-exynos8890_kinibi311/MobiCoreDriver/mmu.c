@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2013-2015 TRUSTONIC LIMITED
+ * Copyright (c) 2013-2017 TRUSTONIC LIMITED
  * All Rights Reserved.
  *
  * This program is free software; you can redistribute it and/or
@@ -237,7 +237,7 @@ static inline int map_buffer(struct task_struct *task, const void *data,
 	/* Get number of L2 tables needed */
 	mmu_table->l2_tables_nr = (total_pages_nr + L2_ENTRIES_MAX - 1) /
 				  L2_ENTRIES_MAX;
-	mc_dev_devel("total_pages_nr %lu l2_tables_nr %zu",
+	mc_dev_devel("total_pages_nr %lu l2_tables_nr %zu\n",
 		     total_pages_nr, mmu_table->l2_tables_nr);
 
 	/* Get a page to store page pointers */
@@ -328,7 +328,7 @@ static inline int map_buffer(struct task_struct *task, const void *data,
 				mc_dev_err("get_user_pages() failed, ret: %ld",
 					   gup_ret);
 				release_pages(pages, gup_ret, 0);
-				ret = -ENOMEM;
+				ret = -EINVAL;
 				goto end;
 			}
 
@@ -383,7 +383,7 @@ static inline int map_buffer(struct task_struct *task, const void *data,
 			for (i = 0; i < pages_nr; i++, page_ptr++, pte++) {
 				unsigned long phys = page_to_phys(*page_ptr);
 #if defined CONFIG_ARM64
-				if (phys & 0xffffffff00000000) {
+				if (phys & 0xffffffff00000000UL) {
 					mc_dev_err("64-bit pointer: 0x%16lx",
 						   phys);
 					ret = -EFAULT;
@@ -511,6 +511,24 @@ struct tee_mmu *tee_mmu_create(struct task_struct *task, const void *addr,
 	return mmu;
 }
 
+bool client_mmu_matches(const struct tee_mmu *left,
+			const struct tee_mmu *right)
+{
+	const void *left_page = left->l2_tables[0].ptes_32;
+	const void *right_page = right->l2_tables[0].ptes_32;
+	bool ret;
+
+	/* L1 not supported */
+	if (left->l1_table.page || right->l1_table.page)
+		return false;
+
+	/* Only need to compare contents of L2 page */
+	ret = !memcmp(left_page, right_page, PAGE_SIZE);
+	mc_dev_devel("MMU tables virt %p and %p %smatch\n", left, right,
+		     ret ? "" : "do not ");
+	return ret;
+}
+
 void tee_mmu_buffer(const struct tee_mmu *mmu, struct mcp_buffer_map *map)
 {
 	uintptr_t table = mmu_table_pointer(mmu);
@@ -528,8 +546,8 @@ void tee_mmu_buffer(const struct tee_mmu *mmu, struct mcp_buffer_map *map)
 int tee_mmu_debug_structs(struct kasnprintf_buf *buf, const struct tee_mmu *mmu)
 {
 	return kasnprintf(buf,
-			  "\t\t\tmmu %pK: %s len %u off %u table %pK type L%d\n",
+			  "\t\t\tmmu %p: %s len %u off %u table %lx type L%d\n",
 			  mmu, mmu->user ? "user" : "kernel", mmu->length,
-			  mmu->offset, (void *)mmu_table_pointer(mmu),
+			  mmu->offset, mmu_table_pointer(mmu),
 			  mmu->l1_table.page ? 1 : 2);
 }

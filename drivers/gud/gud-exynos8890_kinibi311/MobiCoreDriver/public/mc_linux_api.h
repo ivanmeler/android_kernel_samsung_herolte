@@ -11,7 +11,20 @@
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the
  * GNU General Public License for more details.
  */
-#ifndef MOBICORE_COMPONENT_BUILD_TAG
-#define MOBICORE_COMPONENT_BUILD_TAG \
-	"t-base-EXYNOS64-Android-310B-V011-20180509_074946_48827"
-#endif
+#ifndef _MC_LINUX_API_H_
+#define _MC_LINUX_API_H_
+
+#include <linux/types.h>
+
+/*
+ * Switch TEE active core to core_num, defined as linux
+ * core id
+ */
+int mc_switch_core(int core_num);
+
+/*
+ * Return TEE active core as Linux core id
+ */
+int mc_active_core(void);
+
+#endif /* _MC_LINUX_API_H_ */
