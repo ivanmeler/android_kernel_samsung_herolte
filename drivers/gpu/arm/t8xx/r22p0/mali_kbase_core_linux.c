@@ -3941,6 +3941,7 @@ static int kbase_device_suspend_dummy(struct device *dev)
 /* MALI_SEC_INTEGRATION */
 int kbase_device_suspend(struct kbase_device *kbdev)
 {
+
 	if (!kbdev)
 		return -ENODEV;
 
@@ -3951,6 +3952,7 @@ int kbase_device_suspend(struct kbase_device *kbdev)
 #endif
 
 	kbase_pm_suspend(kbdev);
+
 	return 0;
 }
 
@@ -3973,6 +3975,7 @@ static int kbase_device_resume_dummy(struct device *dev)
 /* MALI_SEC_INTEGRATION */
 int kbase_device_resume(struct kbase_device *kbdev)
 {
+
 	if (!kbdev)
 		return -ENODEV;
 
@@ -3983,6 +3986,7 @@ int kbase_device_resume(struct kbase_device *kbdev)
 	if (kbdev->inited_subsys & inited_devfreq)
 		devfreq_resume_device(kbdev->devfreq);
 #endif
+
 	return 0;
 }
 

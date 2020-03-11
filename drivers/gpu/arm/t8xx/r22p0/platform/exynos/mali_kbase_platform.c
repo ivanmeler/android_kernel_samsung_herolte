@@ -582,17 +582,16 @@ static int exynos_secure_mem_enable(struct kbase_device *kbdev, int ion_fd, u64 
 		struct ion_client *client;
 		struct ion_handle *ion_handle;
 		size_t len = 0;
-		unsigned int CRC_CHECK_MASK = 0xFFFF & kbdev->sec_sr_info.secure_flags_crc_asp;
-		u64 SECURE_CRC_FLAGS = (kbdev->sec_sr_info.secure_flags_crc_asp >> CRC_CHECK_MASK) & 0xFFFF;
-		u64 input_flags = (flags >> CRC_CHECK_MASK) & 0xFFFF;
+		unsigned int CRC_CHECK_MASK = kbdev->sec_sr_info.secure_flags_crc_asp;
+		u64 input_flags = flags & CRC_CHECK_MASK;
 
 		ion_phys_addr_t phys = 0;
 
 		flush_all_cpu_caches();
 
-		printk("JK - SECURE_CRC_FLAGS %llx, input_flags %llx, CRC_CHECK_MASK %X\n",
-			SECURE_CRC_FLAGS, input_flags, CRC_CHECK_MASK);
-		if (input_flags == SECURE_CRC_FLAGS) {
+		dev_warn(kbdev->dev, "[G3D] input_flags %llx, CRC_CHECK_MASK %X\n",
+			input_flags, CRC_CHECK_MASK);
+		if (input_flags == BASE_MEM_RESERVED_BIT_19) {
 			reg->flags |= KBASE_REG_SECURE_CRC | KBASE_REG_SECURE;
 		} else {
 			client = ion_client_create(ion_exynos, "G3D");

@@ -25,7 +25,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: dhd_linux.c 788951 2018-11-14 12:30:11Z $
+ * $Id: dhd_linux.c 792554 2018-12-05 09:47:40Z $
  */
 
 #include <typedefs.h>
@@ -133,9 +133,9 @@
 #include <802.1d.h>
 #endif /* AMPDU_VO_ENABLE */
 
-#ifdef DHDTCPACK_SUPPRESS
+#if defined(DHDTCPACK_SUPPRESS) || defined(DHDTCPSYNC_FLOOD_BLK)
 #include <dhd_ip.h>
-#endif /* DHDTCPACK_SUPPRESS */
+#endif /* DHDTCPACK_SUPPRESS || DHDTCPSYNC_FLOOD_BLK */
 #include <dhd_daemon.h>
 #ifdef DHD_PKT_LOGGING
 #include <dhd_pktlog.h>
@@ -201,6 +201,10 @@ typedef struct dhd_tx_lb_pkttag_fr {
 #define DHD_LB_TX_PKTTAG_IFIDX(tag)		((tag)->ifidx)
 #endif /* DHD_LB_TXP */
 #endif /* DHD_LB */
+
+#ifdef DHDTCPSYNC_FLOOD_BLK
+static void dhd_blk_tsfl_handler(struct work_struct * work);
+#endif /* DHDTCPSYNC_FLOOD_BLK */
 
 #ifdef HOFFLOAD_MODULES
 #include <linux/firmware.h>
@@ -601,6 +605,12 @@ typedef struct dhd_if {
 #endif
 	bool rx_pkt_chainable;		/* set all rx packet to chainable config by default */
 	cumm_ctr_t cumm_ctr;			/* cummulative queue length of child flowrings */
+#ifdef DHDTCPSYNC_FLOOD_BLK
+	uint32 tsync_rcvd;
+	uint32 tsyncack_txed;
+	u64 last_sync;
+	struct work_struct  blk_tsfl_work;
+#endif /* DHDTCPSYNC_FLOOD_BLK */
 } dhd_if_t;
 
 
@@ -1169,6 +1179,10 @@ static int dhd_read_map(osl_t *osh, char *fname, uint32 *ramstart, uint32 *rodat
 static int dhd_init_static_strs_array(osl_t *osh, dhd_event_log_t *temp, char *str_file,
 	char *map_file);
 #endif /* SHOW_LOGTRACE */
+
+#ifdef DHDTCPSYNC_FLOOD_BLK
+extern void dhd_reset_tcpsync_info_by_ifp(dhd_if_t *ifp);
+#endif /* DHDTCPSYNC_FLOOD_BLK */
 
 #if defined(DHD_LB)
 
@@ -2926,6 +2940,9 @@ dhd_napi_schedule(void *info)
 	if (napi_schedule_prep(&dhd->rx_napi_struct)) {
 		__napi_schedule(&dhd->rx_napi_struct);
 		DHD_LB_STATS_PERCPU_ARR_INCR(dhd->napi_percpu_run_cnt);
+#ifdef WAKEUP_KSOFTIRQD_POST_NAPI_SCHEDULE
+		raise_softirq(NET_RX_SOFTIRQ);
+#endif /* WAKEUP_KSOFTIRQD_POST_NAPI_SCHEDULE */
 	}
 
 	/*
@@ -5102,6 +5119,12 @@ dhd_start_xmit(struct sk_buff *skb, struct net_device *net)
 	}
 #endif /* DHD_PSTA */
 
+#ifdef DHDTCPSYNC_FLOOD_BLK
+	if (dhd_tcpdata_get_flag(&dhd->pub, pktbuf) == FLAG_SYNCACK) {
+		ifp->tsyncack_txed ++;
+	}
+#endif /* DHDTCPSYNC_FLOOD_BLK */
+
 #ifdef DHDTCPACK_SUPPRESS
 	if (dhd->pub.tcpack_sup_mode == TCPACK_SUP_HOLD) {
 		/* If this packet has been hold or got freed, just return */
@@ -5596,15 +5619,38 @@ dhd_rx_frame(dhd_pub_t *dhdp, int ifidx, void *pktbuf, int numpkt, uint8 chan)
 		}
 #endif /* DHD_WAKE_STATUS */
 
+		eh = (struct ether_header *)PKTDATA(dhdp->osh, pktbuf);
+
+		if (ifidx >= DHD_MAX_IFS) {
+			DHD_ERROR(("%s: ifidx(%d) Out of bound. drop packet\n",
+				__FUNCTION__, ifidx));
+			if (ntoh16(eh->ether_type) == ETHER_TYPE_BRCM) {
+#ifdef DHD_USE_STATIC_CTRLBUF
+				PKTFREE_STATIC(dhdp->osh, pktbuf, FALSE);
+#else
+				PKTFREE(dhdp->osh, pktbuf, FALSE);
+#endif /* DHD_USE_STATIC_CTRLBUF */
+			} else {
+				PKTCFREE(dhdp->osh, pktbuf, FALSE);
+			}
+			continue;
+		}
+
 		ifp = dhd->iflist[ifidx];
 		if (ifp == NULL) {
 			DHD_ERROR(("%s: ifp is NULL. drop packet\n",
 				__FUNCTION__));
-			PKTCFREE(dhdp->osh, pktbuf, FALSE);
+			if (ntoh16(eh->ether_type) == ETHER_TYPE_BRCM) {
+#ifdef DHD_USE_STATIC_CTRLBUF
+				PKTFREE_STATIC(dhdp->osh, pktbuf, FALSE);
+#else
+				PKTFREE(dhdp->osh, pktbuf, FALSE);
+#endif /* DHD_USE_STATIC_CTRLBUF */
+			} else {
+				PKTCFREE(dhdp->osh, pktbuf, FALSE);
+			}
 			continue;
 		}
-
-		eh = (struct ether_header *)PKTDATA(dhdp->osh, pktbuf);
 
 		/* Dropping only data packets before registering net device to avoid kernel panic */
 #ifndef PROP_TXSTATUS_VSDB
@@ -5686,6 +5732,29 @@ dhd_rx_frame(dhd_pub_t *dhdp, int ifidx, void *pktbuf, int numpkt, uint8 chan)
 		}
 #endif /* MCAST_REGEN */
 
+
+#ifdef DHDTCPSYNC_FLOOD_BLK
+		if (dhd_tcpdata_get_flag(dhdp, pktbuf) == FLAG_SYNC) {
+			int delta_sec;
+			int delta_sync;
+			int sync_per_sec;
+			u64 curr_time = DIV_U64(OSL_LOCALTIME_NS(), NSEC_PER_SEC);
+			ifp->tsync_rcvd ++;
+			delta_sync = ifp->tsync_rcvd - ifp->tsyncack_txed;
+			delta_sec = curr_time - ifp->last_sync;
+			if (delta_sec > 1) {
+				sync_per_sec = delta_sync/delta_sec;
+				if (sync_per_sec > TCP_SYNC_FLOOD_LIMIT) {
+					schedule_work(&ifp->blk_tsfl_work);
+					DHD_ERROR(("ifx %d TCP SYNC Flood attack suspected! "
+						"sync recvied %d pkt/sec \n",
+						ifidx, sync_per_sec));
+				}
+				dhd_reset_tcpsync_info_by_ifp(ifp);
+			}
+
+		}
+#endif /* DHDTCPSYNC_FLOOD_BLK */
 
 #ifdef DHDTCPACK_SUPPRESS
 		dhd_tcpdata_info_get(dhdp, pktbuf);
@@ -7207,19 +7276,18 @@ static const struct net_device_ops netdev_monitor_ops =
 };
 
 static void
-dhd_add_monitor_if(void *handle, void *event_info, u8 event)
+dhd_add_monitor_if(dhd_info_t *dhd)
 {
-	dhd_info_t *dhd = handle;
 	struct net_device *dev;
 	char *devname;
 
-	if (event != DHD_WQ_WORK_IF_ADD) {
-		DHD_ERROR(("%s: unexpected event \n", __FUNCTION__));
+	if (!dhd) {
+		DHD_ERROR(("%s: dhd info not available \n", __FUNCTION__));
 		return;
 	}
 
-	if (!dhd) {
-		DHD_ERROR(("%s: dhd info not available \n", __FUNCTION__));
+	if (dhd->monitor_dev) {
+		DHD_ERROR(("%s: monitor i/f already exists", __FUNCTION__));
 		return;
 	}
 
@@ -7251,7 +7319,7 @@ dhd_add_monitor_if(void *handle, void *event_info, u8 event)
 	dev->netdev_ops = &netdev_monitor_ops;
 #endif
 
-	if (register_netdev(dev)) {
+	if (register_netdevice(dev)) {
 		DHD_ERROR(("%s, register_netdev failed for %s\n",
 			__FUNCTION__, dev->name));
 		free_netdev(dev);
@@ -7262,30 +7330,29 @@ dhd_add_monitor_if(void *handle, void *event_info, u8 event)
 }
 
 static void
-dhd_del_monitor_if(void *handle, void *event_info, u8 event)
+dhd_del_monitor_if(dhd_info_t *dhd)
 {
-	dhd_info_t *dhd = handle;
-
-	if (event != DHD_WQ_WORK_IF_DEL) {
-		DHD_ERROR(("%s: unexpected event \n", __FUNCTION__));
-		return;
-	}
-
 	if (!dhd) {
 		DHD_ERROR(("%s: dhd info not available \n", __FUNCTION__));
 		return;
 	}
 
+	if (!dhd->monitor_dev) {
+		DHD_ERROR(("%s: monitor i/f doesn't exist", __FUNCTION__));
+		return;
+	}
+
 	if (dhd->monitor_dev) {
-		unregister_netdev(dhd->monitor_dev);
-
+		if (dhd->monitor_dev->reg_state == NETREG_UNINITIALIZED) {
 #if (LINUX_VERSION_CODE < KERNEL_VERSION(2, 6, 24))
-		MFREE(dhd->osh, dhd->monitor_dev->priv, DHD_MON_DEV_PRIV_SIZE);
-		MFREE(dhd->osh, dhd->monitor_dev, sizeof(struct net_device));
+			MFREE(dhd->osh, dhd->monitor_dev->priv, DHD_MON_DEV_PRIV_SIZE);
+			MFREE(dhd->osh, dhd->monitor_dev, sizeof(struct net_device));
 #else
-		free_netdev(dhd->monitor_dev);
+			free_netdev(dhd->monitor_dev);
 #endif /* 2.6.24 */
-
+		} else {
+			unregister_netdevice(dhd->monitor_dev);
+		}
 		dhd->monitor_dev = NULL;
 	}
 
@@ -7296,28 +7363,22 @@ dhd_del_monitor_if(void *handle, void *event_info, u8 event)
 }
 
 static void
-dhd_set_monitor(dhd_pub_t *dhd, int ifidx, int val)
+dhd_set_monitor(dhd_pub_t *pub, int ifidx, int val)
 {
-	dhd_info_t *info = dhd->info;
+	dhd_info_t *dhd = pub->info;
 
 	DHD_TRACE(("%s: val %d\n", __FUNCTION__, val));
-	if ((val && info->monitor_dev) || (!val && !info->monitor_dev)) {
-		DHD_ERROR(("%s: Mismatched params, return\n", __FUNCTION__));
-		return;
-	}
 
-	/* Delete monitor */
+	dhd_net_if_lock_local(dhd);
 	if (!val) {
-		info->monitor_type = val;
-		dhd_deferred_schedule_work(info->dhd_deferred_wq, NULL, DHD_WQ_WORK_IF_DEL,
-			dhd_del_monitor_if, DHD_WQ_WORK_PRIORITY_LOW);
-		return;
+			/* Delete monitor */
+			dhd_del_monitor_if(dhd);
+	} else {
+			/* Add monitor */
+			dhd_add_monitor_if(dhd);
 	}
-
-	/* Add monitor */
-	info->monitor_type = val;
-	dhd_deferred_schedule_work(info->dhd_deferred_wq, NULL, DHD_WQ_WORK_IF_ADD,
-		dhd_add_monitor_if, DHD_WQ_WORK_PRIORITY_LOW);
+	dhd->monitor_type = val;
+	dhd_net_if_unlock_local(dhd);
 }
 #endif /* WL_MONITOR */
 
@@ -7429,7 +7490,17 @@ int dhd_ioctl_process(dhd_pub_t *pub, int ifidx, dhd_ioctl_t *ioc, void *data_bu
 #ifdef WL_MONITOR
 	/* Intercept monitor ioctl here, add/del monitor if */
 	if (bcmerror == BCME_OK && ioc->cmd == WLC_SET_MONITOR) {
-		dhd_set_monitor(pub, ifidx, *(int32*)data_buf);
+		int val = 0;
+		if (data_buf != NULL && buflen != 0) {
+			if (buflen >= 4) {
+				val = *(int*)data_buf;
+			} else if (buflen >= 2) {
+				val = *(short*)data_buf;
+			} else {
+				val = *(char*)data_buf;
+			}
+		}
+		dhd_set_monitor(pub, ifidx, val);
 	}
 #endif
 
@@ -8631,6 +8702,11 @@ dhd_allocate_if(dhd_pub_t *dhdpub, int ifidx, const char *name,
 
 	DHD_CUMM_CTR_INIT(&ifp->cumm_ctr);
 
+#ifdef DHDTCPSYNC_FLOOD_BLK
+	INIT_WORK(&ifp->blk_tsfl_work, dhd_blk_tsfl_handler);
+	dhd_reset_tcpsync_info_by_ifp(ifp);
+#endif /* DHDTCPSYNC_FLOOD_BLK */
+
 	return ifp->net;
 
 fail:
@@ -8668,8 +8744,10 @@ dhd_remove_if(dhd_pub_t *dhdpub, int ifidx, bool need_rtnl_lock)
 #endif /* PCIE_FULL_DONGLE */
 
 	ifp = dhdinfo->iflist[ifidx];
-
 	if (ifp != NULL) {
+#ifdef DHDTCPSYNC_FLOOD_BLK
+		cancel_work_sync(&ifp->blk_tsfl_work);
+#endif /* DHDTCPSYNC_FLOOD_BLK */
 		if (ifp->net != NULL) {
 			DHD_ERROR(("deleting interface '%s' idx %d\n", ifp->net->name, ifp->idx));
 
@@ -9861,7 +9939,7 @@ bool dhd_validate_chipid(dhd_pub_t *dhdp)
 #if defined(BT_OVER_SDIO)
 wlan_bt_handle_t dhd_bt_get_pub_hndl(void)
 {
-	DHD_ERROR(("%s: g_dhd_pub %p\n", __FUNCTION__, g_dhd_pub));
+	DHD_INFO(("%s: g_dhd_pub %p\n", __FUNCTION__, g_dhd_pub));
 	/* assuming that dhd_pub_t type pointer is available from a global variable */
 	return (wlan_bt_handle_t) g_dhd_pub;
 } EXPORT_SYMBOL(dhd_bt_get_pub_hndl);
@@ -12902,7 +12980,7 @@ void dhd_detach(dhd_pub_t *dhdp)
 	dhd_mw_list_delete(dhdp, &(dhdp->mw_list_head));
 #endif /* DHD_DEBUG */
 #ifdef WL_MONITOR
-	dhd_del_monitor_if(dhd, NULL, DHD_WQ_WORK_IF_DEL);
+	dhd_del_monitor_if(dhd);
 #endif /* WL_MONITOR */
 
 	/* Prefer adding de-init code above this comment unless necessary.
@@ -13117,12 +13195,12 @@ dhd_reboot_callback(struct notifier_block *this, unsigned long code, void *unuse
 #if defined(CONFIG_DEFERRED_INITCALLS) && !defined(EXYNOS_PCIE_MODULE_PATCH)
 #if defined(CONFIG_MACH_UNIVERSAL7420) || defined(CONFIG_SOC_EXYNOS8890) || \
 	defined(CONFIG_ARCH_MSM8996) || defined(CONFIG_SOC_EXYNOS8895) || \
-	defined(CONFIG_ARCH_MSM8998)
+	defined(CONFIG_ARCH_MSM8998) || defined(CONFIG_ARCH_SDM845)
 deferred_module_init_sync(dhd_module_init);
 #else
 deferred_module_init(dhd_module_init);
 #endif /* CONFIG_MACH_UNIVERSAL7420 || CONFIG_SOC_EXYNOS8890 ||
-	* CONFIG_ARCH_MSM8996 || CONFIG_SOC_EXYNOS8895 || CONFIG_ARCH_MSM8998
+	* CONFIG_ARCH_MSM8996 || CONFIG_SOC_EXYNOS8895 || CONFIG_ARCH_MSM8998 || CONFIG_ARCH_SDM845
 	*/
 #elif defined(USE_LATE_INITCALL_SYNC)
 late_initcall_sync(dhd_module_init);
@@ -14042,8 +14120,11 @@ int net_os_set_suspend_bcn_li_dtim(struct net_device *dev, int val)
 {
 	dhd_info_t *dhd = DHD_DEV_INFO(dev);
 
-	if (dhd)
+	if (dhd) {
+		DHD_ERROR(("%s: Set bcn_li_dtim in suspend %d\n",
+			__FUNCTION__, val));
 		dhd->pub.suspend_bcn_li_dtim = val;
+	}
 
 	return 0;
 }
@@ -17394,6 +17475,7 @@ void dhd_get_memdump_info(dhd_pub_t *dhd)
 {
 	struct file *fp = NULL;
 	uint32 mem_val = DUMP_MEMFILE_MAX;
+	char *p_mem_val = NULL;
 	int ret = 0;
 	char *filepath = MEMDUMPINFO;
 
@@ -17420,14 +17502,16 @@ void dhd_get_memdump_info(dhd_pub_t *dhd)
 	}
 
 	/* Handle success case */
-	ret = kernel_read(fp, 0, (char *)&mem_val, 4);
+	ret = kernel_read(fp, 0, (char *)&mem_val, sizeof(uint32));
 	if (ret < 0) {
 		DHD_ERROR(("%s: File read error, ret=%d\n", __FUNCTION__, ret));
 		filp_close(fp, NULL);
 		goto done;
 	}
 
-	mem_val = bcm_atoi((char *)&mem_val);
+	p_mem_val = (char*)&mem_val;
+	p_mem_val[sizeof(uint32) - 1] = '\0';
+	mem_val = bcm_atoi(p_mem_val);
 
 	filp_close(fp, NULL);
 
@@ -17457,13 +17541,17 @@ void dhd_schedule_memdump(dhd_pub_t *dhdp, uint8 *buf, uint32 size)
 	dump->buf = buf;
 	dump->bufsize = size;
 
+	if ((dhdp->memdump_enabled == DUMP_MEMONLY) ||
+		(dhdp->memdump_enabled == DUMP_MEMFILE_BUGON)) {
 #if defined(CONFIG_ARM64)
-	DHD_ERROR(("%s: buf(va)=%llx, buf(pa)=%llx, bufsize=%d\n", __FUNCTION__,
-		(uint64)buf, (uint64)__virt_to_phys((ulong)buf), size));
+		DHD_ERROR(("%s: buf(va)=%llx, buf(pa)=%llx, bufsize=%d\n", __FUNCTION__,
+			(uint64)buf, (uint64)__virt_to_phys((ulong)buf), size));
 #elif defined(__ARM_ARCH_7A__)
-	DHD_ERROR(("%s: buf(va)=%x, buf(pa)=%x, bufsize=%d\n", __FUNCTION__,
-		(uint32)buf, (uint32)__virt_to_phys((ulong)buf), size));
+		DHD_ERROR(("%s: buf(va)=%x, buf(pa)=%x, bufsize=%d\n", __FUNCTION__,
+			(uint32)buf, (uint32)__virt_to_phys((ulong)buf), size));
 #endif /* __ARM_ARCH_7A__ */
+	}
+
 	if (dhdp->memdump_enabled == DUMP_MEMONLY) {
 		BUG_ON(1);
 	}
@@ -17748,6 +17836,7 @@ void dhd_get_assert_info(dhd_pub_t *dhd)
 	struct file *fp = NULL;
 	char *filepath = ASSERTINFO;
 	int mem_val = -1;
+	char *p_mem_val = NULL;
 
 	/*
 	 * Read assert info from the file
@@ -17760,11 +17849,13 @@ void dhd_get_assert_info(dhd_pub_t *dhd)
 	if (IS_ERR(fp)) {
 		DHD_ERROR(("%s: File [%s] doesn't exist\n", __FUNCTION__, filepath));
 	} else {
-		int ret = kernel_read(fp, 0, (char *)&mem_val, 4);
+		int ret = kernel_read(fp, 0, (char *)&mem_val, sizeof(uint32));
 		if (ret < 0) {
 			DHD_ERROR(("%s: File read error, ret=%d\n", __FUNCTION__, ret));
 		} else {
-			mem_val = bcm_atoi((char *)&mem_val);
+			p_mem_val = (char *)&mem_val;
+			p_mem_val[sizeof(uint32) - 1] = '\0';
+			mem_val = bcm_atoi(p_mem_val);
 			DHD_ERROR(("%s: ASSERT ENABLED = %d\n", __FUNCTION__, mem_val));
 		}
 		filp_close(fp, NULL);
@@ -19871,3 +19962,53 @@ copy_debug_dump_time(char *dest, char *src)
 	memcpy(dest, src, DEBUG_DUMP_TIME_BUF_LEN);
 }
 #endif /* WL_CFGVENDOR_SEND_HANG_EVENT || DHD_PKT_LOGGING */
+#ifdef DHDTCPSYNC_FLOOD_BLK
+static void dhd_blk_tsfl_handler(struct work_struct * work)
+{
+	dhd_if_t *ifp = NULL;
+	dhd_pub_t *dhdp = NULL;
+	/* Ignore compiler warnings due to -Werror=cast-qual */
+#if defined(STRICT_GCC_WARNINGS) && defined(__GNUC__)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wcast-qual"
+#endif /* STRICT_GCC_WARNINGS  && __GNUC__ */
+	ifp = container_of(work, dhd_if_t, blk_tsfl_work);
+#if defined(STRICT_GCC_WARNINGS) && defined(__GNUC__)
+#pragma GCC diagnostic pop
+#endif /* STRICT_GCC_WARNINGS  && __GNUC__ */
+	if (ifp) {
+		dhdp = &ifp->info->pub;
+		if (dhdp) {
+			if ((dhdp->op_mode & DHD_FLAG_P2P_GO_MODE)||
+					(dhdp->op_mode & DHD_FLAG_HOSTAP_MODE)) {
+				DHD_ERROR(("Disassoc due to TCP SYNC FLOOD ATTACK\n"));
+				wl_cfg80211_del_all_sta(ifp->net, WLAN_REASON_UNSPECIFIED);
+			} else if ((dhdp->op_mode & DHD_FLAG_P2P_GC_MODE)||
+					(dhdp->op_mode & DHD_FLAG_STA_MODE)) {
+				DHD_ERROR(("Diconnect due to TCP SYNC FLOOD ATTACK\n"));
+				wl_cfg80211_disassoc(ifp->net);
+			}
+		}
+	}
+}
+
+void dhd_reset_tcpsync_info_by_ifp(dhd_if_t *ifp)
+{
+	ifp->tsync_rcvd = 0;
+	ifp->tsyncack_txed = 0;
+	ifp->last_sync = DIV_U64(OSL_LOCALTIME_NS(), NSEC_PER_SEC);
+}
+
+void dhd_reset_tcpsync_info_by_dev(struct net_device *dev)
+{
+	dhd_if_t *ifp = NULL;
+	if (dev) {
+		ifp = DHD_DEV_IFP(dev);
+	}
+	if (ifp) {
+		ifp->tsync_rcvd = 0;
+		ifp->tsyncack_txed = 0;
+		ifp->last_sync = DIV_U64(OSL_LOCALTIME_NS(), NSEC_PER_SEC);
+	}
+}
+#endif /* DHDTCPSYNC_FLOOD_BLK */

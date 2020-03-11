@@ -24,7 +24,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: dhd_ip.c 700317 2017-05-18 15:13:29Z $
+ * $Id: dhd_ip.c 792549 2018-12-05 09:39:13Z $
  */
 #include <typedefs.h>
 #include <osl.h>
@@ -39,11 +39,11 @@
 
 #include <dhd_ip.h>
 
-#ifdef DHDTCPACK_SUPPRESS
+#if defined(DHDTCPACK_SUPPRESS) || defined(DHDTCPSYNC_FLOOD_BLK)
 #include <dhd_bus.h>
 #include <dhd_proto.h>
 #include <bcmtcp.h>
-#endif /* DHDTCPACK_SUPPRESS */
+#endif /* DHDTCPACK_SUPPRESS || DHDTCPSYNC_FLOOD_BLK */
 
 /* special values */
 /* 802.3 llc/snap header */
@@ -1318,3 +1318,54 @@ exit:
 	return hold;
 }
 #endif /* DHDTCPACK_SUPPRESS */
+
+#ifdef DHDTCPSYNC_FLOOD_BLK
+tcp_hdr_flag_t
+dhd_tcpdata_get_flag(dhd_pub_t *dhdp, void *pkt)
+{
+	uint8 *ether_hdr;	/* Ethernet header of the new packet */
+	uint16 ether_type;	/* Ethernet type of the new packet */
+	uint8 *ip_hdr;		/* IP header of the new packet */
+	uint8 *tcp_hdr;		/* TCP header of the new packet */
+	uint32 ip_hdr_len;	/* IP header length of the new packet */
+	uint32 cur_framelen;
+	uint8 flags;
+
+	ether_hdr = PKTDATA(dhdp->osh, pkt);
+	cur_framelen = PKTLEN(dhdp->osh, pkt);
+
+	ether_type = ether_hdr[12] << 8 | ether_hdr[13];
+
+	if (ether_type != ETHER_TYPE_IP) {
+		DHD_TRACE(("%s %d: Not a IP packet 0x%x\n",
+			__FUNCTION__, __LINE__, ether_type));
+		return FLAG_OTHERS;
+	}
+
+	ip_hdr = ether_hdr + ETHER_HDR_LEN;
+	cur_framelen -= ETHER_HDR_LEN;
+
+	if (cur_framelen < IPV4_MIN_HEADER_LEN) {
+		return FLAG_OTHERS;
+	}
+
+	ip_hdr_len = IPV4_HLEN(ip_hdr);
+	if (IP_VER(ip_hdr) != IP_VER_4 || IPV4_PROT(ip_hdr) != IP_PROT_TCP) {
+		DHD_TRACE(("%s %d: Not IPv4 nor TCP! ip ver %d, prot %d\n",
+			__FUNCTION__, __LINE__, IP_VER(ip_hdr), IPV4_PROT(ip_hdr)));
+		return FLAG_OTHERS;
+	}
+
+	tcp_hdr = ip_hdr + ip_hdr_len;
+
+	flags = (uint8)tcp_hdr[TCP_FLAGS_OFFSET];
+
+	if (flags & TCP_FLAG_SYN) {
+		if (flags & TCP_FLAG_ACK) {
+			return FLAG_SYNCACK;
+		}
+		return FLAG_SYNC;
+	}
+	return FLAG_OTHERS;
+}
+#endif /* DHDTCPSYNC_FLOOD_BLK */

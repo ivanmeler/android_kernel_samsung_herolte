@@ -715,6 +715,9 @@ int arizona_mux_put(struct snd_kcontrol *kcontrol,
 
 	mux = ucontrol->value.enumerated.item[0];
 
+	if (mux < 0)
+		return -EINVAL;
+
 	if (arz_enum->val == mux)
 		return 0;
 

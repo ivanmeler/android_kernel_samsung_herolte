@@ -506,6 +506,11 @@ struct sec_age_data {
 	struct sec_age_data
 #endif
 
+typedef struct {
+	unsigned int cycle;
+	unsigned int asoc;
+} battery_health_condition;
+
 struct sec_battery_platform_data {
 	/* NO NEED TO BE CHANGED */
 	/* callback functions */
@@ -796,6 +801,9 @@ struct sec_battery_platform_data {
 	int age_data_length;
 	sec_age_data_t* age_data;
 #endif
+
+	battery_health_condition* health_condition;
+
 	unsigned int siop_event_check_type;
 	unsigned int siop_call_cc_current;
 	unsigned int siop_call_cv_current;
@@ -924,6 +932,11 @@ static inline struct power_supply *get_power_supply_by_name(char *name)
 		}	\
 	}	\
 }
+
+#define is_nocharge_type(cable_type) ( \
+	cable_type == POWER_SUPPLY_TYPE_BATTERY || \
+	cable_type == POWER_SUPPLY_TYPE_OTG || \
+	cable_type == POWER_SUPPLY_TYPE_POWER_SHARING)
 
 #ifndef CONFIG_OF
 #define adc_init(pdev, pdata, channel)	\

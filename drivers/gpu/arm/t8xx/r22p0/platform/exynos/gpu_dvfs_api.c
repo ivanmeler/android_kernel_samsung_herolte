@@ -243,6 +243,7 @@ int gpu_set_target_clk_vol_pending(int clk)
 	target_vol = MAX(gpu_dvfs_get_voltage(target_clk) + platform->voltage_margin, platform->cold_min_vol);
 
 	prev_clk = gpu_get_cur_clock(platform);
+
 #ifdef CONFIG_EXYNOS_CL_DVFS_G3D
 	level = gpu_dvfs_get_level(clk);
 #ifdef CONFIG_SOC_EXYNOS8890

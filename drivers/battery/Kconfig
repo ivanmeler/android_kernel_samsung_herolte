@@ -47,6 +47,11 @@ config BATTERY_CISD
 	 Say Y to include support for cisd
 	 cisd means cell internal short detection
 
+ config PREVENT_SWELLING_BATTERY
+	 bool "support for psb"
+	 help
+	 Say Y to include support for psb
+
 config UPDATE_BATTERY_DATA
 	bool "support for updating battery data"
 	default n

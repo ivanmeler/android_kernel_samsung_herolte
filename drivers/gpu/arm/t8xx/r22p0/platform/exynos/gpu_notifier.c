@@ -98,6 +98,9 @@ static int gpu_tmu_notifier(struct notifier_block *notifier,
 	platform->voltage_margin = 0;
 	index = *(unsigned long *)v;
 
+	if (index >= TMU_LOCK_CLK_END || index < THROTTLING1)
+		return -ENODEV;
+
 	if (event == GPU_COLD) {
 		platform->voltage_margin = platform->gpu_default_vol_margin;
 	} else if (event == GPU_NORMAL) {

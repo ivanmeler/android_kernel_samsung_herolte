@@ -1,5 +1,18 @@
-BCM4361 DHD 1.77.72.5 for Android Great/Dream/Hero & BCM4345X & BCM4343X Project
+BCM4361 DHD 1.77.72.10 for Android Great/Dream/Hero & BCM4345X & BCM4343X Project
 (Notes: 1.77.x is twigged off from 1.579.235.9)
+
+DHD 1.77.72.10 - 2018.12.11
+Security Patch
+ - CS6671196(By Kang Hyung Wook) SI-13162: Disconnect WiFi when TCP sync flood attack detected
+ - CS6793364(By Kang Hyung Wook) SI-13537: Fixed stack buffer overflow at wl_cfgvendor_get_ndev()
+ - CS6861227(By Kang Hyung Wook) SI-13560: Fixed kernel memory disclosure caused by no offset validation
+
+Others
+ - CS6626453(By Kim MinSoo) Changed PCIe IRQ affinity control by ARGOS scheduler for Exynos 8890 platform
+ - CS6713692(By Kim MinSoo) Fixed NET_RX delay issue
+ - CS6769798(By Kim Beom Jip) Fixed P2P connection failure issue due to the DHD driven random MAC feature
+ - Fixed the throughput regression due to enabling the ARGOS Scheduler in Exynos8895
+
 
 DHD 1.77.72.5 - 2018.11.06
 Others
@@ -60,6 +73,21 @@ Others
  - Disable DEBUG_UART feature at DHD
  - Fixed wrong BDC data offset calculation in Lossless Roaming
  - Moved the closednet configuration to appropriate position in order to support Android P OS
+
+
+DHD 1.77.71.4 - 2018.11.16
+Others
+ - Disabled DHD_LB_IRQSET for Exynos8890 platform
+
+
+DHD 1.77.71.3 - 2018.11.16
+Others
+ - CS4541746(By Park HeeBae) Adding log for pkt info received during sleep
+ - CS5488359(By Min SungBin) Added Qatar country regrev QA/6 in translate_custom_table for HERO project
+   (This patch should be sync up with BCM4359C0 - FW 9.96.11 or higher version)
+ - CS5550621(By Park HeeBae) Triggering hang on KSO failure
+ - CS6302259(By Kang Hyung Wook) Supported DHD driven Random MAC feature
+ - Fixed DHD TCP ACK Suppress operation controlled by ARGOS scheduler
 
 
 DHD 1.77.71.2 - 2018.07.27

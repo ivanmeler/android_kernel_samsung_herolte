@@ -82,6 +82,19 @@
 #define SIOP_HV_CHARGING_LIMIT_CURRENT             1000
 
 #define BATT_MISC_EVENT_UNDEFINED_RANGE_TYPE	0x00000001
+#define BATT_MISC_EVENT_BATTERY_HEALTH			0x000F0000
+
+#define BATTERY_HEALTH_SHIFT                16
+enum misc_battery_health {
+	BATTERY_HEALTH_UNKNOWN = 0,
+	BATTERY_HEALTH_GOOD,
+	BATTERY_HEALTH_NORMAL,
+	BATTERY_HEALTH_AGED,
+	BATTERY_HEALTH_MAX = BATTERY_HEALTH_AGED,
+
+	/* For event */
+	BATTERY_HEALTH_BAD = 0xF,
+};
 
 enum store_mode_type {
 	STORE_MODE_NONE = 0,
@@ -173,7 +186,11 @@ struct sec_battery_info {
 
 #if defined(CONFIG_BATTERY_CISD)
 	struct cisd cisd;
-#endif	
+#endif
+
+#if defined(CONFIG_PREVENT_SWELLING_BATTERY)
+	void *psb;
+#endif
 
 	/* battery check */
 	unsigned int check_count;
@@ -334,6 +351,7 @@ struct sec_battery_info {
 #if defined(CONFIG_BATTERY_AGE_FORECAST)
 	int batt_cycle;
 #endif
+	int batt_asoc;
 #if defined(CONFIG_STEP_CHARGING)
 	unsigned int step_charging_type;
 	int step_charging_status;

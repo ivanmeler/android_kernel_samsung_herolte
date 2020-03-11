@@ -5,6 +5,7 @@ obj-$(CONFIG_STEP_CHARGING)	+= sec_step_charging.o
 obj-$(CONFIG_BATTERY_CISD)	+= sec_cisd.o
 obj-$(CONFIG_UPDATE_BATTERY_DATA)	+= sec_battery_data.o
 obj-$(CONFIG_BATTERY_NOTIFIER)	+= battery_notifier.o
+obj-$(CONFIG_PREVENT_SWELLING_BATTERY)	+= sec_psb.o
 
 obj-$(CONFIG_FUELGAUGE_MAX17042)	+= max17042_fuelgauge.o sec_fuelgauge.o
 obj-$(CONFIG_FUELGAUGE_MAX17048)	+= max17048_fuelgauge.o sec_fuelgauge.o

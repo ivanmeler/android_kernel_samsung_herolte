@@ -316,13 +316,11 @@ struct kbase_pm_backend_data {
 	bool poweroff_wait_in_progress;
 	bool poweron_required;
 	bool poweroff_is_suspend;
-
 	/* MALI_SEC_INTEGRATIN : remove power off wq */
 /*
 	struct workqueue_struct *gpu_poweroff_wait_wq;
 	struct work_struct gpu_poweroff_wait_work;
 */
-
 	wait_queue_head_t poweroff_wait;
 
 	int (*callback_power_on)(struct kbase_device *kbdev);

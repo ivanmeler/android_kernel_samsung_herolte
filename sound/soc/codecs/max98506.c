@@ -849,19 +849,39 @@ static int max98506_volume_step_put(struct snd_kcontrol *kcontrol,
 		struct snd_ctl_elem_value *ucontrol)
 {
 	struct snd_soc_codec *codec = snd_soc_kcontrol_codec(kcontrol);
-	struct max98506_priv *max98506 = snd_soc_codec_get_drvdata(codec);
-	struct max98506_pdata *pdata = max98506->pdata;
-	struct max98506_volume_step_info *vstep = &max98506->vstep;
-
+	struct max98506_priv *max98506;
+	struct max98506_pdata *pdata;
+	struct max98506_volume_step_info *vstep;
 	int sel = (int)ucontrol->value.integer.value[0];
 	unsigned int mask = 0;
-	bool adc_status = vstep->adc_status;
+	bool adc_status;
+
+	if (!codec) {
+		msg_maxim("codec null pointer");
+		return 0;
+	}
+
+	max98506 = snd_soc_codec_get_drvdata(codec);
+
+	if (!max98506) {
+		msg_maxim("codec data null pointer");
+		return 0;
+	}
+
+	pdata = max98506->pdata;
+	vstep = &max98506->vstep;
+	adc_status = vstep->adc_status;
 
 	/*
 	 * ADC status will be updated according to the volume.
 	 * Under step 7 : Disable
 	 * Over step 7  : Enable
 	 */
+	if (sel < MAX98506_VSTEP_0 || sel >= MAX98506_VSTEP_MAX) {
+		msg_maxim("Unknown value %d", sel);
+		return -EINVAL;
+	}
+
 	if (!pdata->nodsm) {
 		if (sel <= vstep->adc_thres
 				&& vstep->adc_status) {
