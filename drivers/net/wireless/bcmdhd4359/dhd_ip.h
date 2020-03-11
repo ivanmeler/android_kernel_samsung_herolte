@@ -26,17 +26,17 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: dhd_ip.h 536854 2015-02-24 13:17:29Z $
+ * $Id: dhd_ip.h 792549 2018-12-05 09:39:13Z $
  */
 
 #ifndef _dhd_ip_h_
 #define _dhd_ip_h_
 
-#ifdef DHDTCPACK_SUPPRESS
+#if defined(DHDTCPACK_SUPPRESS) || defined(DHDTCPSYNC_FLOOD_BLK)
 #include <dngl_stats.h>
 #include <bcmutils.h>
 #include <dhd.h>
-#endif /* DHDTCPACK_SUPPRESS */
+#endif /* DHDTCPACK_SUPPRESS || DHDTCPSYNC_FLOOD_BLK */
 
 typedef enum pkt_frag
 {
@@ -47,6 +47,17 @@ typedef enum pkt_frag
 } pkt_frag_t;
 
 extern pkt_frag_t pkt_frag_info(osl_t *osh, void *p);
+
+#ifdef DHDTCPSYNC_FLOOD_BLK
+typedef enum tcp_hdr_flags {
+	FLAG_SYNC,
+	FLAG_SYNCACK,
+	FLAG_RST,
+	FLAG_OTHERS
+} tcp_hdr_flag_t;
+
+extern tcp_hdr_flag_t dhd_tcpdata_get_flag(dhd_pub_t *dhdp, void *pkt);
+#endif /* DHDTCPSYNC_FLOOD_BLK */
 
 #ifdef DHDTCPACK_SUPPRESS
 #define	TCPACKSZMIN	(ETHER_HDR_LEN + IPV4_MIN_HEADER_LEN + TCP_MIN_HEADER_LEN)

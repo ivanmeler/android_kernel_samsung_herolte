@@ -1969,12 +1969,9 @@ bool kbase_check_alloc_flags(unsigned long flags)
 
 bool kbase_check_import_flags(unsigned long flags)
 {
-/* MALI_SEC_SECURE_RENDERING */
-#ifndef CONFIG_MALI_SEC_ASP_SECURE_BUF_CTRL
 	/* Only known input flags should be set. */
 	if (flags & ~BASE_MEM_FLAGS_INPUT_MASK)
 		return false;
-#endif
 
 	/* At least one flag should be set */
 	if (flags == 0)

@@ -503,6 +503,7 @@ int gpu_enable_dvs(struct exynos_context *platform)
 		exynos_cl_dvfs_stop(ID_G3D, level);
 	}
 #endif /* CONFIG_EXYNOS_CL_DVFS_G3D */
+
 	/* Do not need to enable dvs during suspending */
 	if (!pkbdev->pm.suspending) {
 //		if (s2m_set_dvs_pin(true) != 0) {

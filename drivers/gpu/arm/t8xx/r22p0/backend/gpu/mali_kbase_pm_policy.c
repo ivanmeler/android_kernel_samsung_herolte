@@ -290,7 +290,6 @@ static void kbasep_pm_do_gpu_poweroff_wq(struct work_struct *data)
 int kbase_pm_policy_init(struct kbase_device *kbdev)
 {
 	struct workqueue_struct *wq;
-
 	/* MALI_SEC_INTEGRATION */
 	/* alloc_workqueue option is changed to ordered */
 	wq = alloc_workqueue("kbase_pm_do_poweroff",

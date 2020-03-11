@@ -525,6 +525,7 @@ int dhd_sel_ant_from_file(dhd_pub_t *dhd)
 #endif /* !CUSTOM_SET_ANTNPM */
 	char *filepath = ANTINFO;
 	uint chip_id = dhd_bus_chip_id(dhd);
+	char *p_ant_val = NULL;
 #ifndef CUSTOM_SET_ANTNPM
 	 memset(&rsdb_mode, 0, sizeof(rsdb_mode));
 #endif /* CUSTOM_SET_ANTNPM */
@@ -552,14 +553,16 @@ int dhd_sel_ant_from_file(dhd_pub_t *dhd)
 #endif /* !CUSTOM_SET_ANTNPM */
 		return ret;
 	} else {
-		ret = kernel_read(fp, 0, (char *)&ant_val, 4);
+		ret = kernel_read(fp, 0, (char *)&ant_val, sizeof(uint32));
 		if (ret < 0) {
 			DHD_ERROR(("[WIFI_SEC] %s: File read error, ret=%d\n", __FUNCTION__, ret));
 			filp_close(fp, NULL);
 			return ret;
 		}
 
-		ant_val = bcm_atoi((char *)&ant_val);
+		p_ant_val = (char *)&ant_val;
+		p_ant_val[sizeof(uint32) - 1] = '\0';
+		ant_val = bcm_atoi(p_ant_val);
 
 		DHD_ERROR(("[WIFI_SEC]%s: ANT val = %d\n", __FUNCTION__, ant_val));
 		filp_close(fp, NULL);
@@ -631,6 +634,7 @@ int dhd_rsdb_mode_from_file(dhd_pub_t *dhd)
 	wl_config_t  rsdb_mode;
 	uint32 rsdb_configuration = 0;
 	char *filepath = RSDBINFO;
+	char *p_rsdb_conf = NULL;
 
 	memset(&rsdb_mode, 0, sizeof(rsdb_mode));
 
@@ -640,14 +644,17 @@ int dhd_rsdb_mode_from_file(dhd_pub_t *dhd)
 		DHD_ERROR(("[WIFI_SEC] %s: File [%s] doesn't exist\n", __FUNCTION__, filepath));
 		return ret;
 	} else {
-		ret = kernel_read(fp, 0, (char *)&rsdb_configuration, 4);
+		ret = kernel_read(fp, 0, (char *)&rsdb_configuration, sizeof(uint32));
 		if (ret < 0) {
 			DHD_ERROR(("[WIFI_SEC] %s: File read error, ret=%d\n", __FUNCTION__, ret));
 			filp_close(fp, NULL);
 			return ret;
 		}
 
-		rsdb_mode.config = bcm_atoi((char *)&rsdb_configuration);
+		p_rsdb_conf = (char *)&rsdb_configuration;
+		p_rsdb_conf[sizeof(uint32) - 1] = '\0';
+		rsdb_mode.config = bcm_atoi(p_rsdb_conf);
+
 		DHD_ERROR(("[WIFI_SEC] %s: RSDB mode from file = %d\n",
 			__FUNCTION__, rsdb_mode.config));
 
@@ -689,6 +696,7 @@ int dhd_logtrace_from_file(dhd_pub_t *dhd)
 	int ret = -1;
 	uint32 logtrace = 0;
 	char *filepath = LOGTRACEINFO;
+	char *p_logtrace = NULL;
 
 	/* Read LOGTRACE Event on/off request from the file */
 	fp = filp_open(filepath, O_RDONLY, 0);
@@ -696,14 +704,16 @@ int dhd_logtrace_from_file(dhd_pub_t *dhd)
 		DHD_ERROR(("[WIFI_SEC] %s: File [%s] doesn't exist\n", __FUNCTION__, filepath));
 		return 0;
 	} else {
-		ret = kernel_read(fp, 0, (char *)&logtrace, 4);
+		ret = kernel_read(fp, 0, (char *)&logtrace, sizeof(uint32));
 		if (ret < 0) {
 			DHD_ERROR(("[WIFI_SEC] %s: File read error, ret=%d\n", __FUNCTION__, ret));
 			filp_close(fp, NULL);
 			return 0;
 		}
 
-		logtrace = bcm_atoi((char *)&logtrace);
+		p_logtrace = (char *)&logtrace;
+		p_logtrace[sizeof(uint32) - 1] = '\0';
+		logtrace = bcm_atoi(p_logtrace);
 
 		DHD_ERROR(("[WIFI_SEC] %s: LOGTRACE On/Off from file = %d\n",
 			__FUNCTION__, logtrace));
@@ -727,6 +737,7 @@ int sec_get_param_wfa_cert(dhd_pub_t *dhd, int mode, uint* read_val)
 	struct file *fp = NULL;
 	char *filepath = NULL;
 	int val = 0;
+	char *p_val = NULL;
 
 	if (!dhd || (mode < SET_PARAM_BUS_TXGLOM_MODE) ||
 		(mode >= PARAM_LAST_VALUE)) {
@@ -767,7 +778,7 @@ int sec_get_param_wfa_cert(dhd_pub_t *dhd, int mode, uint* read_val)
 			__FUNCTION__, filepath));
 		return BCME_ERROR;
 	} else {
-		if (kernel_read(fp, fp->f_pos, (char *)&val, 4) < 0) {
+		if (kernel_read(fp, fp->f_pos, (char *)&val, sizeof(uint32)) < 0) {
 			filp_close(fp, NULL);
 			/* File operation is failed so we will return error code */
 			DHD_ERROR(("[WIFI_SEC] %s: read failed, file path=%s\n",
@@ -777,7 +788,9 @@ int sec_get_param_wfa_cert(dhd_pub_t *dhd, int mode, uint* read_val)
 		filp_close(fp, NULL);
 	}
 
-	val = bcm_atoi((char *)&val);
+	p_val = (char *)&val;
+	p_val[sizeof(uint32) - 1] = '\0';
+	val = bcm_atoi(p_val);
 
 	switch (mode) {
 		case SET_PARAM_ROAMOFF:
@@ -1055,6 +1068,7 @@ void dhd_adps_mode_from_file(dhd_pub_t *dhd)
 	int ret = 0;
 	uint32 adps_mode = 0;
 	char *filepath = ADPSINFO;
+	char *p_adps_mode = NULL;
 
 	/* Read ASDP on/off request from the file */
 	fp = filp_open(filepath, O_RDONLY, 0);
@@ -1065,14 +1079,16 @@ void dhd_adps_mode_from_file(dhd_pub_t *dhd)
 		}
 		return;
 	} else {
-		ret = kernel_read(fp, 0, (char *)&adps_mode, 4);
+		ret = kernel_read(fp, 0, (char *)&adps_mode, sizeof(uint32));
 		if (ret < 0) {
 			DHD_ERROR(("[WIFI_SEC] %s: File read error, ret=%d\n", __FUNCTION__, ret));
 			filp_close(fp, NULL);
 			return;
 		}
 
-		adps_mode = bcm_atoi((char *)&adps_mode);
+		p_adps_mode = (char *)&adps_mode;
+		p_adps_mode[sizeof(uint32) - 1] = '\0';
+		adps_mode = bcm_atoi(p_adps_mode);
 
 		DHD_ERROR(("[WIFI_SEC] %s: ASDP mode from file = %d\n", __FUNCTION__, adps_mode));
 		filp_close(fp, NULL);

@@ -93,7 +93,6 @@ struct s3c24xx_uart_port {
 	struct delayed_work		qos_work;
 
 	unsigned int dbg_mode;
-
 	struct local_buf local_buf;
 };
 

@@ -24,7 +24,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: dhd_pktlog.h 742382 2018-01-22 01:56:53Z $
+ * $Id: dhd_pktlog.h 772708 2018-07-18 05:47:31Z $
  */
 
 #ifndef __DHD_PKTLOG_H_
@@ -42,7 +42,9 @@
 #define PKTLOG_TXPKT_CASE			0x0001
 #define PKTLOG_TXSTATUS_CASE		0x0002
 #define PKTLOG_RXPKT_CASE			0x0004
-#define MAX_FILTER_PATTERN_LEN		256
+/* MAX_FILTER_PATTERN_LEN is buf len to print bitmask/pattern with string */
+#define MAX_FILTER_PATTERN_LEN \
+	((MAX_MASK_PATTERN_FILTER_LEN * HD_BYTE_SIZE) + HD_PREFIX_SIZE + 1) * 2
 #define PKTLOG_DUMP_BUF_SIZE		(64 * 1024)
 
 typedef struct dhd_dbg_pktlog_info {

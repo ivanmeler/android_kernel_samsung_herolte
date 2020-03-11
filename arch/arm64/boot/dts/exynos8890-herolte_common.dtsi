@@ -315,6 +315,7 @@
 	};
 
 	serial_1: uart@14C20000 {
+		samsung,uart-logging;
 		status = "okay";
 	};
 

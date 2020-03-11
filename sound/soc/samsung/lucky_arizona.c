@@ -534,6 +534,12 @@ static int set_voicecontrol_mode(struct snd_kcontrol *kcontrol,
 
 	voicecontrol_mode = ucontrol->value.integer.value[0];
 
+	if (voicecontrol_mode > 2 || voicecontrol_mode < 0) {
+		dev_info(card->dev, "Unknown value : %d\n",
+			voicecontrol_mode);
+		return -EINVAL;
+	}
+
 	if (priv->seamless_voicewakeup) {
 		priv->voice_uevent = voicecontrol_mode;
 		dev_info(card->dev, "set voice control mode: %s\n",

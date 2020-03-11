@@ -504,6 +504,7 @@ void kbase_pm_do_poweron(struct kbase_device *kbdev, bool is_resume);
  * @is_suspend: true if power off due to suspend,
  *              false otherwise
  */
+
 /* MALI_SEC_INTEGRATION */
 int kbase_pm_do_poweroff(struct kbase_device *kbdev, bool is_suspend);
 

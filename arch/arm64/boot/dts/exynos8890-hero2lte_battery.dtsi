@@ -80,6 +80,14 @@
 		};
 	};
 
+	prevent_swelling_battery {
+		psb,trigger_time_after_full = <172800>;	/* 48h */
+		psb,release_discharging_time = <7200>; /* 2h */
+		psb,release_discharging_soc = <80>;
+		psb,release_discharging_voltage = <4150>;
+		psb,step_count_condition = <0 5 0 0 1>;
+	};
+
 	battery {
 		status = "okay";
 		compatible = "samsung,sec-battery";
@@ -274,6 +282,13 @@
 			250 43125 4242 4212 91
 			300 42875 4217 4187 90
 			1000 42375 4167 4137 89>;
+
+		battery,health_condition = <
+			/* CYCLE ASOC */
+			1200 75	/* GOOD */
+			1400 65 /* NORMAL */
+			1600 55 /* AGED */
+			>;
 
 		battery,enable_coil_temp = <1>;
 

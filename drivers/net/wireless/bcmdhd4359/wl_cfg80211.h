@@ -24,7 +24,7 @@
  *
  * <<Broadcom-WL-IPTag/Open:>>
  *
- * $Id: wl_cfg80211.h 788951 2018-11-14 12:30:11Z $
+ * $Id: wl_cfg80211.h 792549 2018-12-05 09:39:13Z $
  */
 
 /**
@@ -983,10 +983,8 @@ wl_probe_wdev_all(struct bcm_cfg80211 *cfg)
 	GCC_DIAGNOSTIC_PUSH();
 	BCM_LIST_FOR_EACH_ENTRY_SAFE(_net_info, next,
 		&cfg->net_list, list) {
-		WL_ERR(("%s: net_list[%d] bssidx: %d, "
-			"ndev: %p, wdev: %p \n", __FUNCTION__,
-			idx++, _net_info->bssidx,
-			_net_info->ndev, _net_info->wdev));
+		WL_ERR(("%s: net_list[%d] bssidx: %d\n",
+			__FUNCTION__, idx++, _net_info->bssidx));
 	}
 	GCC_DIAGNOSTIC_POP();
 	spin_unlock_irqrestore(&cfg->net_list_sync, flags);
@@ -1566,6 +1564,8 @@ extern int wl_cfg80211_remove_if(struct bcm_cfg80211 *cfg,
 extern int wl_cfg80211_scan_stop(struct bcm_cfg80211 *cfg, bcm_struct_cfgdev *cfgdev);
 extern void wl_cfg80211_scan_abort(struct bcm_cfg80211 *cfg);
 extern bool wl_cfg80211_is_concurrent_mode(struct net_device * dev);
+extern void wl_cfg80211_disassoc(struct net_device *ndev);
+extern void wl_cfg80211_del_all_sta(struct net_device *ndev, uint32 reason);
 extern void* wl_cfg80211_get_dhdp(struct net_device * dev);
 extern bool wl_cfg80211_is_p2p_active(struct net_device * dev);
 extern bool wl_cfg80211_is_roam_offload(struct net_device * dev);
