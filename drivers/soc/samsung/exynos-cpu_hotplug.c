@@ -173,11 +173,11 @@ static int do_cpu_hotplug(void *param)
 	 * If cpu hotplug is disabled or suspended,
 	 * do_cpu_hotplug() do nothing.
 	 */
-	if (!cpu_hotplug.enabled || cpu_hotplug.suspended) {
+	/*if (!cpu_hotplug.enabled || cpu_hotplug.suspended) {*/
 		mutex_unlock(&cpu_hotplug.lock);
 		return 0;
-	}
-
+	/*}*/
+#if 0
 	/* Create online cpumask */
 	enable_cpus = create_cpumask();
 
@@ -226,6 +226,7 @@ out:
 	mutex_unlock(&cpu_hotplug.lock);
 
 	return ret;
+#endif
 }
 
 static void cpu_hotplug_work(struct work_struct *work)
